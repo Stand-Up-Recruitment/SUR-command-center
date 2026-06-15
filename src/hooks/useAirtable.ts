@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 
-const REFRESH_INTERVAL_MS = 60_000;
+const REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 interface UseAirtableResult<T> {
   data: T | null;

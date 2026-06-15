@@ -300,10 +300,17 @@ export async function fetchMarketingKPIs(): Promise<MarketingKPIs> {
   ]);
 
   const b = weekBoundaries();
+  console.log('[Marketing] allClients total:', allClients.length, 'sample:', allClients[0]);
+  console.log('[Marketing] allCandidates total:', allCandidates.length, 'sample:', allCandidates[0]);
+  console.log('[Marketing] budgetRecords:', budgetRecords);
+
   const thisClients    = allClients.filter(f => isThisWeek(f.Created, b));
   const prevClients    = allClients.filter(f => isPrevWeek(f.Created, b));
   const thisCandidates = allCandidates.filter(f => isThisWeek(f.Created, b));
   const prevCandidates = allCandidates.filter(f => isPrevWeek(f.Created, b));
+
+  console.log('[Marketing] thisClients:', thisClients.length, 'prevClients:', prevClients.length);
+  console.log('[Marketing] thisCandidates:', thisCandidates.length, 'prevCandidates:', prevCandidates.length);
 
   const weeklyBudget = budgetRecords[0]?.['Weekly Budget'] ?? 0;
 
