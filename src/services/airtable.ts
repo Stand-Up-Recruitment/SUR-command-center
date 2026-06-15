@@ -185,6 +185,7 @@ type ClientLeadFields = {
   Status?: string;
   Source?: string;
   Created?: string;
+  'Last Updated Date'?: string;
 };
 
 type CandidateLeadFields = {
@@ -282,9 +283,6 @@ export async function fetchMarketingKPIs(): Promise<MarketingKPIs> {
     throw new Error('Marketing credentials not configured');
   }
 
-  const clientFields = ['Status', 'Source', 'Created'];
-  const candidateFields = ['NZ Citizenship Status', 'Trade / Occupation', 'UTMs', 'Created'];
-
   const [
     allClients,
     allCandidates,
@@ -300,23 +298,48 @@ export async function fetchMarketingKPIs(): Promise<MarketingKPIs> {
   ]);
 
   const b = weekBoundaries();
-  console.log('[Marketing] allClients total:', allClients.length, 'sample:', JSON.stringify(allClients[0]));
-  console.log('[Marketing] allCandidates total:', allCandidates.length, 'sample:', allCandidates[0]);
-  console.log('[Marketing] budgetRecords:', budgetRecords);
 
-  const thisClients    = allClients.filter(f => isThisWeek(f.Created, b));
-  const prevClients    = allClients.filter(f => isPrevWeek(f.Created, b));
+  // Candidates: bucket by Created date
   const thisCandidates = allCandidates.filter(f => isThisWeek(f.Created, b));
   const prevCandidates = allCandidates.filter(f => isPrevWeek(f.Created, b));
 
-  console.log('[Marketing] thisClients:', thisClients.length, 'prevClients:', prevClients.length);
-  console.log('[Marketing] thisCandidates:', thisCandidates.length, 'prevCandidates:', prevCandidates.length);
+  // Client totals: new contacts created this week
+  const thisClients = allClients.filter(f => isThisWeek(f.Created, b));
+  const prevClients = allClients.filter(f => isPrevWeek(f.Created, b));
+
+  // Client qualified: moved to CRM this week (by Last Updated Date, not Created)
+  const qualClientsThis = allClients.filter(
+    f => f.Status === 'Moved to CRM' && isThisWeek(f['Last Updated Date'], b)
+  );
+  const qualClientsPrev = allClients.filter(
+    f => f.Status === 'Moved to CRM' && isPrevWeek(f['Last Updated Date'], b)
+  );
+
+  const clientQualRate = thisClients.length > 0
+    ? Math.round((qualClientsThis.length / thisClients.length) * 100) : 0;
+  const clientPrevQualRate = prevClients.length > 0
+    ? Math.round((qualClientsPrev.length / prevClients.length) * 100) : 0;
+  const clientCpl = qualClientsThis.length > 0
+    ? Math.round(spend.thisWeek / qualClientsThis.length) : 0;
+  const clientPrevCpl = qualClientsPrev.length > 0
+    ? Math.round(spend.prevWeek / qualClientsPrev.length) : 0;
+
+  const clientMetric: LeadMetric = {
+    total: thisClients.length,
+    qualified: qualClientsThis.length,
+    qualRate: clientQualRate,
+    cpl: clientCpl,
+    prevTotal: prevClients.length,
+    prevQualified: qualClientsPrev.length,
+    prevQualRate: clientPrevQualRate,
+    prevCpl: clientPrevCpl,
+  };
 
   const weeklyBudget = budgetRecords[0]?.['Weekly Budget'] ?? 0;
 
   return {
     candidates: buildLeadMetric(thisCandidates, prevCandidates, isCandidateQualified, spend.thisWeek, spend.prevWeek),
-    clients: buildLeadMetric(thisClients, prevClients, isClientQualified, spend.thisWeek, spend.prevWeek),
+    clients: clientMetric,
     channels: buildChannels(thisClients, thisCandidates, spend.thisWeek),
     spend,
     weeklyBudget,
