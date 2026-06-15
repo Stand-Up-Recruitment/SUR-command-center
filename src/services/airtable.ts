@@ -196,18 +196,25 @@ type CandidateLeadFields = {
 
 type MarketingConfigFields = {
   Name?: string;
-  WeeklyBudget?: number;
+  'Weekly Budget'?: number;
 };
 
-function weekFilters() {
+function weekBoundaries() {
   const MS_7D = 7 * 24 * 60 * 60 * 1000;
   const now = Date.now();
-  const t7 = new Date(now - MS_7D).toISOString();
-  const t14 = new Date(now - 2 * MS_7D).toISOString();
-  return {
-    thisWeek: `IS_AFTER({Created}, "${t7}")`,
-    prevWeek: `AND(IS_AFTER({Created}, "${t14}"), NOT(IS_AFTER({Created}, "${t7}")))`,
-  };
+  return { t7: now - MS_7D, t14: now - 2 * MS_7D };
+}
+
+function isThisWeek(created: string | undefined, b: { t7: number; t14: number }) {
+  if (!created) return false;
+  const t = new Date(created).getTime();
+  return !isNaN(t) && t >= b.t7;
+}
+
+function isPrevWeek(created: string | undefined, b: { t7: number; t14: number }) {
+  if (!created) return false;
+  const t = new Date(created).getTime();
+  return !isNaN(t) && t >= b.t14 && t < b.t7;
 }
 
 function isClientQualified(f: ClientLeadFields) {
@@ -275,37 +282,30 @@ export async function fetchMarketingKPIs(): Promise<MarketingKPIs> {
     throw new Error('Marketing credentials not configured');
   }
 
-  const filters = weekFilters();
   const clientFields = ['Status', 'Source', 'Created'];
   const candidateFields = ['NZ Citizenship Status', 'Trade / Occupation', 'UTMs', 'Created'];
 
   const [
-    thisClients,
-    prevClients,
-    thisCandidates,
-    prevCandidates,
+    allClients,
+    allCandidates,
     spend,
     budgetRecords,
   ] = await Promise.all([
-    fetchAllFromBase<ClientLeadFields>(CLIENTS_BASE_ID, CLIENTS_TABLE_ID, {
-      filterByFormula: filters.thisWeek,
-    }, clientFields),
-    fetchAllFromBase<ClientLeadFields>(CLIENTS_BASE_ID, CLIENTS_TABLE_ID, {
-      filterByFormula: filters.prevWeek,
-    }, clientFields),
-    fetchAllFromBase<CandidateLeadFields>(CANDIDATES_BASE_ID, CANDIDATES_TABLE_ID, {
-      filterByFormula: filters.thisWeek,
-    }, candidateFields),
-    fetchAllFromBase<CandidateLeadFields>(CANDIDATES_BASE_ID, CANDIDATES_TABLE_ID, {
-      filterByFormula: filters.prevWeek,
-    }, candidateFields),
+    fetchAllFromBase<ClientLeadFields>(CLIENTS_BASE_ID, CLIENTS_TABLE_ID, {}, clientFields),
+    fetchAllFromBase<CandidateLeadFields>(CANDIDATES_BASE_ID, CANDIDATES_TABLE_ID, {}, candidateFields),
     fetchMetaSpend(),
     fetchAllFromBase<MarketingConfigFields>(CLIENTS_BASE_ID, 'Marketing Config', {
       maxRecords: '1',
     }).catch(() => [] as MarketingConfigFields[]),
   ]);
 
-  const weeklyBudget = budgetRecords[0]?.WeeklyBudget ?? 0;
+  const b = weekBoundaries();
+  const thisClients    = allClients.filter(f => isThisWeek(f.Created, b));
+  const prevClients    = allClients.filter(f => isPrevWeek(f.Created, b));
+  const thisCandidates = allCandidates.filter(f => isThisWeek(f.Created, b));
+  const prevCandidates = allCandidates.filter(f => isPrevWeek(f.Created, b));
+
+  const weeklyBudget = budgetRecords[0]?.['Weekly Budget'] ?? 0;
 
   return {
     candidates: buildLeadMetric(thisCandidates, prevCandidates, isCandidateQualified, spend.thisWeek, spend.prevWeek),
