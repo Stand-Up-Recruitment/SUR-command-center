@@ -291,8 +291,8 @@ export async function fetchMarketingKPIs(): Promise<MarketingKPIs> {
     spend,
     budgetRecords,
   ] = await Promise.all([
-    fetchAllFromBase<ClientLeadFields>(CLIENTS_BASE_ID, CLIENTS_TABLE_ID, {}, clientFields),
-    fetchAllFromBase<CandidateLeadFields>(CANDIDATES_BASE_ID, CANDIDATES_TABLE_ID, {}, candidateFields),
+    fetchAllFromBase<ClientLeadFields>(CLIENTS_BASE_ID, CLIENTS_TABLE_ID, {}),
+    fetchAllFromBase<CandidateLeadFields>(CANDIDATES_BASE_ID, CANDIDATES_TABLE_ID, {}),
     fetchMetaSpend(),
     fetchAllFromBase<MarketingConfigFields>(CLIENTS_BASE_ID, 'Marketing Config', {
       maxRecords: '1',
@@ -300,7 +300,7 @@ export async function fetchMarketingKPIs(): Promise<MarketingKPIs> {
   ]);
 
   const b = weekBoundaries();
-  console.log('[Marketing] allClients total:', allClients.length, 'sample:', allClients[0]);
+  console.log('[Marketing] allClients total:', allClients.length, 'sample:', JSON.stringify(allClients[0]));
   console.log('[Marketing] allCandidates total:', allCandidates.length, 'sample:', allCandidates[0]);
   console.log('[Marketing] budgetRecords:', budgetRecords);
 
