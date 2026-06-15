@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SUR Command Center — Redesign Mockup</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f1f5f9; color: #0f172a; }
+
+  /* Header */
+  .header {
+    background: white;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 0 28px;
+    display: flex;
+    align-items: stretch;
+    height: 56px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+  .header-brand { display: flex; align-items: center; gap: 10px; margin-right: 32px; }
+  .brand-icon { width: 28px; height: 28px; background: #059669; border-radius: 7px; display: flex; align-items: center; justify-content: center; }
+  .brand-icon svg { color: white; }
+  .brand-name { font-size: 14px; font-weight: 700; color: #0f172a; }
+  .brand-sub { font-size: 11px; color: #94a3b8; margin-top: 1px; }
+
+  /* Tabs */
+  .tabs { display: flex; align-items: stretch; flex: 1; gap: 2px; }
+  .tab {
+    display: flex; align-items: center; padding: 0 16px;
+    font-size: 13px; font-weight: 500; color: #64748b;
+    border-bottom: 2px solid transparent;
+    cursor: pointer; white-space: nowrap;
+    text-decoration: none;
+    transition: color 0.15s;
+  }
+  .tab:hover { color: #0f172a; }
+  .tab.active { color: #059669; font-weight: 600; border-bottom-color: #059669; }
+  .tab.coming-soon { color: #cbd5e1; cursor: default; }
+
+  /* Header right */
+  .header-right { display: flex; align-items: center; gap: 12px; margin-left: auto; }
+  .time-block { text-align: right; }
+  .time { font-size: 13px; font-weight: 600; color: #0f172a; }
+  .date { font-size: 11px; color: #94a3b8; margin-top: 1px; }
+  .btn-refresh {
+    display: flex; align-items: center; gap: 6px;
+    background: #f0fdf4; border: 1px solid #bbf7d0;
+    color: #059669; font-size: 12px; font-weight: 600;
+    padding: 6px 12px; border-radius: 7px; cursor: pointer;
+  }
+
+  /* Page */
+  .page { max-width: 900px; margin: 0 auto; padding: 28px 24px; }
+  .page-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 24px; }
+  .page-title { font-size: 22px; font-weight: 800; color: #0f172a; letter-spacing: -0.5px; }
+  .page-subtitle { font-size: 13px; color: #94a3b8; margin-top: 3px; }
+  .status-pill {
+    display: flex; align-items: center; gap: 6px;
+    background: #f0fdf4; border: 1px solid #bbf7d0;
+    color: #15803d; font-size: 12px; font-weight: 600;
+    padding: 5px 12px; border-radius: 20px;
+  }
+  .status-dot { width: 6px; height: 6px; background: #16a34a; border-radius: 50%; }
+
+  /* Cards */
+  .card {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .card-pad { padding: 20px; }
+
+  /* Section label */
+  .section-label {
+    font-size: 10px; font-weight: 700; color: #94a3b8;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    margin-bottom: 10px;
+  }
+
+  /* Hero stat */
+  .hero-card { padding: 24px; }
+  .hero-row { display: grid; grid-template-columns: 1fr 1px 1fr; gap: 24px; align-items: start; }
+  .hero-divider { background: #f1f5f9; }
+  .hero-label { font-size: 11px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 10px; }
+  .hero-number { font-size: 44px; font-weight: 900; color: #0f172a; letter-spacing: -2px; line-height: 1; }
+  .hero-number-sm { font-size: 32px; font-weight: 900; color: #0f172a; letter-spacing: -1.5px; line-height: 1; }
+  .wow-badge {
+    display: inline-flex; align-items: center; gap: 3px;
+    font-size: 11px; font-weight: 700;
+    padding: 3px 8px; border-radius: 20px;
+    margin-left: 8px;
+  }
+  .wow-up { background: #dcfce7; color: #16a34a; }
+  .wow-down { background: #fee2e2; color: #dc2626; }
+
+  /* Stat grid */
+  .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .stat-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 16px; }
+  .stat-label { font-size: 10px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
+  .stat-value { font-size: 20px; font-weight: 800; color: #0f172a; }
+  .stat-value.green { color: #059669; }
+  .stat-value.amber { color: #d97706; }
+  .stat-trend { font-size: 10px; font-weight: 600; color: #94a3b8; margin-top: 4px; }
+  .stat-trend.up { color: #16a34a; }
+  .stat-trend.down { color: #dc2626; }
+
+  /* Table */
+  .data-table { width: 100%; border-collapse: collapse; }
+  .data-table th { font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.07em; padding: 10px 14px; text-align: left; background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
+  .data-table th:not(:first-child) { text-align: right; }
+  .data-table td { padding: 12px 14px; font-size: 13px; color: #0f172a; border-bottom: 1px solid #f1f5f9; font-weight: 500; }
+  .data-table td:not(:first-child) { text-align: right; }
+  .data-table tr:last-child td { border-bottom: none; }
+
+  /* Spend row */
+  .spend-row { display: flex; align-items: center; justify-content: space-between; }
+  .spend-block { }
+  .spend-label { font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 4px; }
+  .spend-value { font-size: 26px; font-weight: 900; color: #0f172a; letter-spacing: -1px; }
+  .spend-sub { font-size: 11px; color: #94a3b8; margin-top: 3px; }
+  .progress-bar { background: #e2e8f0; border-radius: 3px; height: 5px; margin-top: 8px; overflow: hidden; }
+  .progress-fill { background: #059669; height: 100%; border-radius: 3px; }
+  .divider { width: 1px; background: #e2e8f0; align-self: stretch; margin: 0 8px; }
+
+  .gap-4 { display: flex; flex-direction: column; gap: 16px; }
+  .gap-3 { display: flex; flex-direction: column; gap: 12px; }
+
+  /* Watermark */
+  .mockup-note {
+    text-align: center; color: #cbd5e1; font-size: 11px; margin-top: 28px;
+    padding: 10px; border-top: 1px solid #e2e8f0;
+  }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="header">
+  <div class="header-brand">
+    <div class="brand-icon">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+        <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="white"/>
+      </svg>
+    </div>
+    <div>
+      <div class="brand-name">Stand Up Recruitment</div>
+      <div class="brand-sub">Command Center</div>
+    </div>
+  </div>
+
+  <nav class="tabs">
+    <a class="tab" href="#">Overview</a>
+    <a class="tab active" href="#">Marketing</a>
+    <a class="tab" href="#">Sales</a>
+    <a class="tab" href="#">Recruitment</a>
+    <a class="tab coming-soon" href="#" title="Coming soon">Finance</a>
+    <a class="tab coming-soon" href="#" title="Coming soon">Retention</a>
+  </nav>
+
+  <div class="header-right">
+    <div class="time-block">
+      <div class="time">9:41 AM</div>
+      <div class="date">Monday, 16 June 2026</div>
+    </div>
+    <button class="btn-refresh">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+      Refresh
+    </button>
+  </div>
+</header>
+
+<!-- MARKETING PAGE -->
+<div class="page">
+
+  <!-- Page header -->
+  <div class="page-header">
+    <div>
+      <div class="page-title">Marketing</div>
+      <div class="page-subtitle">Week of 9–16 June 2026 · Updates every 60s</div>
+    </div>
+    <div class="status-pill">
+      <div class="status-dot"></div>
+      On Track
+    </div>
+  </div>
+
+  <div class="gap-4">
+
+    <!-- HERO CARD: Qualified leads -->
+    <div class="card hero-card">
+      <div class="hero-row">
+        <!-- Candidate leads -->
+        <div>
+          <div class="hero-label">Candidate Leads</div>
+          <div style="display:flex;align-items:baseline;gap:4px;margin-bottom:16px">
+            <span class="hero-number">24</span>
+            <span class="wow-badge wow-up">↑ 12%</span>
+          </div>
+          <div class="stat-grid" style="grid-template-columns:1fr 1fr;">
+            <div class="stat-card">
+              <div class="stat-label">Qual Rate</div>
+              <div class="stat-value green">65%</div>
+              <div class="stat-trend" style="color:#94a3b8">↔ flat</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Cost per Lead</div>
+              <div class="stat-value">$46</div>
+              <div class="stat-trend down">↑ 5% cost</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="hero-divider"></div>
+
+        <!-- Client leads -->
+        <div>
+          <div class="hero-label">Client Leads</div>
+          <div style="display:flex;align-items:baseline;gap:4px;margin-bottom:16px">
+            <span class="hero-number-sm">8</span>
+            <span class="wow-badge wow-up">↑ 33%</span>
+          </div>
+          <div class="stat-grid" style="grid-template-columns:1fr 1fr;">
+            <div class="stat-card">
+              <div class="stat-label">Qual Rate</div>
+              <div class="stat-value amber">42%</div>
+              <div class="stat-trend up">↑ 8%</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Cost per Lead</div>
+              <div class="stat-value">$138</div>
+              <div class="stat-trend up">↓ 10% cost</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CHANNEL BREAKDOWN -->
+    <div class="card">
+      <div style="padding:16px 20px 0">
+        <div class="section-label">Channel Breakdown</div>
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Channel</th>
+            <th>Leads</th>
+            <th>Qual %</th>
+            <th>Cost per Qual. Lead</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <div style="display:flex;align-items:center;gap:8px">
+                <div style="width:8px;height:8px;background:#059669;border-radius:50%"></div>
+                Meta Paid
+              </div>
+            </td>
+            <td>42</td>
+            <td><span style="color:#059669;font-weight:700">60%</span></td>
+            <td>$40</td>
+          </tr>
+          <tr>
+            <td>
+              <div style="display:flex;align-items:center;gap:8px">
+                <div style="width:8px;height:8px;background:#94a3b8;border-radius:50%"></div>
+                Instagram Organic
+              </div>
+            </td>
+            <td>14</td>
+            <td><span style="color:#d97706;font-weight:700">35%</span></td>
+            <td style="color:#94a3b8">—</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- AD SPEND -->
+    <div class="card card-pad">
+      <div class="section-label" style="margin-bottom:16px">Ad Spend</div>
+      <div class="spend-row">
+        <div class="spend-block">
+          <div class="spend-label">This Week</div>
+          <div style="display:flex;align-items:baseline;gap:8px">
+            <span class="spend-value">$1,107</span>
+            <span class="wow-badge wow-up" style="font-size:10px">↑ 8%</span>
+          </div>
+          <div class="spend-sub">vs $1,025 last week</div>
+        </div>
+        <div class="divider"></div>
+        <div class="spend-block" style="flex:1;margin-left:24px">
+          <div class="spend-label">Weekly Budget</div>
+          <div style="display:flex;align-items:baseline;justify-content:space-between">
+            <span class="spend-value">$1,500</span>
+            <span style="font-size:12px;color:#059669;font-weight:700">74% used</span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-fill" style="width:74%"></div>
+          </div>
+          <div class="spend-sub" style="margin-top:6px">$393 remaining</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="mockup-note">Design mockup — Executive Light · Top Tabs · Hero + Grid · Emerald Green</div>
+
+</body>
+</html>

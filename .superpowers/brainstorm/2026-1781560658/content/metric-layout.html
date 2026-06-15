@@ -1,0 +1,230 @@
+<h2>How should metrics be presented on each department page?</h2>
+<p class="subtitle">Using Marketing as the example — same data, three different layouts</p>
+
+<div class="cards">
+
+  <!-- Option A: Hero + Grid -->
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#f8fafc;border-radius:8px;font-family:system-ui;height:260px;overflow:hidden;border:1px solid #e2e8f0;padding:12px;display:flex;flex-direction:column;gap:8px">
+        <!-- Hero stat -->
+        <div style="background:white;border:1px solid #e2e8f0;border-radius:10px;padding:14px;box-shadow:0 1px 4px rgba(0,0,0,0.06);display:flex;align-items:center;justify-content:space-between">
+          <div>
+            <div style="color:#94a3b8;font-size:7px;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Qualified Candidate Leads this week</div>
+            <div style="display:flex;align-items:baseline;gap:8px">
+              <span style="color:#0f172a;font-size:32px;font-weight:900;letter-spacing:-1.5px">24</span>
+              <span style="background:#dcfce7;color:#16a34a;font-size:9px;font-weight:600;padding:2px 6px;border-radius:20px">↑ 12% WoW</span>
+            </div>
+          </div>
+          <div style="text-align:right">
+            <div style="color:#94a3b8;font-size:7px;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Qualified Client Leads</div>
+            <div style="display:flex;align-items:baseline;gap:6px;justify-content:flex-end">
+              <span style="color:#0f172a;font-size:24px;font-weight:800;letter-spacing:-1px">8</span>
+              <span style="background:#dcfce7;color:#16a34a;font-size:8px;font-weight:600;padding:2px 5px;border-radius:20px">↑ 33%</span>
+            </div>
+          </div>
+        </div>
+        <!-- 4-stat grid -->
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">
+          <div style="background:white;border:1px solid #e2e8f0;border-radius:8px;padding:8px;box-shadow:0 1px 2px rgba(0,0,0,0.04)">
+            <div style="color:#94a3b8;font-size:6px;text-transform:uppercase;margin-bottom:4px">Cand. Qual %</div>
+            <div style="color:#f59e0b;font-size:13px;font-weight:700">65%</div>
+            <div style="color:#94a3b8;font-size:6px;margin-top:2px">↔ flat</div>
+          </div>
+          <div style="background:white;border:1px solid #e2e8f0;border-radius:8px;padding:8px;box-shadow:0 1px 2px rgba(0,0,0,0.04)">
+            <div style="color:#94a3b8;font-size:6px;text-transform:uppercase;margin-bottom:4px">Cand. CPL</div>
+            <div style="color:#0f172a;font-size:13px;font-weight:700">$46</div>
+            <div style="color:#ef4444;font-size:6px;margin-top:2px">↑ 5%</div>
+          </div>
+          <div style="background:white;border:1px solid #e2e8f0;border-radius:8px;padding:8px;box-shadow:0 1px 2px rgba(0,0,0,0.04)">
+            <div style="color:#94a3b8;font-size:6px;text-transform:uppercase;margin-bottom:4px">Client Qual %</div>
+            <div style="color:#f59e0b;font-size:13px;font-weight:700">42%</div>
+            <div style="color:#16a34a;font-size:6px;margin-top:2px">↑ 8%</div>
+          </div>
+          <div style="background:white;border:1px solid #e2e8f0;border-radius:8px;padding:8px;box-shadow:0 1px 2px rgba(0,0,0,0.04)">
+            <div style="color:#94a3b8;font-size:6px;text-transform:uppercase;margin-bottom:4px">Client CPL</div>
+            <div style="color:#0f172a;font-size:13px;font-weight:700">$138</div>
+            <div style="color:#16a34a;font-size:6px;margin-top:2px">↓ 10%</div>
+          </div>
+        </div>
+        <!-- Channel table -->
+        <div style="background:white;border:1px solid #e2e8f0;border-radius:8px;padding:8px;box-shadow:0 1px 2px rgba(0,0,0,0.04);flex:1">
+          <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:4px;align-items:center">
+            <div style="color:#64748b;font-size:6px;font-weight:600;text-transform:uppercase">Channel</div>
+            <div style="color:#64748b;font-size:6px;font-weight:600;text-align:right">Leads</div>
+            <div style="color:#64748b;font-size:6px;font-weight:600;text-align:right">Qual %</div>
+            <div style="color:#64748b;font-size:6px;font-weight:600;text-align:right">CPL</div>
+            <div style="color:#0f172a;font-size:7px;font-weight:500">Meta Paid</div>
+            <div style="color:#0f172a;font-size:7px;text-align:right">42</div>
+            <div style="color:#0f172a;font-size:7px;text-align:right">60%</div>
+            <div style="color:#0f172a;font-size:7px;text-align:right">$40</div>
+            <div style="color:#0f172a;font-size:7px;font-weight:500">Instagram Org.</div>
+            <div style="color:#0f172a;font-size:7px;text-align:right">14</div>
+            <div style="color:#0f172a;font-size:7px;text-align:right">35%</div>
+            <div style="color:#94a3b8;font-size:7px;text-align:right">—</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Hero + Grid</h3>
+      <p>The most important number is huge at the top. Supporting stats in a tight grid below. Everything on one scan. Clean hierarchy.</p>
+    </div>
+  </div>
+
+  <!-- Option B: Section columns -->
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#f8fafc;border-radius:8px;font-family:system-ui;height:260px;overflow:hidden;border:1px solid #e2e8f0;padding:12px;display:flex;flex-direction:column;gap:8px">
+        <!-- Two column sections -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;flex:1">
+          <!-- Candidate section -->
+          <div style="background:white;border:1px solid #e2e8f0;border-radius:10px;padding:10px;box-shadow:0 1px 3px rgba(0,0,0,0.05);display:flex;flex-direction:column;gap:6px">
+            <div style="color:#f59e0b;font-size:7px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;border-bottom:1px solid #fef3c7;padding-bottom:5px">Candidate Leads</div>
+            <div>
+              <div style="color:#94a3b8;font-size:6px;text-transform:uppercase;margin-bottom:2px">Qualified</div>
+              <div style="display:flex;align-items:baseline;gap:4px">
+                <span style="color:#0f172a;font-size:22px;font-weight:900;letter-spacing:-1px">24</span>
+                <span style="color:#16a34a;font-size:8px;font-weight:600">↑12%</span>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
+              <div>
+                <div style="color:#94a3b8;font-size:6px;margin-bottom:1px">Qual Rate</div>
+                <div style="color:#f59e0b;font-size:11px;font-weight:700">65% <span style="color:#94a3b8;font-size:6px">↔</span></div>
+              </div>
+              <div>
+                <div style="color:#94a3b8;font-size:6px;margin-bottom:1px">CPL</div>
+                <div style="color:#0f172a;font-size:11px;font-weight:700">$46 <span style="color:#ef4444;font-size:6px">↑</span></div>
+              </div>
+            </div>
+          </div>
+          <!-- Client section -->
+          <div style="background:white;border:1px solid #e2e8f0;border-radius:10px;padding:10px;box-shadow:0 1px 3px rgba(0,0,0,0.05);display:flex;flex-direction:column;gap:6px">
+            <div style="color:#3b82f6;font-size:7px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;border-bottom:1px solid #dbeafe;padding-bottom:5px">Client Leads</div>
+            <div>
+              <div style="color:#94a3b8;font-size:6px;text-transform:uppercase;margin-bottom:2px">Qualified</div>
+              <div style="display:flex;align-items:baseline;gap:4px">
+                <span style="color:#0f172a;font-size:22px;font-weight:900;letter-spacing:-1px">8</span>
+                <span style="color:#16a34a;font-size:8px;font-weight:600">↑33%</span>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
+              <div>
+                <div style="color:#94a3b8;font-size:6px;margin-bottom:1px">Qual Rate</div>
+                <div style="color:#3b82f6;font-size:11px;font-weight:700">42% <span style="color:#16a34a;font-size:6px">↑</span></div>
+              </div>
+              <div>
+                <div style="color:#94a3b8;font-size:6px;margin-bottom:1px">CPL</div>
+                <div style="color:#0f172a;font-size:11px;font-weight:700">$138 <span style="color:#16a34a;font-size:6px">↓</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- Bottom: channels + spend -->
+        <div style="display:grid;grid-template-columns:2fr 1fr;gap:8px">
+          <div style="background:white;border:1px solid #e2e8f0;border-radius:8px;padding:8px;box-shadow:0 1px 2px rgba(0,0,0,0.04)">
+            <div style="color:#64748b;font-size:6px;font-weight:600;text-transform:uppercase;margin-bottom:5px">Channels</div>
+            <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:3px">
+              <div style="color:#94a3b8;font-size:6px">Channel</div><div style="color:#94a3b8;font-size:6px;text-align:right">Leads</div><div style="color:#94a3b8;font-size:6px;text-align:right">Qual%</div><div style="color:#94a3b8;font-size:6px;text-align:right">CPL</div>
+              <div style="color:#0f172a;font-size:7px">Meta Paid</div><div style="color:#0f172a;font-size:7px;text-align:right">42</div><div style="color:#0f172a;font-size:7px;text-align:right">60%</div><div style="color:#0f172a;font-size:7px;text-align:right">$40</div>
+              <div style="color:#0f172a;font-size:7px">IG Organic</div><div style="color:#0f172a;font-size:7px;text-align:right">14</div><div style="color:#0f172a;font-size:7px;text-align:right">35%</div><div style="color:#94a3b8;font-size:7px;text-align:right">—</div>
+            </div>
+          </div>
+          <div style="background:white;border:1px solid #e2e8f0;border-radius:8px;padding:8px;box-shadow:0 1px 2px rgba(0,0,0,0.04)">
+            <div style="color:#64748b;font-size:6px;font-weight:600;text-transform:uppercase;margin-bottom:5px">Ad Spend</div>
+            <div style="color:#0f172a;font-size:14px;font-weight:800">$1,107</div>
+            <div style="color:#94a3b8;font-size:6px;margin-top:1px">Budget: $1,500</div>
+            <div style="background:#e2e8f0;border-radius:2px;height:3px;margin-top:4px">
+              <div style="background:#16a34a;width:74%;height:100%;border-radius:2px"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Section Columns</h3>
+      <p>Candidate and Client sections side by side as distinct panels. Spend with a budget progress bar at the bottom. Clear visual separation.</p>
+    </div>
+  </div>
+
+  <!-- Option C: Scorecard rows -->
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#f8fafc;border-radius:8px;font-family:system-ui;height:260px;overflow:hidden;border:1px solid #e2e8f0;padding:12px;display:flex;flex-direction:column;gap:6px">
+        <!-- Row-based scorecard -->
+        <div style="background:white;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.05)">
+          <!-- Header row -->
+          <div style="display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr 1fr;padding:6px 10px;background:#f8fafc;border-bottom:1px solid #e2e8f0">
+            <div style="color:#64748b;font-size:6px;font-weight:600;text-transform:uppercase">Metric</div>
+            <div style="color:#64748b;font-size:6px;font-weight:600;text-align:right;text-transform:uppercase">This Week</div>
+            <div style="color:#64748b;font-size:6px;font-weight:600;text-align:right;text-transform:uppercase">vs Last</div>
+            <div style="color:#64748b;font-size:6px;font-weight:600;text-align:right;text-transform:uppercase">Qual %</div>
+            <div style="color:#64748b;font-size:6px;font-weight:600;text-align:right;text-transform:uppercase">CPL</div>
+          </div>
+          <!-- Candidate row -->
+          <div style="display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr 1fr;padding:8px 10px;border-bottom:1px solid #f1f5f9;align-items:center">
+            <div style="display:flex;align-items:center;gap:4px">
+              <div style="width:6px;height:6px;background:#f59e0b;border-radius:50%"></div>
+              <span style="color:#0f172a;font-size:7px;font-weight:600">Candidates</span>
+            </div>
+            <div style="color:#0f172a;font-size:14px;font-weight:800;text-align:right">24</div>
+            <div style="text-align:right"><span style="background:#dcfce7;color:#16a34a;font-size:7px;font-weight:600;padding:1px 5px;border-radius:10px">↑12%</span></div>
+            <div style="color:#f59e0b;font-size:10px;font-weight:700;text-align:right">65%</div>
+            <div style="color:#0f172a;font-size:10px;font-weight:700;text-align:right">$46</div>
+          </div>
+          <!-- Client row -->
+          <div style="display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr 1fr;padding:8px 10px;align-items:center">
+            <div style="display:flex;align-items:center;gap:4px">
+              <div style="width:6px;height:6px;background:#3b82f6;border-radius:50%"></div>
+              <span style="color:#0f172a;font-size:7px;font-weight:600">Clients</span>
+            </div>
+            <div style="color:#0f172a;font-size:14px;font-weight:800;text-align:right">8</div>
+            <div style="text-align:right"><span style="background:#dcfce7;color:#16a34a;font-size:7px;font-weight:600;padding:1px 5px;border-radius:10px">↑33%</span></div>
+            <div style="color:#3b82f6;font-size:10px;font-weight:700;text-align:right">42%</div>
+            <div style="color:#0f172a;font-size:10px;font-weight:700;text-align:right">$138</div>
+          </div>
+        </div>
+        <!-- Channel table -->
+        <div style="background:white;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.05)">
+          <div style="display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr;padding:6px 10px;background:#f8fafc;border-bottom:1px solid #e2e8f0">
+            <div style="color:#64748b;font-size:6px;font-weight:600;text-transform:uppercase">Channel</div>
+            <div style="color:#64748b;font-size:6px;font-weight:600;text-align:right;text-transform:uppercase">Leads</div>
+            <div style="color:#64748b;font-size:6px;font-weight:600;text-align:right;text-transform:uppercase">Qual %</div>
+            <div style="color:#64748b;font-size:6px;font-weight:600;text-align:right;text-transform:uppercase">CPL</div>
+          </div>
+          <div style="display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr;padding:7px 10px;border-bottom:1px solid #f1f5f9;align-items:center">
+            <div style="color:#0f172a;font-size:7px;font-weight:500">Meta Paid</div>
+            <div style="color:#0f172a;font-size:9px;font-weight:700;text-align:right">42</div>
+            <div style="color:#0f172a;font-size:9px;text-align:right">60%</div>
+            <div style="color:#0f172a;font-size:9px;text-align:right">$40</div>
+          </div>
+          <div style="display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr;padding:7px 10px;align-items:center">
+            <div style="color:#0f172a;font-size:7px;font-weight:500">Instagram Org.</div>
+            <div style="color:#0f172a;font-size:9px;font-weight:700;text-align:right">14</div>
+            <div style="color:#0f172a;font-size:9px;text-align:right">35%</div>
+            <div style="color:#94a3b8;font-size:9px;text-align:right">—</div>
+          </div>
+        </div>
+        <!-- Spend row -->
+        <div style="background:white;border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px;box-shadow:0 1px 2px rgba(0,0,0,0.04);display:flex;justify-content:space-between;align-items:center">
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="color:#64748b;font-size:7px;font-weight:600;text-transform:uppercase">Ad Spend</span>
+            <span style="color:#0f172a;font-size:13px;font-weight:800">$1,107</span>
+            <span style="background:#fef9ec;color:#b45309;font-size:7px;padding:1px 5px;border-radius:10px">↑8% WoW</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="color:#64748b;font-size:7px">Budget</span>
+            <span style="color:#0f172a;font-size:13px;font-weight:800">$1,500</span>
+            <span style="background:#dcfce7;color:#16a34a;font-size:7px;padding:1px 5px;border-radius:10px">74% used</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Scorecard Rows</h3>
+      <p>Table-style layout — every metric in a row for quick scanning. Candidates and Clients as rows, not columns. Dense but very readable.</p>
+    </div>
+  </div>
+
+</div>

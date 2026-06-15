@@ -1,0 +1,144 @@
+<h2>Which design direction feels right?</h2>
+<p class="subtitle">Each has a different personality — pick the one that feels most like your brand</p>
+
+<div class="cards">
+
+  <!-- Option A: Command Dark -->
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#09090b;border-radius:8px;padding:14px;font-family:system-ui;height:220px;overflow:hidden;position:relative">
+        <!-- Mini sidebar -->
+        <div style="display:flex;gap:10px;height:100%">
+          <div style="width:36px;display:flex;flex-direction:column;gap:6px;padding-top:4px">
+            <div style="width:24px;height:24px;background:#18181b;border-radius:6px;display:flex;align-items:center;justify-content:center">
+              <div style="width:10px;height:10px;background:#71717a;border-radius:2px"></div>
+            </div>
+            <div style="width:4px;height:20px;background:#f59e0b;border-radius:2px;margin-left:0px"></div>
+            <div style="width:4px;height:20px;background:transparent;margin-left:0px"></div>
+            <div style="width:4px;height:20px;background:transparent;margin-left:0px"></div>
+          </div>
+          <div style="flex:1;display:flex;flex-direction:column;gap:8px">
+            <!-- Header bar -->
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+              <div style="color:#fafafa;font-size:11px;font-weight:700;letter-spacing:0.05em">MARKETING</div>
+              <div style="background:#16a34a22;border:1px solid #16a34a44;border-radius:20px;padding:2px 8px;color:#4ade80;font-size:9px;font-weight:600">● ON TRACK</div>
+            </div>
+            <!-- Big KPI -->
+            <div style="background:#18181b;border:1px solid #27272a;border-radius:10px;padding:12px">
+              <div style="color:#71717a;font-size:8px;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:6px">QUALIFIED LEADS</div>
+              <div style="display:flex;align-items:baseline;gap:6px">
+                <span style="color:#fafafa;font-size:28px;font-weight:800;letter-spacing:-1px">24</span>
+                <span style="color:#4ade80;font-size:10px;font-weight:600">↑12%</span>
+              </div>
+              <div style="color:#52525b;font-size:8px;margin-top:2px">vs 20 last week</div>
+            </div>
+            <!-- 2 smaller KPIs -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+              <div style="background:#18181b;border:1px solid #27272a;border-radius:8px;padding:8px">
+                <div style="color:#71717a;font-size:7px;letter-spacing:0.06em;text-transform:uppercase;margin-bottom:4px">QUAL RATE</div>
+                <div style="color:#f59e0b;font-size:14px;font-weight:700">65%</div>
+              </div>
+              <div style="background:#18181b;border:1px solid #27272a;border-radius:8px;padding:8px">
+                <div style="color:#71717a;font-size:7px;letter-spacing:0.06em;text-transform:uppercase;margin-bottom:4px">CPL</div>
+                <div style="color:#fafafa;font-size:14px;font-weight:700">$46</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Command Dark</h3>
+      <p>Zinc blacks, crisp white type, tight spacing. Feels like Linear or Vercel's dashboard. Professional and focused — every pixel earns its place.</p>
+    </div>
+  </div>
+
+  <!-- Option B: Electric Midnight -->
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#0d0e1a;border-radius:8px;padding:14px;font-family:system-ui;height:220px;overflow:hidden;position:relative">
+        <!-- Glow accent top -->
+        <div style="position:absolute;top:-20px;right:20px;width:80px;height:80px;background:radial-gradient(circle,#6366f144 0%,transparent 70%);pointer-events:none"></div>
+        <div style="display:flex;gap:10px;height:100%">
+          <div style="width:36px;display:flex;flex-direction:column;gap:6px;padding-top:4px">
+            <div style="width:24px;height:24px;background:linear-gradient(135deg,#6366f1,#8b5cf6);border-radius:6px;display:flex;align-items:center;justify-content:center">
+              <div style="width:10px;height:10px;background:white;border-radius:2px;opacity:0.9"></div>
+            </div>
+            <div style="width:24px;height:24px;background:#f59e0b22;border-radius:6px;border:1px solid #f59e0b66"></div>
+            <div style="width:24px;height:24px;background:#ffffff08;border-radius:6px"></div>
+          </div>
+          <div style="flex:1;display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+              <div style="color:#e2e8f0;font-size:11px;font-weight:700">Marketing</div>
+              <div style="background:linear-gradient(90deg,#10b98122,#06b6d422);border:1px solid #10b98144;border-radius:20px;padding:2px 8px;color:#34d399;font-size:9px">On Track</div>
+            </div>
+            <div style="background:linear-gradient(135deg,#1e1f3b,#16172e);border:1px solid #2d2f5e;border-radius:10px;padding:12px">
+              <div style="color:#818cf8;font-size:8px;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:6px">QUALIFIED LEADS</div>
+              <div style="display:flex;align-items:baseline;gap:6px">
+                <span style="color:white;font-size:28px;font-weight:800;letter-spacing:-1px">24</span>
+                <span style="color:#34d399;font-size:10px;font-weight:600">↑12%</span>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+              <div style="background:linear-gradient(135deg,#1e1f3b,#16172e);border:1px solid #2d2f5e;border-radius:8px;padding:8px">
+                <div style="color:#818cf8;font-size:7px;letter-spacing:0.06em;text-transform:uppercase;margin-bottom:4px">QUAL RATE</div>
+                <div style="background:linear-gradient(90deg,#f59e0b,#f97316);-webkit-background-clip:text;-webkit-text-fill-color:transparent;font-size:14px;font-weight:700">65%</div>
+              </div>
+              <div style="background:linear-gradient(135deg,#1e1f3b,#16172e);border:1px solid #2d2f5e;border-radius:8px;padding:8px">
+                <div style="color:#818cf8;font-size:7px;letter-spacing:0.06em;text-transform:uppercase;margin-bottom:4px">CPL</div>
+                <div style="color:white;font-size:14px;font-weight:700">$46</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Electric Midnight</h3>
+      <p>Deep navy + indigo with gradient glows and neon accents. High energy, tech-forward. Feels like a Bloomberg terminal meets modern SaaS.</p>
+    </div>
+  </div>
+
+  <!-- Option C: Executive Light -->
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#f8fafc;border-radius:8px;padding:14px;font-family:system-ui;height:220px;overflow:hidden;border:1px solid #e2e8f0">
+        <div style="display:flex;gap:10px;height:100%">
+          <div style="width:36px;display:flex;flex-direction:column;gap:6px;padding-top:4px">
+            <div style="width:24px;height:24px;background:#0f172a;border-radius:6px"></div>
+            <div style="width:24px;height:24px;background:#f59e0b1a;border-radius:6px;border-left:3px solid #f59e0b"></div>
+            <div style="width:24px;height:24px;background:#f1f5f9;border-radius:6px"></div>
+          </div>
+          <div style="flex:1;display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+              <div style="color:#0f172a;font-size:11px;font-weight:700">Marketing</div>
+              <div style="background:#dcfce7;border-radius:20px;padding:2px 8px;color:#16a34a;font-size:9px;font-weight:600">On Track</div>
+            </div>
+            <div style="background:white;border:1px solid #e2e8f0;border-radius:10px;padding:12px;box-shadow:0 1px 3px rgba(0,0,0,0.06)">
+              <div style="color:#94a3b8;font-size:8px;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:6px">QUALIFIED LEADS</div>
+              <div style="display:flex;align-items:baseline;gap:6px">
+                <span style="color:#0f172a;font-size:28px;font-weight:800;letter-spacing:-1px">24</span>
+                <span style="color:#16a34a;font-size:10px;font-weight:600">↑12%</span>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+              <div style="background:white;border:1px solid #e2e8f0;border-radius:8px;padding:8px;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+                <div style="color:#94a3b8;font-size:7px;letter-spacing:0.06em;text-transform:uppercase;margin-bottom:4px">QUAL RATE</div>
+                <div style="color:#f59e0b;font-size:14px;font-weight:700">65%</div>
+              </div>
+              <div style="background:white;border:1px solid #e2e8f0;border-radius:8px;padding:8px;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+                <div style="color:#94a3b8;font-size:7px;letter-spacing:0.06em;text-transform:uppercase;margin-bottom:4px">CPL</div>
+                <div style="color:#0f172a;font-size:14px;font-weight:700">$46</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Executive Light</h3>
+      <p>Clean white with slate typography and subtle shadows. Stripe / Notion aesthetic. Professional, easy to read, works well in bright offices.</p>
+    </div>
+  </div>
+
+</div>

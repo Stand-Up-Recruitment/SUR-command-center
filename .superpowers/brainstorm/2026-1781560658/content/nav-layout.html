@@ -1,0 +1,169 @@
+<h2>How should you navigate between departments?</h2>
+<p class="subtitle">The nav pattern shapes the whole feel of the app</p>
+
+<div class="cards">
+
+  <!-- Option A: Top tabs -->
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#f8fafc;border-radius:8px;font-family:system-ui;height:220px;overflow:hidden;border:1px solid #e2e8f0">
+        <!-- Top bar -->
+        <div style="background:white;border-bottom:1px solid #e2e8f0;padding:10px 14px;display:flex;align-items:center;justify-content:space-between">
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="width:20px;height:20px;background:#0f172a;border-radius:5px"></div>
+            <span style="color:#0f172a;font-size:10px;font-weight:700">Stand Up Recruitment</span>
+          </div>
+          <div style="color:#94a3b8;font-size:8px">09:41 AM</div>
+        </div>
+        <!-- Tab nav -->
+        <div style="background:white;border-bottom:1px solid #e2e8f0;padding:0 14px;display:flex;gap:2px">
+          <div style="padding:7px 10px;color:#94a3b8;font-size:8px;font-weight:500">Overview</div>
+          <div style="padding:7px 10px;color:#f59e0b;font-size:8px;font-weight:600;border-bottom:2px solid #f59e0b">Marketing</div>
+          <div style="padding:7px 10px;color:#94a3b8;font-size:8px;font-weight:500">Sales</div>
+          <div style="padding:7px 10px;color:#94a3b8;font-size:8px;font-weight:500">Recruitment</div>
+          <div style="padding:7px 10px;color:#94a3b8;font-size:8px;font-weight:500">Finance</div>
+        </div>
+        <!-- Content -->
+        <div style="padding:14px;display:flex;flex-direction:column;gap:8px">
+          <div style="color:#0f172a;font-size:11px;font-weight:700">Marketing</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div style="background:white;border:1px solid #e2e8f0;border-radius:8px;padding:10px;box-shadow:0 1px 3px rgba(0,0,0,0.05)">
+              <div style="color:#94a3b8;font-size:7px;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">Qualified Leads</div>
+              <div style="color:#0f172a;font-size:18px;font-weight:800">24 <span style="color:#16a34a;font-size:9px">↑12%</span></div>
+            </div>
+            <div style="background:white;border:1px solid #e2e8f0;border-radius:8px;padding:10px;box-shadow:0 1px 3px rgba(0,0,0,0.05)">
+              <div style="color:#94a3b8;font-size:7px;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">Ad Spend</div>
+              <div style="color:#0f172a;font-size:18px;font-weight:800">$1,107</div>
+            </div>
+          </div>
+          <div style="background:white;border:1px solid #e2e8f0;border-radius:8px;padding:10px;box-shadow:0 1px 3px rgba(0,0,0,0.05)">
+            <div style="color:#94a3b8;font-size:7px;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">Channel Breakdown</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px">
+              <div style="color:#64748b;font-size:7px">Channel</div>
+              <div style="color:#64748b;font-size:7px;text-align:right">Leads</div>
+              <div style="color:#64748b;font-size:7px;text-align:right">Qual%</div>
+              <div style="color:#64748b;font-size:7px;text-align:right">CPL</div>
+              <div style="color:#0f172a;font-size:8px;font-weight:500">Meta Paid</div>
+              <div style="color:#0f172a;font-size:8px;text-align:right">42</div>
+              <div style="color:#0f172a;font-size:8px;text-align:right">60%</div>
+              <div style="color:#0f172a;font-size:8px;text-align:right">$40</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Top Tabs</h3>
+      <p>Horizontal tabs under the header. Familiar pattern, maximises content width, works well on wide screens. Like Stripe or Shopify admin.</p>
+    </div>
+  </div>
+
+  <!-- Option B: Left sidebar -->
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#f8fafc;border-radius:8px;font-family:system-ui;height:220px;overflow:hidden;border:1px solid #e2e8f0;display:flex;flex-direction:column">
+        <!-- Header -->
+        <div style="background:white;border-bottom:1px solid #e2e8f0;padding:8px 12px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+          <div style="display:flex;align-items:center;gap:6px">
+            <div style="width:18px;height:18px;background:#0f172a;border-radius:4px"></div>
+            <span style="color:#0f172a;font-size:9px;font-weight:700">Stand Up Recruitment</span>
+          </div>
+          <div style="color:#94a3b8;font-size:7px">09:41 AM</div>
+        </div>
+        <!-- Body with sidebar -->
+        <div style="display:flex;flex:1;overflow:hidden">
+          <!-- Sidebar -->
+          <div style="width:110px;background:white;border-right:1px solid #e2e8f0;padding:8px 0;flex-shrink:0">
+            <div style="padding:4px 10px;color:#94a3b8;font-size:7px;font-weight:500">Overview</div>
+            <div style="padding:4px 10px;background:#fef9ec;border-right:2px solid #f59e0b;color:#b45309;font-size:7px;font-weight:600">Marketing</div>
+            <div style="padding:4px 10px;color:#94a3b8;font-size:7px;font-weight:500">Sales</div>
+            <div style="padding:4px 10px;color:#94a3b8;font-size:7px;font-weight:500">Recruitment</div>
+            <div style="padding:4px 10px;color:#94a3b8;font-size:7px;font-weight:500">Finance</div>
+            <div style="padding:4px 10px;color:#94a3b8;font-size:7px;font-weight:500">Retention</div>
+          </div>
+          <!-- Content -->
+          <div style="flex:1;padding:10px;display:flex;flex-direction:column;gap:6px;overflow:hidden">
+            <div style="color:#0f172a;font-size:9px;font-weight:700">Marketing</div>
+            <div style="background:white;border:1px solid #e2e8f0;border-radius:6px;padding:8px;box-shadow:0 1px 2px rgba(0,0,0,0.05)">
+              <div style="color:#94a3b8;font-size:6px;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:3px">Qualified Leads</div>
+              <div style="color:#0f172a;font-size:16px;font-weight:800">24 <span style="color:#16a34a;font-size:8px">↑12%</span></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px">
+              <div style="background:white;border:1px solid #e2e8f0;border-radius:6px;padding:7px;box-shadow:0 1px 2px rgba(0,0,0,0.05)">
+                <div style="color:#94a3b8;font-size:6px;text-transform:uppercase;margin-bottom:2px">Qual Rate</div>
+                <div style="color:#f59e0b;font-size:12px;font-weight:700">65%</div>
+              </div>
+              <div style="background:white;border:1px solid #e2e8f0;border-radius:6px;padding:7px;box-shadow:0 1px 2px rgba(0,0,0,0.05)">
+                <div style="color:#94a3b8;font-size:6px;text-transform:uppercase;margin-bottom:2px">CPL</div>
+                <div style="color:#0f172a;font-size:12px;font-weight:700">$46</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Left Sidebar</h3>
+      <p>Persistent sidebar with all departments visible at once. You always know where you are. Like Notion, Linear, or Vercel's dashboard. Current app uses this.</p>
+    </div>
+  </div>
+
+  <!-- Option C: Icon rail + expanded -->
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#f8fafc;border-radius:8px;font-family:system-ui;height:220px;overflow:hidden;border:1px solid #e2e8f0;display:flex;flex-direction:column">
+        <!-- Header -->
+        <div style="background:white;border-bottom:1px solid #e2e8f0;padding:8px 12px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+          <div style="display:flex;align-items:center;gap:6px">
+            <div style="width:18px;height:18px;background:#0f172a;border-radius:4px"></div>
+            <span style="color:#0f172a;font-size:9px;font-weight:700">SUR Command Center</span>
+          </div>
+          <div style="color:#94a3b8;font-size:7px">09:41 AM</div>
+        </div>
+        <div style="display:flex;flex:1;overflow:hidden">
+          <!-- Icon rail -->
+          <div style="width:36px;background:white;border-right:1px solid #e2e8f0;padding:8px 0;display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0">
+            <div style="width:24px;height:24px;background:#f1f5f9;border-radius:6px;display:flex;align-items:center;justify-content:center">
+              <div style="width:10px;height:10px;background:#94a3b8;border-radius:2px"></div>
+            </div>
+            <div style="width:24px;height:24px;background:#fef9ec;border-radius:6px;display:flex;align-items:center;justify-content:center;border:1px solid #fcd34d">
+              <div style="width:10px;height:2px;background:#f59e0b;border-radius:1px"></div>
+            </div>
+            <div style="width:24px;height:24px;background:#f1f5f9;border-radius:6px;display:flex;align-items:center;justify-content:center">
+              <div style="width:10px;height:10px;background:#94a3b8;border-radius:2px"></div>
+            </div>
+            <div style="width:24px;height:24px;background:#f1f5f9;border-radius:6px;display:flex;align-items:center;justify-content:center">
+              <div style="width:10px;height:10px;background:#94a3b8;border-radius:2px"></div>
+            </div>
+          </div>
+          <!-- Content -->
+          <div style="flex:1;padding:10px;display:flex;flex-direction:column;gap:6px">
+            <div style="display:flex;align-items:center;gap:6px">
+              <div style="width:3px;height:16px;background:#f59e0b;border-radius:2px"></div>
+              <div style="color:#0f172a;font-size:10px;font-weight:700">Marketing</div>
+            </div>
+            <div style="background:white;border:1px solid #e2e8f0;border-radius:6px;padding:8px;box-shadow:0 1px 2px rgba(0,0,0,0.05)">
+              <div style="color:#94a3b8;font-size:6px;text-transform:uppercase;margin-bottom:3px">Qualified Leads</div>
+              <div style="color:#0f172a;font-size:16px;font-weight:800">24 <span style="color:#16a34a;font-size:8px">↑12%</span></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px">
+              <div style="background:white;border:1px solid #e2e8f0;border-radius:6px;padding:7px">
+                <div style="color:#94a3b8;font-size:6px;text-transform:uppercase;margin-bottom:2px">Qual Rate</div>
+                <div style="color:#f59e0b;font-size:12px;font-weight:700">65%</div>
+              </div>
+              <div style="background:white;border:1px solid #e2e8f0;border-radius:6px;padding:7px">
+                <div style="color:#94a3b8;font-size:6px;text-transform:uppercase;margin-bottom:2px">CPL</div>
+                <div style="color:#0f172a;font-size:12px;font-weight:700">$46</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Icon Rail</h3>
+      <p>Narrow icon-only sidebar — maximises content space. Hover or click reveals the department name. Like Figma or Slack's compact nav.</p>
+    </div>
+  </div>
+
+</div>
