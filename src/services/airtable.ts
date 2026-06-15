@@ -47,7 +47,7 @@ async function fetchTableFromBase<T>(
   tableId: string,
   params?: Record<string, string>
 ): Promise<AirtableResponse<T>> {
-  const url = new URL(`https://api.airtable.com/v0/${baseId}/${tableId}`);
+  const url = new URL(`https://api.airtable.com/v0/${baseId}/${encodeURIComponent(tableId)}`);
   if (params) {
     Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
   }
@@ -70,7 +70,7 @@ async function fetchAllFromBase<T>(
   const all: T[] = [];
   let offset: string | undefined;
   do {
-    const url = new URL(`https://api.airtable.com/v0/${baseId}/${tableId}`);
+    const url = new URL(`https://api.airtable.com/v0/${baseId}/${encodeURIComponent(tableId)}`);
     const p = { ...params, ...(offset ? { offset } : {}) };
     Object.entries(p).forEach(([k, v]) => url.searchParams.set(k, v));
     if (fields) {
