@@ -64,13 +64,26 @@ async function fetchTableFromBase<T>(
 async function fetchAllFromBase<T>(
   baseId: string,
   tableId: string,
-  params?: Record<string, string>
+  params?: Record<string, string>,
+  fields?: string[]
 ): Promise<T[]> {
   const all: T[] = [];
   let offset: string | undefined;
   do {
+    const url = new URL(`https://api.airtable.com/v0/${baseId}/${tableId}`);
     const p = { ...params, ...(offset ? { offset } : {}) };
-    const data = await fetchTableFromBase<T>(baseId, tableId, p);
+    Object.entries(p).forEach(([k, v]) => url.searchParams.set(k, v));
+    if (fields) {
+      fields.forEach((f) => url.searchParams.append('fields[]', f));
+    }
+    const res = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${API_KEY}` },
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ error: { message: res.statusText } }));
+      throw new Error(error?.error?.message ?? `Airtable error ${res.status}`);
+    }
+    const data: AirtableResponse<T> = await res.json();
     all.push(...data.records.map((r) => r.fields));
     offset = data.offset;
   } while (offset);
@@ -276,20 +289,16 @@ export async function fetchMarketingKPIs(): Promise<MarketingKPIs> {
   ] = await Promise.all([
     fetchAllFromBase<ClientLeadFields>(CLIENTS_BASE_ID, CLIENTS_TABLE_ID, {
       filterByFormula: filters.thisWeek,
-      fields: JSON.stringify(clientFields),
-    }),
+    }, clientFields),
     fetchAllFromBase<ClientLeadFields>(CLIENTS_BASE_ID, CLIENTS_TABLE_ID, {
       filterByFormula: filters.prevWeek,
-      fields: JSON.stringify(clientFields),
-    }),
+    }, clientFields),
     fetchAllFromBase<CandidateLeadFields>(CANDIDATES_BASE_ID, CANDIDATES_TABLE_ID, {
       filterByFormula: filters.thisWeek,
-      fields: JSON.stringify(candidateFields),
-    }),
+    }, candidateFields),
     fetchAllFromBase<CandidateLeadFields>(CANDIDATES_BASE_ID, CANDIDATES_TABLE_ID, {
       filterByFormula: filters.prevWeek,
-      fields: JSON.stringify(candidateFields),
-    }),
+    }, candidateFields),
     fetchMetaSpend(),
     fetchAllFromBase<MarketingConfigFields>(CLIENTS_BASE_ID, 'Marketing Config', {
       maxRecords: '1',
