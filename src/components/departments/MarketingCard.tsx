@@ -90,7 +90,7 @@ export function MarketingCard() {
                       {spend > 0 && data!.candidates.qualified > 0 ? fmtCurrency(data!.candidates.cpl) : '—'}
                     </div>
                     {data!.candidates.prevCpl > 0 && data!.candidates.cpl > 0 && (
-                      <WoWBadge current={data!.candidates.prevCpl} prev={data!.candidates.cpl} invertDirection />
+                      <WoWBadge current={data!.candidates.cpl} prev={data!.candidates.prevCpl} invertDirection />
                     )}
                   </div>
                 </div>
@@ -124,7 +124,7 @@ export function MarketingCard() {
                       {spend > 0 && data!.clients.qualified > 0 ? fmtCurrency(data!.clients.cpl) : '—'}
                     </div>
                     {data!.clients.prevCpl > 0 && data!.clients.cpl > 0 && (
-                      <WoWBadge current={data!.clients.prevCpl} prev={data!.clients.cpl} invertDirection />
+                      <WoWBadge current={data!.clients.cpl} prev={data!.clients.prevCpl} invertDirection />
                     )}
                   </div>
                 </div>
