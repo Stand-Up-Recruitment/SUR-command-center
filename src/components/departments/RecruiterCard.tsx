@@ -1,13 +1,11 @@
 import { useCallback } from 'react';
 import { KPIMetric } from '../shared/KPIMetric';
-import { COLORS } from '../../styles/tokens';
 import { StatusBadge } from '../shared/StatusBadge';
 import { RecruiterTable } from '../shared/RecruiterTable';
 import { useAirtable } from '../../hooks/useAirtable';
 import { fetchRecruiterKPIs, MOCK_RECRUITER } from '../../services/airtable';
+import { COLORS, CARD_STYLE } from '../../styles/tokens';
 import type { DepartmentStatus } from '../../types';
-
-const COLOR = '#10b981';
 
 export function RecruiterCard() {
   const fetcher = useCallback(() => fetchRecruiterKPIs(), []);
@@ -22,82 +20,84 @@ export function RecruiterCard() {
     : 'off-track';
 
   return (
-    <div
-      style={{
-        background: '#1a1d27',
-        border: '1px solid #2a2d3e',
-        borderTop: `3px solid ${COLOR}`,
-      }}
-      className="rounded-xl p-5 flex flex-col gap-4"
-    >
-      {/* Header */}
-      <div className="flex items-start justify-between">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* Page header row */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
         <div>
-          <p style={{ color: COLOR }} className="text-xs font-semibold uppercase tracking-widest mb-0.5">
-            Recruiter
+          <h2 style={{ fontSize: 22, fontWeight: 900, color: COLORS.textPrimary, letterSpacing: '-0.5px', margin: 0 }}>
+            Recruitment
+          </h2>
+          <p style={{ fontSize: 13, color: COLORS.textMuted, margin: '3px 0 0' }}>
+            {new Date().toLocaleString('default', { month: 'long', year: 'numeric' })} · Updates every 60s
           </p>
-          <h3 style={{ color: '#e2e8f0' }} className="text-lg font-bold leading-none">
-            Placements &amp; Pipeline
-          </h3>
         </div>
         <StatusBadge status={error ? 'no-data' : status} />
       </div>
 
       {loading && !data ? (
-        <div className="flex-1 flex items-center justify-center h-32">
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
           <div
-            style={{ borderColor: COLOR, borderTopColor: 'transparent' }}
-            className="w-6 h-6 rounded-full border-2 animate-spin"
+            style={{ width: 24, height: 24, border: `2px solid ${COLORS.accent}`, borderTopColor: 'transparent', borderRadius: '50%' }}
+            className="animate-spin"
           />
         </div>
       ) : (
         <>
-          {/* Team KPI row */}
-          <div className="grid grid-cols-2 gap-4">
-            <KPIMetric
-              label="Active Jobs"
-              value={data?.totalActiveJobs ?? 0}
-              valueColor={COLOR}
-            />
-            <KPIMetric
-              label="Placements"
-              value={data?.totalPlacements ?? 0}
-              valueColor={COLORS.textPrimary}
-              trendText="this month"
-            />
-            <KPIMetric
-              label="Team Fill Rate"
-              value={`${data?.fillRate ?? 0}%`}
-              valueColor={
-                (data?.fillRate ?? 0) >= 70
-                  ? '#10b981'
-                  : (data?.fillRate ?? 0) >= 50
-                  ? '#f59e0b'
-                  : '#ef4444'
-              }
-            />
-            <KPIMetric
-              label="Avg Days to Fill"
-              value={`${data?.avgDaysToFill ?? 0}d`}
-              valueColor={COLORS.textPrimary}
-            />
+          {/* HERO CARD: Placements */}
+          <div style={{ ...CARD_STYLE, padding: 24 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>
+              Total Placements
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', marginBottom: 20 }}>
+              <span style={{ fontSize: 44, fontWeight: 900, color: COLORS.textPrimary, letterSpacing: '-2px', lineHeight: 1 }}>
+                {data?.totalPlacements ?? 0}
+              </span>
+              <span style={{ fontSize: 13, color: COLORS.textMuted, marginLeft: 12 }}>this month</span>
+            </div>
+
+            {/* Stat grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+              <KPIMetric
+                label="Active Jobs"
+                value={data?.totalActiveJobs ?? 0}
+                valueColor={COLORS.accent}
+              />
+              <KPIMetric
+                label="Team Fill Rate"
+                value={`${data?.fillRate ?? 0}%`}
+                valueColor={
+                  (data?.fillRate ?? 0) >= 70 ? COLORS.accent
+                  : (data?.fillRate ?? 0) >= 50 ? COLORS.warning
+                  : COLORS.danger
+                }
+              />
+              <KPIMetric
+                label="Avg Days to Fill"
+                value={`${data?.avgDaysToFill ?? 0}d`}
+                valueColor={COLORS.textPrimary}
+              />
+              <KPIMetric
+                label="Recruiters"
+                value={data?.byRecruiter.length ?? 0}
+                valueColor={COLORS.textSecondary}
+              />
+            </div>
           </div>
 
-          {/* Divider */}
-          <div style={{ borderTop: '1px solid #2a2d3e' }} />
-
-          {/* Per-recruiter breakdown */}
-          <div>
-            <p style={{ color: '#8892a4' }} className="text-xs uppercase tracking-wider mb-3">
-              By Recruiter — {new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}
-            </p>
+          {/* PER-RECRUITER TABLE CARD */}
+          <div style={{ ...CARD_STYLE, overflow: 'hidden' }}>
+            <div style={{ padding: '16px 14px 0' }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>
+                By Recruiter — {new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}
+              </div>
+            </div>
             <RecruiterTable recruiters={data?.byRecruiter ?? []} />
           </div>
         </>
       )}
 
       {error && (
-        <p style={{ color: '#f59e0b' }} className="text-xs mt-1">
+        <p style={{ color: COLORS.warning, fontSize: 12, margin: 0 }}>
           ⚠ Using demo data — {error}
         </p>
       )}
