@@ -105,6 +105,9 @@ export async function fetchSalesKPIs(): Promise<SalesKPIs> {
     fetchAllFromBase<{ Created?: string }>(CLIENTS_BASE_ID, MAIN_CLIENT_TABLE_ID, {}),
   ]);
 
+  console.log('[Sales] CRM total:', allCRM.length, 'sample:', JSON.stringify(allCRM[0]));
+  console.log('[Sales] MainClient total:', allMainClient.length, 'sample:', JSON.stringify(allMainClient[0]));
+
   const bookedCalls     = allClients.filter(f => f.Status === 'Moved to CRM' && isThisWeek(f['Last Updated Date'], b)).length;
   const prevBookedCalls = allClients.filter(f => f.Status === 'Moved to CRM' && isPrevWeek(f['Last Updated Date'], b)).length;
 
