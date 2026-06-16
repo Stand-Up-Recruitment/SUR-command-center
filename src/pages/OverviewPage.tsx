@@ -56,10 +56,10 @@ export function OverviewPage() {
     '/marketing': {
       loading: mktLoading,
       showStatus: true,
-      status: mkt
-        ? (mkt.candidates.qualified >= 20 && mkt.clients.qualified >= 5 ? 'on-track'
-          : mkt.candidates.qualified + mkt.clients.qualified >= 13 ? 'at-risk' : 'off-track')
-        : 'no-data',
+      status: !mkt ? 'no-data' : (() => {
+        const totalQual = mkt.candidates.qualified + mkt.clients.qualified;
+        return totalQual >= 25 ? 'on-track' : totalQual >= 13 ? 'at-risk' : 'off-track';
+      })(),
       kpi: mkt ? `${mkt.candidates.qualified + mkt.clients.qualified} qual. leads` : '—',
     },
     '/sales': {
