@@ -23,9 +23,20 @@ export interface SalesKPIs {
   openPipeline: number;          // total CRM records (current snapshot)
   newPipelineThisWeek: number;
   newPipelinePrevWeek: number;
+  leadsThisWeek: number;
+  leadsPrevWeek: number;
+  hotPipeline: number;           // CRM records with TOB Status set (snapshot)
 }
 
 // ─── Recruiter ────────────────────────────────────────────────────────────────
+export interface RecruiterStat {
+  name: string;
+  phoneInterviews: number;
+  internalInterviews: number;
+  clientInterviews: number;
+  placements: number;
+}
+
 export interface RecruiterKPIs {
   phoneInterviews: number;
   prevPhoneInterviews: number;
@@ -35,6 +46,10 @@ export interface RecruiterKPIs {
   prevClientInterviews: number;
   placements: number;
   prevPlacements: number;
+  conversionRate: number;      // placements ÷ client interviews × 100
+  prevConversionRate: number;
+  activePipeline: number;      // total candidates in any stage (snapshot)
+  byRecruiter: RecruiterStat[];
 }
 
 // ─── Marketing ────────────────────────────────────────────────────────────────
@@ -64,8 +79,79 @@ export interface MarketingKPIs {
   weeklyBudget: number;
 }
 
+// ─── Revenue ──────────────────────────────────────────────────────────────────
+export interface RevenueKPIs {
+  // Placements
+  placements: number;
+  prevPlacements: number;
+  // First payment flow
+  firstInvoiced: number;
+  prevFirstInvoiced: number;
+  firstCollected: number;
+  prevFirstCollected: number;
+  firstCollectedAmount: number;
+  // Second payment
+  pendingSecond: number;           // snapshot: candidates started, 2nd invoice not yet sent
+  secondCollected: number;
+  prevSecondCollected: number;
+  secondCollectedAmount: number;
+  // Totals
+  totalRevenue: number;
+  prevTotalRevenue: number;
+  // CAC (0 if data unavailable)
+  cac: number;
+  prevCac: number;
+  adSpend: number;
+  clientsClosed: number;
+}
+
+// ─── Finance (Xero P&L) ───────────────────────────────────────────────────────
+export interface XeroCostRow {
+  label: string;
+  value: number;
+}
+
+export interface CashWeek {
+  label: string;     // e.g. 'W1\nJun 9'
+  weekLabel: string; // e.g. 'W1 Jun 9–13'
+  net: number;
+  balance: number;
+}
+
+export interface AusPlacement {
+  candidate: string;
+  client: string;
+  status: string;
+}
+
+export interface XeroFinanceData {
+  asOf: string;
+  fyStart: string;
+  netProfit: number;
+  nzRevenue: number;
+  nzCogs: XeroCostRow[];
+  nzTotalCogs: number;
+  nzGrossProfit: number;
+  ausRevenue: number;
+  ausCosts: XeroCostRow[];
+  ausTotalCosts: number;
+  ausNetContribution: number;
+  advertising: number;
+  travelInternational: number;
+  nzActiveWorkers: number;
+  cashFlow: CashWeek[];
+  cashKpis: {
+    openingBalance: number;
+    closingBalance: number;
+    avgWeeklyOutflow: number;
+    openingDate: string;
+    closingDate: string;
+  };
+}
+
 // ─── Shared ───────────────────────────────────────────────────────────────────
 export type DepartmentStatus = 'on-track' | 'at-risk' | 'off-track' | 'no-data';
+export type TimeFrame = '7d' | '14d' | '30d' | 'month';
 
 export interface TrendPoint {
   label: string;

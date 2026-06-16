@@ -2,9 +2,13 @@ import type {
   AirtableResponse,
   SalesKPIs,
   RecruiterKPIs,
+  RecruiterStat,
   MarketingKPIs,
+  RevenueKPIs,
   LeadMetric,
   ChannelRow,
+  TimeFrame,
+  AusPlacement,
 } from '../types';
 import { fetchMetaSpend } from './metaAds';
 
@@ -89,31 +93,53 @@ async function fetchAllFromBase<T>(
   return all;
 }
 
+// Like fetchAllFromBase but returns { id, fields } so callers can join on record IDs.
+async function fetchAllWithIdsFromBase<T>(
+  baseId: string,
+  tableId: string,
+): Promise<{ id: string; fields: T }[]> {
+  const all: { id: string; fields: T }[] = [];
+  let offset: string | undefined;
+  do {
+    const url = new URL(`https://api.airtable.com/v0/${baseId}/${encodeURIComponent(tableId)}`);
+    if (offset) url.searchParams.set('offset', offset);
+    const res = await fetch(url.toString(), { headers: { Authorization: `Bearer ${API_KEY}` } });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ error: { message: res.statusText } }));
+      throw new Error(error?.error?.message ?? `Airtable error ${res.status}`);
+    }
+    const data: AirtableResponse<T> = await res.json();
+    all.push(...data.records.map(r => ({ id: r.id, fields: r.fields })));
+    offset = data.offset;
+  } while (offset);
+  return all;
+}
+
 // ─── Sales ────────────────────────────────────────────────────────────────────
-export async function fetchSalesKPIs(): Promise<SalesKPIs> {
+export async function fetchSalesKPIs(frame: TimeFrame = '7d'): Promise<SalesKPIs> {
   if (!CLIENTS_BASE_ID) throw new Error('Sales credentials not configured');
 
-  const b = weekBoundaries();
+  const b = timeBoundaries(frame);
 
   const [allClients, allCRM, allMainClient] = await Promise.all([
     fetchAllFromBase<{ Status?: string; 'Last Updated Date'?: string; Created?: string }>(
       CLIENTS_BASE_ID, CLIENTS_TABLE_ID, {}
     ),
-    fetchAllFromBase<{ 'Sent Date'?: string }>(CLIENTS_BASE_ID, CRM_TABLE_ID, {}),
+    fetchAllFromBase<{ 'Sent Date'?: string; 'TOB Status'?: string }>(CLIENTS_BASE_ID, CRM_TABLE_ID, {}),
     fetchAllFromBase<{ 'Signed Date'?: string }>(CLIENTS_BASE_ID, MAIN_CLIENT_TABLE_ID, {}),
   ]);
 
-  const bookedCalls     = allClients.filter(f => f.Status === 'Moved to CRM' && isThisWeek(f['Last Updated Date'], b)).length;
-  const prevBookedCalls = allClients.filter(f => f.Status === 'Moved to CRM' && isPrevWeek(f['Last Updated Date'], b)).length;
+  const bookedCalls     = allClients.filter(f => f.Status === 'Moved to CRM' && isInPeriod(f['Last Updated Date'], b.start, b.now)).length;
+  const prevBookedCalls = allClients.filter(f => f.Status === 'Moved to CRM' && isInPeriod(f['Last Updated Date'], b.prevStart, b.prevEnd)).length;
 
-  const crmThis  = allCRM.filter(f => isThisWeek(f['Sent Date'], b)).length;
-  const crmPrev  = allCRM.filter(f => isPrevWeek(f['Sent Date'], b)).length;
+  const crmThis  = allCRM.filter(f => isInPeriod(f['Sent Date'], b.start, b.now)).length;
+  const crmPrev  = allCRM.filter(f => isInPeriod(f['Sent Date'], b.prevStart, b.prevEnd)).length;
 
-  const closedThis = allMainClient.filter(f => isThisWeek(f['Signed Date'], b)).length;
-  const closedPrev = allMainClient.filter(f => isPrevWeek(f['Signed Date'], b)).length;
+  const closedThis = allMainClient.filter(f => isInPeriod(f['Signed Date'], b.start, b.now)).length;
+  const closedPrev = allMainClient.filter(f => isInPeriod(f['Signed Date'], b.prevStart, b.prevEnd)).length;
 
-  const leadsThis = allClients.filter(f => isThisWeek(f.Created, b)).length;
-  const leadsPrev = allClients.filter(f => isPrevWeek(f.Created, b)).length;
+  const leadsThis = allClients.filter(f => isInPeriod(f.Created, b.start, b.now)).length;
+  const leadsPrev = allClients.filter(f => isInPeriod(f.Created, b.prevStart, b.prevEnd)).length;
 
   return {
     bookedCalls,
@@ -127,34 +153,64 @@ export async function fetchSalesKPIs(): Promise<SalesKPIs> {
     openPipeline: allCRM.length,
     newPipelineThisWeek: crmThis,
     newPipelinePrevWeek: crmPrev,
+    leadsThisWeek: leadsThis,
+    leadsPrevWeek: leadsPrev,
+    hotPipeline: allCRM.filter(f => Boolean(f['TOB Status'])).length,
   };
 }
 
-// ─── Recruiter ────────────────────────────────────────────────────────────────
-const PIPELINE_TABLE_ID = 'tblpHoIL0R3MTQOXF';
-const PLACEMENTS_TABLE_ID = 'tblvttoRo4DuZAIeW';
+// ─── Recruiter / Revenue ──────────────────────────────────────────────────────
+const PIPELINE_TABLE_ID    = 'tblpHoIL0R3MTQOXF';
+const PLACEMENTS_TABLE_ID  = 'tblvttoRo4DuZAIeW';
+const INSTALMENTS_TABLE_ID = 'tblzsNY9hiQunnopk';
 
-export async function fetchRecruiterKPIs(): Promise<RecruiterKPIs> {
-  const b = weekBoundaries();
+export async function fetchRecruiterKPIs(frame: TimeFrame = '7d'): Promise<RecruiterKPIs> {
+  const b = timeBoundaries(frame);
 
   const [pipeline, placements] = await Promise.all([
-    fetchAllFromBase<{ Status?: string; Created?: string }>(
+    fetchAllFromBase<{ Status?: string; Created?: string; Name?: string }>(
       CANDIDATES_BASE_ID, PIPELINE_TABLE_ID, {}
     ),
-    fetchAllFromBase<{ 'Created Date'?: string }>(
+    fetchAllFromBase<{ 'Created Date'?: string; Recruiter?: string }>(
       CLIENTS_BASE_ID, PLACEMENTS_TABLE_ID, {}
     ),
   ]);
 
-  const phoneThis    = pipeline.filter(f => f.Status === 'Phone Interview'             && isThisWeek(f.Created, b)).length;
-  const phonePrev    = pipeline.filter(f => f.Status === 'Phone Interview'             && isPrevWeek(f.Created, b)).length;
-  const internalThis = pipeline.filter(f => f.Status === 'Internal Interview'          && isThisWeek(f.Created, b)).length;
-  const internalPrev = pipeline.filter(f => f.Status === 'Internal Interview'          && isPrevWeek(f.Created, b)).length;
-  const clientThis   = pipeline.filter(f => f.Status === 'Client-Candidate Interview'  && isThisWeek(f.Created, b)).length;
-  const clientPrev   = pipeline.filter(f => f.Status === 'Client-Candidate Interview'  && isPrevWeek(f.Created, b)).length;
+  const phoneThis    = pipeline.filter(f => f.Status === 'Phone Interview'             && isInPeriod(f.Created, b.start, b.now)).length;
+  const phonePrev    = pipeline.filter(f => f.Status === 'Phone Interview'             && isInPeriod(f.Created, b.prevStart, b.prevEnd)).length;
+  const internalThis = pipeline.filter(f => f.Status === 'Internal Interview'          && isInPeriod(f.Created, b.start, b.now)).length;
+  const internalPrev = pipeline.filter(f => f.Status === 'Internal Interview'          && isInPeriod(f.Created, b.prevStart, b.prevEnd)).length;
+  const clientThis   = pipeline.filter(f => f.Status === 'Client-Candidate Interview'  && isInPeriod(f.Created, b.start, b.now)).length;
+  const clientPrev   = pipeline.filter(f => f.Status === 'Client-Candidate Interview'  && isInPeriod(f.Created, b.prevStart, b.prevEnd)).length;
 
-  const placementsThis = placements.filter(f => isThisWeek(f['Created Date'], b)).length;
-  const placementsPrev = placements.filter(f => isPrevWeek(f['Created Date'], b)).length;
+  const placementsThis = placements.filter(f => isInPeriod(f['Created Date'], b.start, b.now)).length;
+  const placementsPrev = placements.filter(f => isInPeriod(f['Created Date'], b.prevStart, b.prevEnd)).length;
+
+  // Group by recruiter (current period only)
+  const recruiterMap = new Map<string, RecruiterStat>();
+  const getOrCreate = (name: string) => {
+    if (!recruiterMap.has(name)) {
+      recruiterMap.set(name, { name, phoneInterviews: 0, internalInterviews: 0, clientInterviews: 0, placements: 0 });
+    }
+    return recruiterMap.get(name)!;
+  };
+
+  for (const f of pipeline.filter(f => isInPeriod(f.Created, b.start, b.now))) {
+    const name = f.Name?.trim();
+    if (!name) continue;
+    const stat = getOrCreate(name);
+    if (f.Status === 'Phone Interview')                  stat.phoneInterviews++;
+    else if (f.Status === 'Internal Interview')          stat.internalInterviews++;
+    else if (f.Status === 'Client-Candidate Interview')  stat.clientInterviews++;
+  }
+
+  for (const f of placements.filter(f => isInPeriod(f['Created Date'], b.start, b.now))) {
+    const name = f.Recruiter?.trim();
+    if (!name) continue;
+    getOrCreate(name).placements++;
+  }
+
+  const byRecruiter = Array.from(recruiterMap.values()).sort((a, b) => a.name.localeCompare(b.name));
 
   return {
     phoneInterviews: phoneThis,
@@ -165,6 +221,10 @@ export async function fetchRecruiterKPIs(): Promise<RecruiterKPIs> {
     prevClientInterviews: clientPrev,
     placements: placementsThis,
     prevPlacements: placementsPrev,
+    conversionRate:     clientThis > 0 ? Math.round(placementsThis / clientThis * 100) : 0,
+    prevConversionRate: clientPrev > 0 ? Math.round(placementsPrev / clientPrev * 100) : 0,
+    activePipeline: pipeline.length,
+    byRecruiter,
   };
 }
 
@@ -188,22 +248,29 @@ type MarketingConfigFields = {
   'Weekly Budget'?: number;
 };
 
-function weekBoundaries() {
-  const MS_7D = 7 * 24 * 60 * 60 * 1000;
+function timeBoundaries(frame: TimeFrame) {
   const now = Date.now();
-  return { t7: now - MS_7D, t14: now - 2 * MS_7D };
+  let start: number;
+  let prevDuration: number;
+
+  if (frame === 'month') {
+    const d = new Date();
+    start = new Date(d.getFullYear(), d.getMonth(), 1).getTime();
+    prevDuration = now - start;
+  } else {
+    const days = frame === '7d' ? 7 : frame === '14d' ? 14 : 30;
+    const ms = days * 24 * 60 * 60 * 1000;
+    start = now - ms;
+    prevDuration = ms;
+  }
+
+  return { start, prevStart: start - prevDuration, prevEnd: start, now };
 }
 
-function isThisWeek(created: string | undefined, b: { t7: number; t14: number }) {
-  if (!created) return false;
-  const t = new Date(created).getTime();
-  return !isNaN(t) && t >= b.t7;
-}
-
-function isPrevWeek(created: string | undefined, b: { t7: number; t14: number }) {
-  if (!created) return false;
-  const t = new Date(created).getTime();
-  return !isNaN(t) && t >= b.t14 && t < b.t7;
+function isInPeriod(date: string | undefined, from: number, to: number) {
+  if (!date) return false;
+  const t = new Date(date).getTime();
+  return !isNaN(t) && t >= from && t < to;
 }
 
 function isClientQualified(f: ClientLeadFields) {
@@ -242,31 +309,34 @@ function buildChannels(
   thisCandidates: CandidateLeadFields[],
   spend: number
 ): ChannelRow[] {
-  const paidClients = thisClients.filter((f) => f.Source === 'Paid Ads');
-  const organicClients = thisClients.filter((f) => f.Source !== 'Paid Ads');
-  const paidCandidates = thisCandidates.filter((f) => Boolean(f.UTMs?.trim()));
-  const organicCandidates = thisCandidates.filter((f) => !f.UTMs?.trim());
+  const paidCandidates    = thisCandidates.filter(f => Boolean(f.UTMs?.trim()) && f.UTMs !== 'social');
+  const socialCandidates  = thisCandidates.filter(f => f.UTMs === 'social');
+  const organicCandidates = thisCandidates.filter(f => !f.UTMs?.trim());
 
-  const paidTotal = paidClients.length + paidCandidates.length;
-  const paidQual =
-    paidClients.filter(isClientQualified).length +
-    paidCandidates.filter(isCandidateQualified).length;
-  const paidQualRate = paidTotal > 0 ? Math.round((paidQual / paidTotal) * 100) : 0;
-  const paidCpl = paidQual > 0 ? Math.round(spend / paidQual) : 0;
+  const paidClients    = thisClients.filter(f => f.Source === 'Paid Ads');
+  const organicClients = thisClients.filter(f => f.Source !== 'Paid Ads');
 
-  const orgTotal = organicClients.length + organicCandidates.length;
-  const orgQual =
-    organicClients.filter(isClientQualified).length +
-    organicCandidates.filter(isCandidateQualified).length;
-  const orgQualRate = orgTotal > 0 ? Math.round((orgQual / orgTotal) * 100) : 0;
+  const paidTotal    = paidClients.length + paidCandidates.length;
+  const paidQual     = paidClients.filter(isClientQualified).length + paidCandidates.filter(isCandidateQualified).length;
+  const paidQualRate = paidTotal > 0 ? Math.round(paidQual / paidTotal * 100) : 0;
+  const paidCpl      = paidQual > 0 ? Math.round(spend / paidQual) : 0;
+
+  const socialTotal    = socialCandidates.length;
+  const socialQual     = socialCandidates.filter(isCandidateQualified).length;
+  const socialQualRate = socialTotal > 0 ? Math.round(socialQual / socialTotal * 100) : 0;
+
+  const orgTotal    = organicClients.length + organicCandidates.length;
+  const orgQual     = organicClients.filter(isClientQualified).length + organicCandidates.filter(isCandidateQualified).length;
+  const orgQualRate = orgTotal > 0 ? Math.round(orgQual / orgTotal * 100) : 0;
 
   return [
-    { channel: 'Meta Paid', leads: paidTotal, qualRate: paidQualRate, cpl: paidTotal > 0 ? paidCpl : null },
-    { channel: 'Instagram Organic', leads: orgTotal, qualRate: orgQualRate, cpl: null },
+    { channel: 'Meta Paid',    leads: paidTotal,   qualRate: paidQualRate,   cpl: paidTotal > 0 ? paidCpl : null },
+    { channel: 'Social Media', leads: socialTotal,  qualRate: socialQualRate, cpl: null },
+    { channel: 'Organic',      leads: orgTotal,     qualRate: orgQualRate,    cpl: null },
   ];
 }
 
-export async function fetchMarketingKPIs(): Promise<MarketingKPIs> {
+export async function fetchMarketingKPIs(frame: TimeFrame = '7d'): Promise<MarketingKPIs> {
   if (!CLIENTS_BASE_ID || !CANDIDATES_BASE_ID || !import.meta.env.VITE_META_TOKEN) {
     throw new Error('Marketing credentials not configured');
   }
@@ -285,22 +355,22 @@ export async function fetchMarketingKPIs(): Promise<MarketingKPIs> {
     }).catch(() => [] as MarketingConfigFields[]),
   ]);
 
-  const b = weekBoundaries();
+  const b = timeBoundaries(frame);
 
   // Candidates: bucket by Created date
-  const thisCandidates = allCandidates.filter(f => isThisWeek(f.Created, b));
-  const prevCandidates = allCandidates.filter(f => isPrevWeek(f.Created, b));
+  const thisCandidates = allCandidates.filter(f => isInPeriod(f.Created, b.start, b.now));
+  const prevCandidates = allCandidates.filter(f => isInPeriod(f.Created, b.prevStart, b.prevEnd));
 
-  // Client totals: new contacts created this week
-  const thisClients = allClients.filter(f => isThisWeek(f.Created, b));
-  const prevClients = allClients.filter(f => isPrevWeek(f.Created, b));
+  // Client totals: new contacts created in period
+  const thisClients = allClients.filter(f => isInPeriod(f.Created, b.start, b.now));
+  const prevClients = allClients.filter(f => isInPeriod(f.Created, b.prevStart, b.prevEnd));
 
-  // Client qualified: moved to CRM this week (by Last Updated Date, not Created)
+  // Client qualified: moved to CRM in period (by Last Updated Date, not Created)
   const qualClientsThis = allClients.filter(
-    f => f.Status === 'Moved to CRM' && isThisWeek(f['Last Updated Date'], b)
+    f => f.Status === 'Moved to CRM' && isInPeriod(f['Last Updated Date'], b.start, b.now)
   );
   const qualClientsPrev = allClients.filter(
-    f => f.Status === 'Moved to CRM' && isPrevWeek(f['Last Updated Date'], b)
+    f => f.Status === 'Moved to CRM' && isInPeriod(f['Last Updated Date'], b.prevStart, b.prevEnd)
   );
 
   const clientQualRate = thisClients.length > 0
@@ -334,6 +404,142 @@ export async function fetchMarketingKPIs(): Promise<MarketingKPIs> {
   };
 }
 
+// ─── Revenue ──────────────────────────────────────────────────────────────────
+type PlacementFields = {
+  'Created Date'?: string;
+  'Candidate Start Date'?: string;
+};
+
+type InstalmentFields = {
+  'Installments #'?: number;
+  'Sent Date'?: string;
+  'Invoice Amount'?: number;
+  Status?: string;
+  Placements?: string[];
+};
+
+export async function fetchRevenueKPIs(frame: TimeFrame = '7d'): Promise<RevenueKPIs> {
+  if (!CLIENTS_BASE_ID) throw new Error('Revenue credentials not configured');
+
+  const b = timeBoundaries(frame);
+  const today = Date.now();
+
+  const [allPlacements, allInstalments, spend, salesData] = await Promise.all([
+    fetchAllWithIdsFromBase<PlacementFields>(CLIENTS_BASE_ID, PLACEMENTS_TABLE_ID),
+    fetchAllWithIdsFromBase<InstalmentFields>(CLIENTS_BASE_ID, INSTALMENTS_TABLE_ID),
+    fetchMetaSpend().catch(() => ({ thisWeek: 0, prevWeek: 0 })),
+    fetchSalesKPIs(frame).catch(() => null),
+  ]);
+
+  // Build placement lookup
+  const placementMap = new Map(allPlacements.map(p => [p.id, p.fields]));
+
+  // Group instalments by placement ID, sorted by Installments # ascending
+  const byPlacement = new Map<string, typeof allInstalments>();
+  for (const inst of allInstalments) {
+    const pid = inst.fields.Placements?.[0];
+    if (!pid) continue;
+    if (!byPlacement.has(pid)) byPlacement.set(pid, []);
+    byPlacement.get(pid)!.push(inst);
+  }
+  for (const insts of byPlacement.values()) {
+    insts.sort((a, b) => (a.fields['Installments #'] ?? 0) - (b.fields['Installments #'] ?? 0));
+  }
+
+  const firstInstalments: InstalmentFields[] = [];
+  const secondInstalments: InstalmentFields[] = [];
+  let pendingSecond = 0;
+
+  for (const [pid, insts] of byPlacement) {
+    if (insts[0]) firstInstalments.push(insts[0].fields);
+    if (insts[1]) {
+      secondInstalments.push(insts[1].fields);
+      if (insts[1].fields.Status === 'Scheduled') {
+        const pf = placementMap.get(pid);
+        const start = pf?.['Candidate Start Date'];
+        if (start && new Date(start).getTime() <= today) pendingSecond++;
+      }
+    }
+  }
+
+  const wasInvoiced = (f: InstalmentFields) =>
+    ['Sent', 'Wait', 'Paid'].includes(f.Status ?? '');
+
+  const firstInvoiced     = firstInstalments.filter(f => wasInvoiced(f) && isInPeriod(f['Sent Date'], b.start, b.now)).length;
+  const prevFirstInvoiced = firstInstalments.filter(f => wasInvoiced(f) && isInPeriod(f['Sent Date'], b.prevStart, b.prevEnd)).length;
+
+  const firstPaid     = firstInstalments.filter(f => f.Status === 'Paid' && isInPeriod(f['Sent Date'], b.start, b.now));
+  const prevFirstPaid = firstInstalments.filter(f => f.Status === 'Paid' && isInPeriod(f['Sent Date'], b.prevStart, b.prevEnd));
+
+  const secondPaid     = secondInstalments.filter(f => f.Status === 'Paid' && isInPeriod(f['Sent Date'], b.start, b.now));
+  const prevSecondPaid = secondInstalments.filter(f => f.Status === 'Paid' && isInPeriod(f['Sent Date'], b.prevStart, b.prevEnd));
+
+  const sum = (arr: InstalmentFields[]) => arr.reduce((s, f) => s + (f['Invoice Amount'] ?? 0), 0);
+
+  const firstCollectedAmount  = sum(firstPaid);
+  const secondCollectedAmount = sum(secondPaid);
+  const totalRevenue          = firstCollectedAmount + secondCollectedAmount;
+  const prevTotalRevenue      = sum(prevFirstPaid) + sum(prevSecondPaid);
+
+  const placements_    = allPlacements.filter(p => isInPeriod(p.fields['Created Date'], b.start, b.now)).length;
+  const prevPlacements = allPlacements.filter(p => isInPeriod(p.fields['Created Date'], b.prevStart, b.prevEnd)).length;
+
+  const clientsClosed = salesData?.closedClients ?? 0;
+  const prevClientsClosed = salesData?.prevClosedClients ?? 0;
+  const cac     = clientsClosed > 0 ? Math.round(spend.thisWeek / clientsClosed) : 0;
+  const prevCac = prevClientsClosed > 0 ? Math.round(spend.prevWeek / prevClientsClosed) : 0;
+
+  return {
+    placements: placements_,
+    prevPlacements,
+    firstInvoiced,
+    prevFirstInvoiced,
+    firstCollected: firstPaid.length,
+    prevFirstCollected: prevFirstPaid.length,
+    firstCollectedAmount,
+    pendingSecond,
+    secondCollected: secondPaid.length,
+    prevSecondCollected: prevSecondPaid.length,
+    secondCollectedAmount,
+    totalRevenue,
+    prevTotalRevenue,
+    cac,
+    prevCac,
+    adSpend: Math.round(spend.thisWeek),
+    clientsClosed,
+  };
+}
+
+// ─── AUS Placements (Finance dashboard) ──────────────────────────────────────
+export async function fetchAusPlacements(): Promise<AusPlacement[]> {
+  if (!CLIENTS_BASE_ID) throw new Error('Airtable credentials not configured');
+
+  // NZ FY starts April 1 — if month < 3 (Jan–Mar) we're still in the previous FY year
+  const now = new Date();
+  const fyYear = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+
+  const records = await fetchAllFromBase<{
+    'Candidate Name'?: string;
+    'Company Name'?: string[];
+    'Placement Year'?: number;
+    [key: string]: unknown;
+  }>(CLIENTS_BASE_ID, PLACEMENTS_TABLE_ID, {
+    filterByFormula: `{Placement Year} = ${fyYear}`,
+  });
+
+  return records.map(f => {
+    // Status field has a BOM character prefix — locate it by substring match
+    const statusKey = Object.keys(f).find(k => k.includes('Status')) ?? '';
+    const rawStatus = (f[statusKey] as string | undefined) ?? '';
+    const companyName = f['Company Name'];
+    return {
+      candidate: (f['Candidate Name'] as string | undefined) ?? '',
+      client: Array.isArray(companyName) ? companyName[0] ?? '' : (companyName as string | undefined) ?? '',
+      status: rawStatus,
+    };
+  });
+}
+
 // ─── Mock data (used when no API key is configured) ───────────────────────────
 export const MOCK_SALES: SalesKPIs = {
   bookedCalls: 5,
@@ -347,6 +553,9 @@ export const MOCK_SALES: SalesKPIs = {
   openPipeline: 14,
   newPipelineThisWeek: 5,
   newPipelinePrevWeek: 3,
+  leadsThisWeek: 12,
+  leadsPrevWeek: 9,
+  hotPipeline: 7,
 };
 
 export const MOCK_RECRUITER: RecruiterKPIs = {
@@ -358,6 +567,14 @@ export const MOCK_RECRUITER: RecruiterKPIs = {
   prevClientInterviews: 1,
   placements: 1,
   prevPlacements: 2,
+  conversionRate: 50,
+  prevConversionRate: 33,
+  activePipeline: 42,
+  byRecruiter: [
+    { name: 'Ayn', phoneInterviews: 4, internalInterviews: 2, clientInterviews: 1, placements: 0 },
+    { name: 'Ian', phoneInterviews: 3, internalInterviews: 1, clientInterviews: 1, placements: 1 },
+    { name: 'Sam', phoneInterviews: 1, internalInterviews: 1, clientInterviews: 0, placements: 0 },
+  ],
 };
 
 export const MOCK_MARKETING: MarketingKPIs = {
@@ -382,9 +599,23 @@ export const MOCK_MARKETING: MarketingKPIs = {
     prevCpl: 171,
   },
   channels: [
-    { channel: 'Meta Paid', leads: 42, qualRate: 60, cpl: 40 },
-    { channel: 'Instagram Organic', leads: 14, qualRate: 35, cpl: null },
+    { channel: 'Meta Paid',    leads: 28, qualRate: 61, cpl: 40 },
+    { channel: 'Social Media', leads: 14, qualRate: 50, cpl: null },
+    { channel: 'Organic',      leads: 16, qualRate: 38, cpl: null },
   ],
   spend: { thisWeek: 1107, prevWeek: 1025 },
   weeklyBudget: 1500,
+};
+
+export const MOCK_REVENUE: RevenueKPIs = {
+  placements: 2, prevPlacements: 1,
+  firstInvoiced: 2, prevFirstInvoiced: 1,
+  firstCollected: 1, prevFirstCollected: 1,
+  firstCollectedAmount: 8000,
+  pendingSecond: 3,
+  secondCollected: 1, prevSecondCollected: 0,
+  secondCollectedAmount: 8000,
+  totalRevenue: 16000, prevTotalRevenue: 8000,
+  cac: 554, prevCac: 683,
+  adSpend: 1107, clientsClosed: 2,
 };
