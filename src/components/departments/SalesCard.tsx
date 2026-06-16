@@ -1,4 +1,7 @@
 import { useCallback, useState } from 'react';
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
+} from 'recharts';
 import { StatusBadge } from '../shared/StatusBadge';
 import { WoWBadge } from '../shared/WoWBadge';
 import { TimeFramePicker } from '../shared/TimeFramePicker';
@@ -55,9 +58,9 @@ function SalesSkeleton() {
 }
 
 export function SalesCard() {
-  const [frame, setFrame] = useState<TimeFrame>('7d');
+  const [frame, setFrame] = useState<TimeFrame>('month');
   const fetcher = useCallback(() => fetchSalesKPIs(frame), [frame]);
-  const { data, error } = useAirtable(fetcher, undefined, hasSalesCredentials);
+  const { data, error } = useAirtable(fetcher, hasSalesCredentials);
 
   if (!data) return <SalesSkeleton />;
 
@@ -66,9 +69,10 @@ export function SalesCard() {
     data.callsToCloseRate >= 20 ? 'at-risk'  : 'off-track';
 
   const subtitleText =
-    frame === 'month' ? 'Month to date' :
-    frame === '7d'    ? 'Last 7 days'   :
-    frame === '14d'   ? 'Last 14 days'  : 'Last 30 days';
+    frame === 'day'   ? 'Today vs yesterday' :
+    frame === 'week'  ? 'This week vs last week' :
+    frame === 'month' ? 'Month to date vs prior period' :
+                        'Year to date vs prior period';
 
   const statCard = (
     label: string,
@@ -147,6 +151,35 @@ export function SalesCard() {
           {statCard('Lead to Close',      `${data.leadToCloseRate}%`, data.leadToCloseRate,   data.prevLeadToCloseRate)}
           {statCard('Open Pipeline',      data.openPipeline,        data.newPipelineThisWeek, data.newPipelinePrevWeek, { neutral: true })}
           {statCard('Hot Pipeline',       data.hotPipeline,         0,                        0,                        { noWoW: true })}
+        </div>
+
+        {/* Current vs Previous bar chart */}
+        <div style={{ marginTop: 24 }}>
+          <div style={{ fontSize: 10, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 14 }}>
+            Current vs Previous Period
+          </div>
+          <ResponsiveContainer width="100%" height={180}>
+            <BarChart
+              data={[
+                { name: 'Leads',        current: data.leadsThisWeek,      prev: data.leadsPrevWeek },
+                { name: 'Booked Calls', current: data.bookedCalls,        prev: data.prevBookedCalls },
+                { name: 'TOB Sent',     current: data.newPipelineThisWeek,prev: data.newPipelinePrevWeek },
+                { name: 'Signed',       current: data.closedClients,      prev: data.prevClosedClients },
+              ]}
+              margin={{ top: 4, right: 4, left: -20, bottom: 0 }}
+              barGap={3}
+            >
+              <XAxis dataKey="name" tick={{ fontSize: 11, fill: COLORS.textMuted }} axisLine={false} tickLine={false} />
+              <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: COLORS.textMuted }} axisLine={false} tickLine={false} />
+              <Tooltip
+                contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${COLORS.border}`, background: '#1a1a1a' }}
+                cursor={{ fill: 'rgba(255,255,255,0.04)' }}
+              />
+              <Legend iconType="square" iconSize={8} wrapperStyle={{ fontSize: 11, color: COLORS.textMuted, paddingTop: 8 }} />
+              <Bar dataKey="current" name="This period" fill={COLORS.accent} radius={[3, 3, 0, 0]} maxBarSize={32} />
+              <Bar dataKey="prev"    name="Prior period" fill={COLORS.textMuted} radius={[3, 3, 0, 0]} maxBarSize={32} opacity={0.5} />
+            </BarChart>
+          </ResponsiveContainer>
         </div>
       </div>
 

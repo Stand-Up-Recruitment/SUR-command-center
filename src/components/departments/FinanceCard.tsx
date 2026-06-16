@@ -165,10 +165,10 @@ function FinanceSkeleton() {
 
 export function FinanceCard() {
   const fetcher = useCallback(() => fetchXeroFinanceData(), []);
-  const { data, error } = useAirtable<XeroFinanceData>(fetcher, undefined, hasXeroCredentials);
+  const { data, error } = useAirtable<XeroFinanceData>(fetcher, hasXeroCredentials);
 
   const placementsFetcher = useCallback(() => fetchAusPlacements(), []);
-  const { data: placements } = useAirtable<AusPlacement[]>(placementsFetcher, undefined, true);
+  const { data: placements } = useAirtable<AusPlacement[]>(placementsFetcher, true);
 
   if (!data) return <FinanceSkeleton />;
 

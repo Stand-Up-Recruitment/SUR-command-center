@@ -2,10 +2,10 @@ import type { TimeFrame } from '../../types';
 import { COLORS } from '../../styles/tokens';
 
 const OPTIONS: { value: TimeFrame; label: string }[] = [
-  { value: '7d',    label: '7D' },
-  { value: '14d',   label: '14D' },
-  { value: '30d',   label: '30D' },
-  { value: 'month', label: 'MTD' },
+  { value: 'day',   label: 'Daily' },
+  { value: 'week',  label: 'Weekly' },
+  { value: 'month', label: 'Monthly' },
+  { value: 'year',  label: 'Yearly' },
 ];
 
 export function TimeFramePicker({

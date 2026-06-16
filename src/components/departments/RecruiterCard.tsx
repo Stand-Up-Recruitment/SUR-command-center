@@ -1,4 +1,7 @@
 import { useCallback, useState } from 'react';
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
+} from 'recharts';
 import { StatusBadge } from '../shared/StatusBadge';
 import { WoWBadge } from '../shared/WoWBadge';
 import { TimeFramePicker } from '../shared/TimeFramePicker';
@@ -53,9 +56,9 @@ function RecruiterSkeleton() {
 }
 
 export function RecruiterCard() {
-  const [frame, setFrame] = useState<TimeFrame>('7d');
+  const [frame, setFrame] = useState<TimeFrame>('month');
   const fetcher = useCallback(() => fetchRecruiterKPIs(frame), [frame]);
-  const { data, error } = useAirtable(fetcher, undefined, hasRecruitCredentials);
+  const { data, error } = useAirtable(fetcher, hasRecruitCredentials);
 
   if (!data) return <RecruiterSkeleton />;
 
@@ -64,9 +67,10 @@ export function RecruiterCard() {
     data.placements >= 1 ? 'at-risk'  : 'off-track';
 
   const subtitleText =
-    frame === 'month' ? 'Month to date' :
-    frame === '7d'    ? 'Last 7 days'   :
-    frame === '14d'   ? 'Last 14 days'  : 'Last 30 days';
+    frame === 'day'   ? 'Today vs yesterday' :
+    frame === 'week'  ? 'This week vs last week' :
+    frame === 'month' ? 'Month to date vs prior period' :
+                        'Year to date vs prior period';
 
   const statCard = (label: string, value: string | number, current: number, prev: number, noWoW?: boolean) => (
     <div style={{ background: COLORS.bgSubtle, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: '14px 16px' }}>
@@ -105,33 +109,67 @@ export function RecruiterCard() {
       </div>
 
       {data.byRecruiter.length > 0 && (
-        <div style={{ ...CARD_STYLE, padding: 0, overflow: 'hidden' }}>
-          <div style={{ padding: '14px 20px', borderBottom: `1px solid ${COLORS.border}` }}>
-            <span style={{ fontSize: 11, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
-              By Recruiter · This Period
-            </span>
-          </div>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ background: COLORS.bgSubtle }}>
-                {['Recruiter', 'Phone', 'Internal', 'Client', 'Placements'].map(h => (
-                  <th key={h} style={{ padding: '8px 16px', fontSize: 10, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em', textAlign: h === 'Recruiter' ? 'left' : 'center' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {data.byRecruiter.map((r, i) => (
-                <tr key={r.name} style={{ borderTop: `1px solid ${COLORS.border}`, background: i % 2 === 1 ? COLORS.bgSubtle : 'transparent' }}>
-                  <td style={{ padding: '10px 16px', fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{r.name}</td>
-                  <td style={{ padding: '10px 16px', fontSize: 13, color: COLORS.textPrimary, textAlign: 'center' }}>{r.phoneInterviews}</td>
-                  <td style={{ padding: '10px 16px', fontSize: 13, color: COLORS.textPrimary, textAlign: 'center' }}>{r.internalInterviews}</td>
-                  <td style={{ padding: '10px 16px', fontSize: 13, color: COLORS.textPrimary, textAlign: 'center' }}>{r.clientInterviews}</td>
-                  <td style={{ padding: '10px 16px', fontSize: 13, fontWeight: 700, color: r.placements > 0 ? COLORS.accent : COLORS.textPrimary, textAlign: 'center' }}>{r.placements}</td>
+        <>
+          <div style={{ ...CARD_STYLE, padding: 0, overflow: 'hidden' }}>
+            <div style={{ padding: '14px 20px', borderBottom: `1px solid ${COLORS.border}` }}>
+              <span style={{ fontSize: 11, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+                By Recruiter · This Period
+              </span>
+            </div>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ background: COLORS.bgSubtle }}>
+                  {['Recruiter', 'Phone', 'Internal', 'Client', 'Placements'].map(h => (
+                    <th key={h} style={{ padding: '8px 16px', fontSize: 10, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em', textAlign: h === 'Recruiter' ? 'left' : 'center' }}>{h}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {data.byRecruiter.map((r, i) => (
+                  <tr key={r.name} style={{ borderTop: `1px solid ${COLORS.border}`, background: i % 2 === 1 ? COLORS.bgSubtle : 'transparent' }}>
+                    <td style={{ padding: '10px 16px', fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{r.name}</td>
+                    <td style={{ padding: '10px 16px', fontSize: 13, color: COLORS.textPrimary, textAlign: 'center' }}>{r.phoneInterviews}</td>
+                    <td style={{ padding: '10px 16px', fontSize: 13, color: COLORS.textPrimary, textAlign: 'center' }}>{r.internalInterviews}</td>
+                    <td style={{ padding: '10px 16px', fontSize: 13, color: COLORS.textPrimary, textAlign: 'center' }}>{r.clientInterviews}</td>
+                    <td style={{ padding: '10px 16px', fontSize: 13, fontWeight: 700, color: r.placements > 0 ? COLORS.accent : COLORS.textPrimary, textAlign: 'center' }}>{r.placements}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Per-recruiter pipeline bar chart */}
+          <div style={{ ...CARD_STYLE, padding: 20 }}>
+            <div style={{ fontSize: 10, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 14 }}>
+              Recruiter Pipeline Breakdown
+            </div>
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart
+                data={data.byRecruiter.map(r => ({
+                  name: r.name.split(' ')[0],
+                  'Phone': r.phoneInterviews,
+                  'Internal': r.internalInterviews,
+                  'Client': r.clientInterviews,
+                  'Placements': r.placements,
+                }))}
+                margin={{ top: 4, right: 4, left: -20, bottom: 0 }}
+                barGap={2}
+              >
+                <XAxis dataKey="name" tick={{ fontSize: 12, fill: COLORS.textMuted }} axisLine={false} tickLine={false} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: COLORS.textMuted }} axisLine={false} tickLine={false} />
+                <Tooltip
+                  contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${COLORS.border}`, background: '#1a1a1a' }}
+                  cursor={{ fill: 'rgba(255,255,255,0.04)' }}
+                />
+                <Legend iconType="square" iconSize={8} wrapperStyle={{ fontSize: 11, color: COLORS.textMuted, paddingTop: 8 }} />
+                <Bar dataKey="Phone"     fill="#60a5fa" radius={[3,3,0,0]} maxBarSize={28} />
+                <Bar dataKey="Internal"  fill="#a78bfa" radius={[3,3,0,0]} maxBarSize={28} />
+                <Bar dataKey="Client"    fill="#34d399" radius={[3,3,0,0]} maxBarSize={28} />
+                <Bar dataKey="Placements" fill={COLORS.accent} radius={[3,3,0,0]} maxBarSize={28} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </>
       )}
 
       {error && (

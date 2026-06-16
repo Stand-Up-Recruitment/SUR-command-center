@@ -74,7 +74,7 @@ async function fetchAllWithIdsFromBase<T>(
 }
 
 // ─── Sales ────────────────────────────────────────────────────────────────────
-export async function fetchSalesKPIs(frame: TimeFrame = '7d'): Promise<SalesKPIs> {
+export async function fetchSalesKPIs(frame: TimeFrame = 'month'): Promise<SalesKPIs> {
   if (!CLIENTS_BASE_ID) throw new Error('Sales credentials not configured');
 
   const b = timeBoundaries(frame);
@@ -122,7 +122,7 @@ const PIPELINE_TABLE_ID    = 'tblpHoIL0R3MTQOXF';
 const PLACEMENTS_TABLE_ID  = 'tblvttoRo4DuZAIeW';
 const INSTALMENTS_TABLE_ID = 'tblzsNY9hiQunnopk';
 
-export async function fetchRecruiterKPIs(frame: TimeFrame = '7d'): Promise<RecruiterKPIs> {
+export async function fetchRecruiterKPIs(frame: TimeFrame = 'month'): Promise<RecruiterKPIs> {
   const b = timeBoundaries(frame);
 
   const [pipeline, placements] = await Promise.all([
@@ -208,21 +208,35 @@ type MarketingConfigFields = {
 
 function timeBoundaries(frame: TimeFrame) {
   const now = Date.now();
+  const d = new Date();
   let start: number;
-  let prevDuration: number;
+  let prevStart: number;
+  let prevEnd: number;
 
-  if (frame === 'month') {
-    const d = new Date();
+  if (frame === 'day') {
+    const todayMidnight = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    start    = todayMidnight;
+    prevEnd  = todayMidnight;
+    prevStart = todayMidnight - 86_400_000;
+  } else if (frame === 'week') {
+    const dow = d.getDay() === 0 ? 6 : d.getDay() - 1; // days since Monday
+    const monMidnight = new Date(d.getFullYear(), d.getMonth(), d.getDate() - dow).getTime();
+    start    = monMidnight;
+    prevEnd  = monMidnight;
+    prevStart = monMidnight - 7 * 86_400_000;
+  } else if (frame === 'month') {
     start = new Date(d.getFullYear(), d.getMonth(), 1).getTime();
-    prevDuration = now - start;
-  } else {
-    const days = frame === '7d' ? 7 : frame === '14d' ? 14 : 30;
-    const ms = days * 24 * 60 * 60 * 1000;
-    start = now - ms;
-    prevDuration = ms;
+    const elapsed = now - start;
+    prevEnd  = start;
+    prevStart = start - elapsed;
+  } else { // 'year'
+    start = new Date(d.getFullYear(), 0, 1).getTime();
+    const elapsed = now - start;
+    prevEnd  = start;
+    prevStart = start - elapsed;
   }
 
-  return { start, prevStart: start - prevDuration, prevEnd: start, now };
+  return { start, prevStart, prevEnd, now };
 }
 
 function isInPeriod(date: string | undefined, from: number, to: number) {
@@ -294,7 +308,7 @@ function buildChannels(
   ];
 }
 
-export async function fetchMarketingKPIs(frame: TimeFrame = '7d'): Promise<MarketingKPIs> {
+export async function fetchMarketingKPIs(frame: TimeFrame = 'month'): Promise<MarketingKPIs> {
   if (!CLIENTS_BASE_ID || !CANDIDATES_BASE_ID || !import.meta.env.VITE_META_TOKEN) {
     throw new Error('Marketing credentials not configured');
   }
@@ -376,7 +390,7 @@ type InstalmentFields = {
   Placements?: string[];
 };
 
-export async function fetchRevenueKPIs(frame: TimeFrame = '7d'): Promise<RevenueKPIs> {
+export async function fetchRevenueKPIs(frame: TimeFrame = 'month'): Promise<RevenueKPIs> {
   if (!CLIENTS_BASE_ID) throw new Error('Revenue credentials not configured');
 
   const b = timeBoundaries(frame);

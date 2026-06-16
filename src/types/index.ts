@@ -171,7 +171,7 @@ export interface XeroFinanceData {
 
 // ─── Shared ───────────────────────────────────────────────────────────────────
 export type DepartmentStatus = 'on-track' | 'at-risk' | 'off-track' | 'no-data';
-export type TimeFrame = '7d' | '14d' | '30d' | 'month';
+export type TimeFrame = 'day' | 'week' | 'month' | 'year';
 
 export interface TrendPoint {
   label: string;

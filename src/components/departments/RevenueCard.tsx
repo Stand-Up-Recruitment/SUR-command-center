@@ -1,4 +1,7 @@
 import { useCallback, useState } from 'react';
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
+} from 'recharts';
 import { StatusBadge } from '../shared/StatusBadge';
 import { WoWBadge } from '../shared/WoWBadge';
 import { TimeFramePicker } from '../shared/TimeFramePicker';
@@ -116,9 +119,9 @@ function StatCard({
 }
 
 export function RevenueCard() {
-  const [frame, setFrame] = useState<TimeFrame>('7d');
+  const [frame, setFrame] = useState<TimeFrame>('month');
   const fetcher = useCallback(() => fetchRevenueKPIs(frame), [frame]);
-  const { data, error } = useAirtable(fetcher, undefined, hasRevenueCredentials);
+  const { data, error } = useAirtable(fetcher, hasRevenueCredentials);
 
   if (!data) return <RevenueCardSkeleton />;
 
@@ -127,10 +130,10 @@ export function RevenueCard() {
     data.totalRevenue >= 8000  ? 'at-risk'  : 'off-track';
 
   const subtitleText =
-    frame === 'month' ? 'Month to date' :
-    frame === '7d'    ? 'Last 7 days'   :
-    frame === '14d'   ? 'Last 14 days'  :
-                        'Last 30 days';
+    frame === 'day'   ? 'Today vs yesterday' :
+    frame === 'week'  ? 'This week vs last week' :
+    frame === 'month' ? 'Month to date vs prior period' :
+                        'Year to date vs prior period';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -208,6 +211,35 @@ export function RevenueCard() {
             }
           />
         </div>
+      </div>
+
+      {/* Revenue current vs previous bar chart */}
+      <div style={{ ...CARD_STYLE, padding: 20 }}>
+        <div style={{ fontSize: 10, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 14 }}>
+          Current vs Previous Period
+        </div>
+        <ResponsiveContainer width="100%" height={180}>
+          <BarChart
+            data={[
+              { name: 'Placements',   current: data.placements,    prev: data.prevPlacements },
+              { name: '1st Invoiced', current: data.firstInvoiced, prev: data.prevFirstInvoiced },
+              { name: '1st Collected',current: data.firstCollected,prev: data.prevFirstCollected },
+              { name: '2nd Collected',current: data.secondCollected,prev: data.prevSecondCollected },
+            ]}
+            margin={{ top: 4, right: 4, left: -20, bottom: 0 }}
+            barGap={3}
+          >
+            <XAxis dataKey="name" tick={{ fontSize: 11, fill: COLORS.textMuted }} axisLine={false} tickLine={false} />
+            <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: COLORS.textMuted }} axisLine={false} tickLine={false} />
+            <Tooltip
+              contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${COLORS.border}`, background: '#1a1a1a' }}
+              cursor={{ fill: 'rgba(255,255,255,0.04)' }}
+            />
+            <Legend iconType="square" iconSize={8} wrapperStyle={{ fontSize: 11, color: COLORS.textMuted, paddingTop: 8 }} />
+            <Bar dataKey="current" name="This period"  fill={COLORS.accent}    radius={[3,3,0,0]} maxBarSize={32} />
+            <Bar dataKey="prev"    name="Prior period" fill={COLORS.textMuted} radius={[3,3,0,0]} maxBarSize={32} opacity={0.5} />
+          </BarChart>
+        </ResponsiveContainer>
       </div>
 
       {error && (
