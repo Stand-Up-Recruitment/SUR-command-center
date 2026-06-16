@@ -16,11 +16,11 @@ const PU   = '#534AB7';
 const AM   = '#BA7517';
 const RD   = '#D85A30';
 
-const BG     = '#f5f4f0';
-const BG2    = '#ffffff';
-const BORDER = 'rgba(0,0,0,0.10)';
-const TEXT   = '#1a1a18';
-const MUTED  = '#5F5E5A';
+const BG     = '#111111';
+const BG2    = '#1a1a1a';
+const BORDER = 'rgba(255,255,255,0.10)';
+const TEXT   = '#f5f5f5';
+const MUTED  = '#a3a3a3';
 
 const fmtNZD = (n: number) =>
   '$' + Math.abs(n).toLocaleString('en-NZ', { maximumFractionDigits: 0 });
@@ -99,13 +99,13 @@ function NoteBox({ children }: { children: React.ReactNode }) {
 
 const statusBadge = (s: string) => {
   const map: Record<string, { bg: string; color: string }> = {
-    Live:    { bg: '#E1F5EE', color: '#0F6E56' },
-    Active:  { bg: '#E1F5EE', color: '#0F6E56' },
-    End:     { bg: '#FAECE7', color: '#993C1D' },
-    Ended:   { bg: '#FAECE7', color: '#993C1D' },
-    Pending: { bg: '#FAEEDA', color: '#854F0B' },
+    Live:    { bg: '#052e16', color: '#22c55e' },
+    Active:  { bg: '#052e16', color: '#22c55e' },
+    End:     { bg: '#1f0a0a', color: '#f87171' },
+    Ended:   { bg: '#1f0a0a', color: '#f87171' },
+    Pending: { bg: '#1c1007', color: '#f59e0b' },
   };
-  const t = map[s] ?? { bg: '#E1F5EE', color: '#0F6E56' };
+  const t = map[s] ?? { bg: '#052e16', color: '#22c55e' };
   const label = s === 'End' ? 'Ended' : s || 'Live';
   return (
     <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 8, fontWeight: 500, display: 'inline-block', background: t.bg, color: t.color }}>
@@ -351,7 +351,7 @@ export function FinanceCard() {
                   const isMin = props.payload?.balance === minBal;
                   const isMax = props.payload?.balance === maxBal;
                   const r = isMin || isMax ? 6 : 3;
-                  const fill = isMin ? AM : isMax ? '#185FA5' : AUS;
+                  const fill = isMin ? AM : isMax ? '#60a5fa' : AUS;
                   const cx = props.cx ?? 0;
                   const cy = props.cy ?? 0;
                   return <circle key={cx} cx={cx} cy={cy} r={r} fill={fill} stroke={fill} />;
@@ -377,7 +377,7 @@ export function FinanceCard() {
             </thead>
             <tbody>
               {cashFlow.map((d, i) => (
-                <tr key={i} style={{ background: d.balance === maxBal ? 'rgba(29,158,117,0.07)' : d.balance === minBal ? 'rgba(216,90,48,0.07)' : 'transparent' }}>
+                <tr key={i} style={{ background: d.balance === maxBal ? 'rgba(29,158,117,0.15)' : d.balance === minBal ? 'rgba(216,90,48,0.15)' : 'transparent' }}>
                   <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, color: MUTED }}>{d.weekLabel}</td>
                   <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, textAlign: 'right', color: d.net >= 0 ? NZ : RD }}>{d.net >= 0 ? '+' : '−'}{fmtNZD(Math.abs(d.net))}</td>
                   <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, textAlign: 'right', color: TEXT }}>{fmtNZD(d.balance)}</td>

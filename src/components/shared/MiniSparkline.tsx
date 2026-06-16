@@ -40,11 +40,11 @@ export function MiniSparkline({
         <XAxis dataKey="label" hide />
         <Tooltip
           contentStyle={{
-            background: '#ffffff',
-            border: '1px solid #e2e8f0',
+            background: '#1a1a1a',
+            border: '1px solid #2d2d2d',
             borderRadius: 6,
             fontSize: 12,
-            color: '#0f172a',
+            color: '#f5f5f5',
           }}
           formatter={(v) => [`${valuePrefix}${Number(v).toLocaleString()}${valueSuffix}`, '']}
           labelFormatter={(l) => l}

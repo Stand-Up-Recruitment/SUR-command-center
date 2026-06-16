@@ -19,7 +19,7 @@ export default function App() {
   }, []);
 
   return (
-    <div style={{ background: '#f1f5f9', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ background: '#0d0d0d', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       <Header onRefresh={handleRefresh} isDemo={IS_DEMO} />
       <main style={{ flex: 1, overflowY: 'auto' }}>
         <Routes>

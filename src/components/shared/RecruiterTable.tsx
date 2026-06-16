@@ -9,7 +9,7 @@ function initials(name: string) {
   return name.split(' ').slice(0, 2).map((n) => n[0]).join('').toUpperCase();
 }
 
-const AVATAR_COLORS = [COLORS.accent, '#3b82f6', COLORS.warning, '#8b5cf6'];
+const AVATAR_COLORS = [COLORS.accent, '#7f1d1d', COLORS.warning, '#6b21a8'];
 
 export function RecruiterTable({ recruiters }: RecruiterTableProps) {
   if (recruiters.length === 0) {

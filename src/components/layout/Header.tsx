@@ -9,7 +9,7 @@ const TABS = [
   { label: 'Recruitment', to: '/recruitment'            },
   { label: 'Revenue',     to: '/revenue'                },
   { label: 'Finance',     to: '/finance'                    },
-  { label: 'Retention',   to: '/retention', comingSoon: true },
+  { label: 'Retention',   to: '/retention'                  },
 ] as const;
 
 interface HeaderProps {
@@ -33,7 +33,7 @@ export function Header({ onRefresh, isDemo }: HeaderProps) {
   return (
     <header
       style={{
-        background:    'white',
+        background:    COLORS.bgCard,
         borderBottom:  `1px solid ${COLORS.border}`,
         boxShadow:     '0 1px 3px rgba(0,0,0,0.06)',
         height:        56,
@@ -80,7 +80,7 @@ export function Header({ onRefresh, isDemo }: HeaderProps) {
                 display: 'flex', alignItems: 'center',
                 padding: '0 16px',
                 fontSize: 13, fontWeight: 500,
-                color: '#cbd5e1',
+                color: COLORS.textMuted,
                 whiteSpace: 'nowrap',
                 borderBottom: '2px solid transparent',
               }}
