@@ -18,7 +18,7 @@ const hasAirtableKey   = Boolean(import.meta.env.VITE_AIRTABLE_API_KEY);
 const hasClientsBase   = Boolean(import.meta.env.VITE_AIRTABLE_CLIENTS_BASE_ID);
 const hasCandidatesBase = Boolean(import.meta.env.VITE_AIRTABLE_CANDIDATES_BASE_ID);
 
-const hasMarketingCredentials  = hasAirtableKey && hasClientsBase && hasCandidatesBase && Boolean(import.meta.env.VITE_META_ADS_TOKEN);
+const hasMarketingCredentials  = hasAirtableKey && hasClientsBase && hasCandidatesBase && Boolean(import.meta.env.VITE_META_TOKEN);
 const hasSalesCredentials      = hasAirtableKey && hasClientsBase;
 const hasRecruitmentCredentials = hasAirtableKey && hasCandidatesBase && hasClientsBase;
 const hasRevenueCredentials    = hasAirtableKey && hasClientsBase;
