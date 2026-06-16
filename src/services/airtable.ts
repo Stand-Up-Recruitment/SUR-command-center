@@ -133,65 +133,19 @@ export async function fetchSalesKPIs(): Promise<SalesKPIs> {
 }
 
 // ─── Recruiter ────────────────────────────────────────────────────────────────
+const PIPELINE_TABLE_ID = 'tblpHoIL0R3MTQOXF';
+const PLACEMENTS_TABLE_ID = 'tblvttoRo4DuZAIeW';
+
 export async function fetchRecruiterKPIs(): Promise<RecruiterKPIs> {
-  const thisMonth = new Date().toISOString().slice(0, 7); // "YYYY-MM"
-
-  const data = await fetchTable<RecruiterFields>('Recruiters', {
-    filterByFormula: `{Month} = "${thisMonth}"`,
-  });
-
-  const records = data.records.map((r) => r.fields);
-
-  if (records.length === 0) {
-    return {
-      totalActiveJobs: 0,
-      totalPlacements: 0,
-      fillRate: 0,
-      avgDaysToFill: 0,
-      byRecruiter: [],
-    };
-  }
-
-  const totalActiveJobs = records.reduce((s, r) => s + (r.ActiveJobs ?? 0), 0);
-  const totalPlacements = records.reduce((s, r) => s + (r.Placements ?? 0), 0);
-  const totalJobsWorked = records.reduce((s, r) => s + (r.JobsWorked ?? 0), 0);
-  const totalDays = records.reduce((s, r) => s + (r.TotalDaysToFill ?? 0), 0);
-
-  const fillRate =
-    totalJobsWorked > 0 ? Math.round((totalPlacements / totalJobsWorked) * 100) : 0;
-  const avgDaysToFill =
-    totalPlacements > 0 ? Math.round(totalDays / totalPlacements) : 0;
-
-  const byRecruiter: RecruiterStat[] = records.map((r) => {
-    const rFillRate =
-      (r.JobsWorked ?? 0) > 0
-        ? Math.round(((r.Placements ?? 0) / r.JobsWorked) * 100)
-        : 0;
-    const rAvgDays =
-      (r.Placements ?? 0) > 0
-        ? Math.round((r.TotalDaysToFill ?? 0) / r.Placements)
-        : 0;
-    return {
-      name: r.RecruiterName,
-      activeJobs: r.ActiveJobs ?? 0,
-      placements: r.Placements ?? 0,
-      fillRate: rFillRate,
-      avgDaysToFill: rAvgDays,
-    };
-  });
-
-  // Debug: log new table schemas
-  const PIPELINE_TABLE_ID = 'tblpHoIL0R3MTQOXF';
-  const PLACEMENTS_TABLE_ID = 'tblvttoRo4DuZAIeW';
-  Promise.all([
+  const [pipeline, placements] = await Promise.all([
     fetchAllFromBase<Record<string, unknown>>(CANDIDATES_BASE_ID, PIPELINE_TABLE_ID, { maxRecords: '1' }),
     fetchAllFromBase<Record<string, unknown>>(CLIENTS_BASE_ID, PLACEMENTS_TABLE_ID, { maxRecords: '1' }),
-  ]).then(([pipeline, placements]) => {
-    console.log('[Recruit] Pipeline sample:', JSON.stringify(pipeline[0]));
-    console.log('[Recruit] Placements sample:', JSON.stringify(placements[0]));
-  }).catch(e => console.log('[Recruit] debug error:', e));
+  ]);
 
-  return { totalActiveJobs, totalPlacements, fillRate, avgDaysToFill, byRecruiter };
+  console.log('[Recruit] Pipeline sample:', JSON.stringify(pipeline[0]));
+  console.log('[Recruit] Placements sample:', JSON.stringify(placements[0]));
+
+  throw new Error('Debug — check console for field names');
 }
 
 // ─── Marketing ────────────────────────────────────────────────────────────────
