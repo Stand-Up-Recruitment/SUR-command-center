@@ -293,18 +293,15 @@ function buildChannels(
   const paidQualRate = paidTotal > 0 ? Math.round(paidQual / paidTotal * 100) : 0;
   const paidCpl      = paidQual > 0 ? Math.round(spend / paidQual) : 0;
 
-  const socialTotal    = socialCandidates.length;
-  const socialQual     = socialCandidates.filter(isCandidateQualified).length;
-  const socialQualRate = socialTotal > 0 ? Math.round(socialQual / socialTotal * 100) : 0;
-
-  const orgTotal    = organicClients.length + organicCandidates.length;
-  const orgQual     = organicClients.filter(isClientQualified).length + organicCandidates.filter(isCandidateQualified).length;
-  const orgQualRate = orgTotal > 0 ? Math.round(orgQual / orgTotal * 100) : 0;
+  const socOrgTotal    = socialCandidates.length + organicClients.length + organicCandidates.length;
+  const socOrgQual     = socialCandidates.filter(isCandidateQualified).length
+                       + organicClients.filter(isClientQualified).length
+                       + organicCandidates.filter(isCandidateQualified).length;
+  const socOrgQualRate = socOrgTotal > 0 ? Math.round(socOrgQual / socOrgTotal * 100) : 0;
 
   return [
-    { channel: 'Meta Paid',    leads: paidTotal,   qualRate: paidQualRate,   cpl: paidTotal > 0 ? paidCpl : null },
-    { channel: 'Social Media', leads: socialTotal,  qualRate: socialQualRate, cpl: null },
-    { channel: 'Organic',      leads: orgTotal,     qualRate: orgQualRate,    cpl: null },
+    { channel: 'Meta Paid',        leads: paidTotal,   qualRate: paidQualRate,   cpl: paidTotal > 0 ? paidCpl : null },
+    { channel: 'Social / Organic', leads: socOrgTotal, qualRate: socOrgQualRate, cpl: null },
   ];
 }
 

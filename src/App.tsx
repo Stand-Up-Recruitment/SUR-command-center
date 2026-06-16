@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { Routes, Route } from 'react-router-dom';
+import { LoginGate } from './components/auth/LoginGate';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/react';
 import { Header } from './components/layout/Header';
@@ -21,6 +22,7 @@ export default function App() {
   }, []);
 
   return (
+    <LoginGate>
     <div style={{ background: '#0d0d0d', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       <Header onRefresh={handleRefresh} isDemo={IS_DEMO} />
       <main style={{ flex: 1, overflowY: 'auto' }}>
@@ -37,5 +39,6 @@ export default function App() {
       <Analytics />
       <SpeedInsights />
     </div>
+    </LoginGate>
   );
 }
