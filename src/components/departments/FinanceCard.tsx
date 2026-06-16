@@ -97,16 +97,6 @@ function NoteBox({ children }: { children: React.ReactNode }) {
   );
 }
 
-function HC({ title, body, action, color }: { title: string; body: string; action: string; color: string }) {
-  return (
-    <div style={{ background: BG, border: `.5px solid ${BORDER}`, borderRadius: 8, borderTop: `3px solid ${color}`, padding: '.875rem 1rem' }}>
-      <div style={{ fontSize: 12, fontWeight: 500, color: TEXT, marginBottom: 5 }}>{title}</div>
-      <div style={{ fontSize: 11, color: MUTED, lineHeight: 1.55 }}>{body}</div>
-      <div style={{ fontSize: 10, fontWeight: 500, marginTop: 6, color }}>{action}</div>
-    </div>
-  );
-}
-
 const statusBadge = (s: string) => {
   const map: Record<string, { bg: string; color: string }> = {
     Live:    { bg: '#E1F5EE', color: '#0F6E56' },
@@ -193,25 +183,14 @@ export function FinanceCard() {
   const cac = ausPlacementsCount > 0 ? Math.round((data.advertising + data.travelInternational) / ausPlacementsCount) : 0;
   const nzCogsMax = Math.max(...data.nzCogs.map(r => r.value), 1);
   const ausCostsMax = Math.max(...data.ausCosts.map(r => r.value), 1);
-  const minBal = data.cashFlow.length > 0 ? Math.min(...data.cashFlow.map(d => d.balance)) : 0;
-  const maxBal = data.cashFlow.length > 0 ? Math.max(...data.cashFlow.map(d => d.balance)) : 0;
+  const cashFlow = data.cashFlow ?? [];
+  const cashKpis = data.cashKpis ?? { openingBalance: 0, closingBalance: 0, avgWeeklyOutflow: 0, openingDate: data.asOf, closingDate: data.asOf };
+  const minBal = cashFlow.length > 0 ? Math.min(...cashFlow.map(d => d.balance)) : 0;
+  const maxBal = cashFlow.length > 0 ? Math.max(...cashFlow.map(d => d.balance)) : 0;
+  const nzActiveWorkers = data.nzActiveWorkers ?? '—';
 
   return (
     <div style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
-
-      {/* Dashboard header */}
-      <div style={{ background: BG, border: `.5px solid ${BORDER}`, borderRadius: 12, padding: '1.25rem 1.5rem', marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div>
-          <div style={{ fontSize: 17, fontWeight: 500, color: TEXT }}>Stand Up Recruitment — CEO Dashboard</div>
-          <div style={{ fontSize: 12, color: MUTED, marginTop: 3 }}>
-            FY{fyYear} Year-to-Date &nbsp;·&nbsp; {new Date(data.fyStart).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })} – {fmtDate(data.asOf)} &nbsp;·&nbsp; All figures NZD
-          </div>
-        </div>
-        <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: 11, color: MUTED }}>Live · Updated</div>
-          <div style={{ fontSize: 13, fontWeight: 500, color: TEXT }}>{fmtDate(data.asOf)}</div>
-        </div>
-      </div>
 
       {/* ── $1M Milestone ─────────────────────────────────────────── */}
       <SH color={PU} label="$1M Net Profit Milestone" />
@@ -250,7 +229,7 @@ export function FinanceCard() {
         <KP accent={NZ} label="NZ revenue"            value={fmtNZD(data.nzRevenue)}    sub="Sales income only" />
         <KP accent={NZ} label="NZ COGS"               value={fmtNZD(data.nzTotalCogs)}  sub={`${Math.round(data.nzTotalCogs / data.nzRevenue * 100)}% of NZ revenue`} valueColor={RD} />
         <KP accent={NZ} label="Gross profit"          value={fmtNZD(data.nzGrossProfit)} sub={`${Math.round(data.nzGrossProfit / data.nzRevenue * 100)}% GP margin`} valueColor={NZ} />
-        <KP accent={NZ} label="Active labour hire workers" value={String(data.nzActiveWorkers)} sub="On Xero payroll (active)" />
+        <KP accent={NZ} label="Active labour hire workers" value={String(nzActiveWorkers)} sub="On Xero payroll (active)" />
       </G4>
 
       <Card accent={NZ}>
@@ -296,7 +275,7 @@ export function FinanceCard() {
           </div>
           <div>
             <div style={{ fontSize: 13, fontWeight: 500, color: TEXT, marginBottom: '.75rem' }}>FY{fyYear} placements — {ausPlacementsCount} confirmed</div>
-            {placements === undefined ? (
+            {placements == null ? (
               <div>{[0,1,2,3].map(i => <div key={i} style={{ marginBottom: 8 }}><Skeleton height={28} /></div>)}</div>
             ) : placements.length === 0 ? (
               <div style={{ fontSize: 12, color: MUTED }}>No placements recorded for FY{fyYear}.</div>
@@ -326,50 +305,56 @@ export function FinanceCard() {
 
       {/* ── Cash Position (last 8 weeks actuals) ─────────────────── */}
       <SH color={MUTED} label="Cash position"
-        sub={data.cashFlow.length > 0
-          ? `8-week actuals · ${fmtDate(data.cashKpis.openingDate)} – ${fmtDate(data.cashKpis.closingDate)}`
+        sub={cashFlow.length > 0
+          ? `8-week actuals · ${fmtDate(cashKpis.openingDate)} – ${fmtDate(cashKpis.closingDate)}`
           : '8-week actuals'} />
 
       <G3>
         <KP label="Opening balance"
-            value={fmtNZD(data.cashKpis.openingBalance)}
-            sub={fmtDate(data.cashKpis.openingDate)} />
+            value={fmtNZD(cashKpis.openingBalance)}
+            sub={fmtDate(cashKpis.openingDate)} />
         <KP label="W8 closing (actual)"
-            value={fmtNZD(data.cashKpis.closingBalance)}
-            sub={fmtDate(data.cashKpis.closingDate)}
-            valueColor={data.cashKpis.closingBalance < data.cashKpis.openingBalance ? RD : NZ} />
+            value={fmtNZD(cashKpis.closingBalance)}
+            sub={fmtDate(cashKpis.closingDate)}
+            valueColor={cashKpis.closingBalance < cashKpis.openingBalance ? RD : NZ} />
         <KP label="Avg weekly outflow"
-            value={`−${fmtNZD(data.cashKpis.avgWeeklyOutflow)}`}
+            value={`−${fmtNZD(cashKpis.avgWeeklyOutflow)}`}
             sub="Negative-flow weeks avg" valueColor={RD} />
       </G3>
 
-      {data.cashFlow.length > 0 && (
+      {cashFlow.length > 0 && (
         <Card>
           <ResponsiveContainer width="100%" height={220}>
-            <ComposedChart data={data.cashFlow} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+            <ComposedChart data={cashFlow} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
               <XAxis dataKey="label" tick={{ fontSize: 11, fill: MUTED }} axisLine={false} tickLine={false} />
               <YAxis yAxisId="left" tickFormatter={v => (v < 0 ? '−' : '') + Math.abs(v / 1000).toFixed(0) + 'k'} tick={{ fontSize: 11, fill: MUTED }} axisLine={false} tickLine={false} width={36} />
               <YAxis yAxisId="right" orientation="right" domain={['auto', 'auto']} tickFormatter={v => '$' + (v / 1000).toFixed(0) + 'k'} tick={{ fontSize: 11, fill: AUS }} axisLine={false} tickLine={false} width={42} />
               <Tooltip
-                formatter={(value: number, name: string) => {
-                  const sign = value >= 0 ? '+' : '−';
-                  return [sign + fmtNZD(Math.abs(value)), name === 'net' ? 'Weekly net' : 'Closing balance'];
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                formatter={(value: any, name: any) => {
+                  const n = Number(value);
+                  const sign = n >= 0 ? '+' : '−';
+                  return [sign + fmtNZD(Math.abs(n)), name === 'net' ? 'Weekly net' : 'Closing balance'];
                 }}
-                labelFormatter={(_: string, payload: { payload?: { weekLabel: string } }[]) =>
-                  payload?.[0]?.payload?.weekLabel ?? ''
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                labelFormatter={(_: any, payload: readonly any[]) =>
+                  (payload?.[0]?.payload?.weekLabel as string | undefined) ?? ''
                 }
                 contentStyle={{ fontSize: 12, borderRadius: 8, border: `.5px solid ${BORDER}` }}
               />
               <Bar yAxisId="left" dataKey="net" radius={[2, 2, 0, 0]}>
-                {data.cashFlow.map((d, i) => <Cell key={i} fill={d.net >= 0 ? NZ : RD} />)}
+                {cashFlow.map((d, i) => <Cell key={i} fill={d.net >= 0 ? NZ : RD} />)}
               </Bar>
               <Line yAxisId="right" type="monotone" dataKey="balance" stroke={AUS} strokeWidth={2}
-                dot={(props: { cx: number; cy: number; payload: { balance: number } }) => {
-                  const isMin = props.payload.balance === minBal;
-                  const isMax = props.payload.balance === maxBal;
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                dot={(props: any) => {
+                  const isMin = props.payload?.balance === minBal;
+                  const isMax = props.payload?.balance === maxBal;
                   const r = isMin || isMax ? 6 : 3;
                   const fill = isMin ? AM : isMax ? '#185FA5' : AUS;
-                  return <circle key={props.cx} cx={props.cx} cy={props.cy} r={r} fill={fill} stroke={fill} />;
+                  const cx = props.cx ?? 0;
+                  const cy = props.cy ?? 0;
+                  return <circle key={cx} cx={cx} cy={cy} r={r} fill={fill} stroke={fill} />;
                 }}
               />
             </ComposedChart>
@@ -391,7 +376,7 @@ export function FinanceCard() {
               </tr>
             </thead>
             <tbody>
-              {data.cashFlow.map((d, i) => (
+              {cashFlow.map((d, i) => (
                 <tr key={i} style={{ background: d.balance === maxBal ? 'rgba(29,158,117,0.07)' : d.balance === minBal ? 'rgba(216,90,48,0.07)' : 'transparent' }}>
                   <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, color: MUTED }}>{d.weekLabel}</td>
                   <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, textAlign: 'right', color: d.net >= 0 ? NZ : RD }}>{d.net >= 0 ? '+' : '−'}{fmtNZD(Math.abs(d.net))}</td>
@@ -402,30 +387,6 @@ export function FinanceCard() {
           </table>
         </Card>
       )}
-
-      {/* ── Key Highlights ────────────────────────────────────────── */}
-      <SH color={PU} label="Key highlights" />
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: '.875rem' }}>
-        <HC color={NZ} title="NZ is self-sustaining — AUS is the growth engine"
-          body={`NZ GP (${fmtNZD(data.nzGrossProfit)}) covers all shared fixed costs. AUS net (${fmtNZD(data.ausNetContribution)}) is pure additional profit. Every incremental AUS placement adds ~$11,600 to the $1M net profit goal with minimal overhead increase.`}
-          action="→ Protect NZ margin, push AUS volume" />
-        <HC color={AM} title={ausPlacementsCount > 0 ? `CAC ${fmtNZD(cac)} — strong payback, track channels` : 'CAC — no placements yet this FY'}
-          body={`${fmtNZD(data.advertising + data.travelInternational)} on advertising + travel for ${ausPlacementsCount} placement${ausPlacementsCount !== 1 ? 's' : ''}. ${ausPlacementsCount > 0 ? 'CAC is recovered in under half a placement at $11,600 net. ' : ''}Need channel-level data to know which spend is actually converting.`}
-          action="→ Review ad channel data with Brinda" />
-        <HC color={AUS} title="AUS margin understated — marginal margin is 60%+"
-          body="Office staff and fixed OpEx are already absorbed. Adding more placements = revenue at near-zero marginal cost. Reported net margin improves rapidly with each placement added."
-          action="→ Scale placements, not headcount" />
-        <HC color={RD} title="Monitor cash — watch for low-balance weeks"
-          body={`Opening balance ${fmtNZD(data.cashKpis.openingBalance)}. Lowest point over the past 8 weeks was ${fmtNZD(minBal)}. All outstanding invoices must be issued and chased promptly to avoid a cash crunch.`}
-          action="→ Issue and chase all pending invoices" />
-      </div>
-
-      {/* ── Footnotes ─────────────────────────────────────────────── */}
-      <div style={{ fontSize: 10, color: MUTED, borderTop: `.5px solid ${BORDER}`, paddingTop: '.625rem', marginTop: '1.25rem', lineHeight: 1.65 }}>
-        <strong style={{ color: TEXT }}>Sources:</strong> Xero P&L + bank transactions + payroll (live via n8n webhook) · Airtable AUS Placements Tracker (live)<br />
-        <strong style={{ color: TEXT }}>FX:</strong> 1 AUD = 1.207 NZD · Other income (Stripe + interest) included in net profit total
-      </div>
 
       {error && (
         <p style={{ color: RD, fontSize: 12, margin: '8px 0 0' }}>⚠ Xero connection error — {error}</p>
