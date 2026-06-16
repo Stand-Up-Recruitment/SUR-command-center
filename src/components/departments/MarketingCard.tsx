@@ -86,7 +86,7 @@ function MarketingSkeleton() {
 export function MarketingCard() {
   const [frame, setFrame] = useState<TimeFrame>('7d');
   const fetcher = useCallback(() => fetchMarketingKPIs(frame), [frame]);
-  const { data, loading, error } = useAirtable(fetcher, undefined, hasMarketingCredentials);
+  const { data, error } = useAirtable(fetcher, undefined, hasMarketingCredentials);
 
   if (!data) return <MarketingSkeleton />;
 

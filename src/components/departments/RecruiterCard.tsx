@@ -55,7 +55,7 @@ function RecruiterSkeleton() {
 export function RecruiterCard() {
   const [frame, setFrame] = useState<TimeFrame>('7d');
   const fetcher = useCallback(() => fetchRecruiterKPIs(frame), [frame]);
-  const { data, loading, error } = useAirtable(fetcher, undefined, hasRecruitCredentials);
+  const { data, error } = useAirtable(fetcher, undefined, hasRecruitCredentials);
 
   if (!data) return <RecruiterSkeleton />;
 

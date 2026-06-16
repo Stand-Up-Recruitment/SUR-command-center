@@ -5,8 +5,9 @@ const departments = [
   { name: 'Marketing',   path: '/marketing',   description: 'Leads, ad spend & channel performance', placeholder: false },
   { name: 'Sales',       path: '/sales',        description: 'Revenue, pipeline & win rate',           placeholder: false },
   { name: 'Recruitment', path: '/recruitment',  description: 'Placements, fill rate & recruiter KPIs', placeholder: false },
-  { name: 'Finance',     path: '/finance',      description: 'P&L, cash flow & invoices',              placeholder: true },
-  { name: 'Retention',   path: '/retention',    description: 'Candidate & client retention',           placeholder: true },
+  { name: 'Revenue',     path: '/revenue',      description: 'Invoices, collections & payment flow',   placeholder: false },
+  { name: 'Finance',     path: '/finance',      description: 'P&L, cash flow & invoices',              placeholder: false },
+  { name: 'Retention',   path: '/retention',    description: 'Candidate & client retention',           placeholder: FontFaceSetLoadEvent },
 ] as const;
 
 export function OverviewPage() {

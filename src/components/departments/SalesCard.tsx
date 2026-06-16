@@ -57,7 +57,7 @@ function SalesSkeleton() {
 export function SalesCard() {
   const [frame, setFrame] = useState<TimeFrame>('7d');
   const fetcher = useCallback(() => fetchSalesKPIs(frame), [frame]);
-  const { data, loading, error } = useAirtable(fetcher, undefined, hasSalesCredentials);
+  const { data, error } = useAirtable(fetcher, undefined, hasSalesCredentials);
 
   if (!data) return <SalesSkeleton />;
 
