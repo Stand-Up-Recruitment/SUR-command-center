@@ -1,12 +1,10 @@
 import type {
   AirtableResponse,
-  RecruiterFields,
   SalesKPIs,
   RecruiterKPIs,
   MarketingKPIs,
   LeadMetric,
   ChannelRow,
-  RecruiterStat,
 } from '../types';
 import { fetchMetaSpend } from './metaAds';
 
@@ -137,15 +135,37 @@ const PIPELINE_TABLE_ID = 'tblpHoIL0R3MTQOXF';
 const PLACEMENTS_TABLE_ID = 'tblvttoRo4DuZAIeW';
 
 export async function fetchRecruiterKPIs(): Promise<RecruiterKPIs> {
+  const b = weekBoundaries();
+
   const [pipeline, placements] = await Promise.all([
-    fetchAllFromBase<Record<string, unknown>>(CANDIDATES_BASE_ID, PIPELINE_TABLE_ID, { maxRecords: '1' }),
-    fetchAllFromBase<Record<string, unknown>>(CLIENTS_BASE_ID, PLACEMENTS_TABLE_ID, { maxRecords: '1' }),
+    fetchAllFromBase<{ Status?: string; Created?: string }>(
+      CANDIDATES_BASE_ID, PIPELINE_TABLE_ID, {}
+    ),
+    fetchAllFromBase<{ 'Created Date'?: string }>(
+      CLIENTS_BASE_ID, PLACEMENTS_TABLE_ID, {}
+    ),
   ]);
 
-  console.log('[Recruit] Pipeline sample:', JSON.stringify(pipeline[0]));
-  console.log('[Recruit] Placements sample:', JSON.stringify(placements[0]));
+  const phoneThis    = pipeline.filter(f => f.Status === 'Phone Interview'             && isThisWeek(f.Created, b)).length;
+  const phonePrev    = pipeline.filter(f => f.Status === 'Phone Interview'             && isPrevWeek(f.Created, b)).length;
+  const internalThis = pipeline.filter(f => f.Status === 'Internal Interview'          && isThisWeek(f.Created, b)).length;
+  const internalPrev = pipeline.filter(f => f.Status === 'Internal Interview'          && isPrevWeek(f.Created, b)).length;
+  const clientThis   = pipeline.filter(f => f.Status === 'Client-Candidate Interview'  && isThisWeek(f.Created, b)).length;
+  const clientPrev   = pipeline.filter(f => f.Status === 'Client-Candidate Interview'  && isPrevWeek(f.Created, b)).length;
 
-  throw new Error('Debug — check console for field names');
+  const placementsThis = placements.filter(f => isThisWeek(f['Created Date'], b)).length;
+  const placementsPrev = placements.filter(f => isPrevWeek(f['Created Date'], b)).length;
+
+  return {
+    phoneInterviews: phoneThis,
+    prevPhoneInterviews: phonePrev,
+    internalInterviews: internalThis,
+    prevInternalInterviews: internalPrev,
+    clientInterviews: clientThis,
+    prevClientInterviews: clientPrev,
+    placements: placementsThis,
+    prevPlacements: placementsPrev,
+  };
 }
 
 // ─── Marketing ────────────────────────────────────────────────────────────────
@@ -330,15 +350,14 @@ export const MOCK_SALES: SalesKPIs = {
 };
 
 export const MOCK_RECRUITER: RecruiterKPIs = {
-  totalActiveJobs: 18,
-  totalPlacements: 7,
-  fillRate: 70,
-  avgDaysToFill: 22,
-  byRecruiter: [
-    { name: 'Ian De La Cruz', activeJobs: 8, placements: 4, fillRate: 80, avgDaysToFill: 18 },
-    { name: 'Ayn Galado', activeJobs: 5, placements: 2, fillRate: 60, avgDaysToFill: 24 },
-    { name: 'Emma Hatch', activeJobs: 5, placements: 1, fillRate: 50, avgDaysToFill: 28 },
-  ],
+  phoneInterviews: 8,
+  prevPhoneInterviews: 5,
+  internalInterviews: 4,
+  prevInternalInterviews: 3,
+  clientInterviews: 2,
+  prevClientInterviews: 1,
+  placements: 1,
+  prevPlacements: 2,
 };
 
 export const MOCK_MARKETING: MarketingKPIs = {

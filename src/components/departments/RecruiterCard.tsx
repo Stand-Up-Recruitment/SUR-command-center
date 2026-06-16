@@ -1,23 +1,39 @@
 import { useCallback } from 'react';
-import { KPIMetric } from '../shared/KPIMetric';
 import { StatusBadge } from '../shared/StatusBadge';
-import { RecruiterTable } from '../shared/RecruiterTable';
+import { WoWBadge } from '../shared/WoWBadge';
 import { useAirtable } from '../../hooks/useAirtable';
 import { fetchRecruiterKPIs, MOCK_RECRUITER } from '../../services/airtable';
 import { COLORS, CARD_STYLE } from '../../styles/tokens';
 import type { DepartmentStatus } from '../../types';
 
+const hasRecruitCredentials =
+  Boolean(import.meta.env.VITE_AIRTABLE_API_KEY) &&
+  Boolean(import.meta.env.VITE_AIRTABLE_CANDIDATES_BASE_ID) &&
+  Boolean(import.meta.env.VITE_AIRTABLE_CLIENTS_BASE_ID);
+
 export function RecruiterCard() {
   const fetcher = useCallback(() => fetchRecruiterKPIs(), []);
-  const { data, loading, error } = useAirtable(fetcher, MOCK_RECRUITER);
+  const { data, loading, error } = useAirtable(fetcher, MOCK_RECRUITER, hasRecruitCredentials);
 
   const status: DepartmentStatus = !data
     ? 'no-data'
-    : data.fillRate >= 70
+    : data.placements >= 2
     ? 'on-track'
-    : data.fillRate >= 50
+    : data.placements >= 1
     ? 'at-risk'
     : 'off-track';
+
+  const statCard = (label: string, current: number, prev: number) => (
+    <div style={{ background: COLORS.bgSubtle, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: '14px 16px' }}>
+      <div style={{ fontSize: 10, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 20, fontWeight: 800, color: COLORS.textPrimary }}>
+        {current}
+      </div>
+      <WoWBadge current={current} prev={prev} />
+    </div>
+  );
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -28,7 +44,7 @@ export function RecruiterCard() {
             Recruitment
           </h2>
           <p style={{ fontSize: 13, color: COLORS.textMuted, margin: '3px 0 0' }}>
-            {new Date().toLocaleString('default', { month: 'long', year: 'numeric' })} · Updates every 60s
+            Week to date · Updates daily
           </p>
         </div>
         <StatusBadge status={error ? 'no-data' : status} />
@@ -43,55 +59,24 @@ export function RecruiterCard() {
         </div>
       ) : (
         <>
-          {/* HERO CARD: Placements */}
+          {/* HERO CARD: Placements + interview funnel */}
           <div style={{ ...CARD_STYLE, padding: 24 }}>
             <div style={{ fontSize: 11, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>
-              Total Placements
+              Placements
             </div>
             <div style={{ display: 'flex', alignItems: 'baseline', marginBottom: 20 }}>
               <span style={{ fontSize: 44, fontWeight: 900, color: COLORS.textPrimary, letterSpacing: '-2px', lineHeight: 1 }}>
-                {data?.totalPlacements ?? 0}
+                {data!.placements}
               </span>
-              <span style={{ fontSize: 13, color: COLORS.textMuted, marginLeft: 12 }}>this month</span>
+              <WoWBadge current={data!.placements} prev={data!.prevPlacements} />
             </div>
 
-            {/* Stat grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
-              <KPIMetric
-                label="Active Jobs"
-                value={data?.totalActiveJobs ?? 0}
-                valueColor={COLORS.accent}
-              />
-              <KPIMetric
-                label="Team Fill Rate"
-                value={`${data?.fillRate ?? 0}%`}
-                valueColor={
-                  (data?.fillRate ?? 0) >= 70 ? COLORS.accent
-                  : (data?.fillRate ?? 0) >= 50 ? COLORS.warning
-                  : COLORS.danger
-                }
-              />
-              <KPIMetric
-                label="Avg Days to Fill"
-                value={`${data?.avgDaysToFill ?? 0}d`}
-                valueColor={COLORS.textPrimary}
-              />
-              <KPIMetric
-                label="Recruiters"
-                value={data?.byRecruiter.length ?? 0}
-                valueColor={COLORS.textSecondary}
-              />
+            {/* Interview funnel grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+              {statCard('Phone Interviews', data!.phoneInterviews, data!.prevPhoneInterviews)}
+              {statCard('Internal Interviews', data!.internalInterviews, data!.prevInternalInterviews)}
+              {statCard('Client Interviews', data!.clientInterviews, data!.prevClientInterviews)}
             </div>
-          </div>
-
-          {/* PER-RECRUITER TABLE CARD */}
-          <div style={{ ...CARD_STYLE, overflow: 'hidden' }}>
-            <div style={{ padding: '16px 14px 0' }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>
-                By Recruiter — {new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}
-              </div>
-            </div>
-            <RecruiterTable recruiters={data?.byRecruiter ?? []} />
           </div>
         </>
       )}

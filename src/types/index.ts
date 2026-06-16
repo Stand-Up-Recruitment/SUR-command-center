@@ -26,29 +26,15 @@ export interface SalesKPIs {
 }
 
 // ─── Recruiter ────────────────────────────────────────────────────────────────
-export interface RecruiterFields {
-  RecruiterName: string;
-  Month: string;
-  ActiveJobs: number;
-  Placements: number;
-  JobsWorked: number;
-  TotalDaysToFill: number;  // sum, divide by placements for avg
-}
-
 export interface RecruiterKPIs {
-  totalActiveJobs: number;
-  totalPlacements: number;
-  fillRate: number;        // %
-  avgDaysToFill: number;
-  byRecruiter: RecruiterStat[];
-}
-
-export interface RecruiterStat {
-  name: string;
-  activeJobs: number;
+  phoneInterviews: number;
+  prevPhoneInterviews: number;
+  internalInterviews: number;
+  prevInternalInterviews: number;
+  clientInterviews: number;
+  prevClientInterviews: number;
   placements: number;
-  fillRate: number;
-  avgDaysToFill: number;
+  prevPlacements: number;
 }
 
 // ─── Marketing ────────────────────────────────────────────────────────────────
