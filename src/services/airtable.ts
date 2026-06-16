@@ -180,6 +180,17 @@ export async function fetchRecruiterKPIs(): Promise<RecruiterKPIs> {
     };
   });
 
+  // Debug: log new table schemas
+  const PIPELINE_TABLE_ID = 'tblpHoIL0R3MTQOXF';
+  const PLACEMENTS_TABLE_ID = 'tblvttoRo4DuZAIeW';
+  Promise.all([
+    fetchAllFromBase<Record<string, unknown>>(CANDIDATES_BASE_ID, PIPELINE_TABLE_ID, { maxRecords: '1' }),
+    fetchAllFromBase<Record<string, unknown>>(CLIENTS_BASE_ID, PLACEMENTS_TABLE_ID, { maxRecords: '1' }),
+  ]).then(([pipeline, placements]) => {
+    console.log('[Recruit] Pipeline sample:', JSON.stringify(pipeline[0]));
+    console.log('[Recruit] Placements sample:', JSON.stringify(placements[0]));
+  }).catch(e => console.log('[Recruit] debug error:', e));
+
   return { totalActiveJobs, totalPlacements, fillRate, avgDaysToFill, byRecruiter };
 }
 
