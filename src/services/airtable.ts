@@ -9,12 +9,11 @@ import type {
   ChannelRow,
   TimeFrame,
   AusPlacement,
+  RetentionKPIs,
 } from '../types';
 import { fetchMetaSpend } from './metaAds';
 
 const API_KEY = import.meta.env.VITE_AIRTABLE_API_KEY as string;
-const BASE_ID = import.meta.env.VITE_AIRTABLE_BASE_ID as string;
-const BASE_URL = `https://api.airtable.com/v0/${BASE_ID}`;
 const CLIENTS_BASE_ID = import.meta.env.VITE_AIRTABLE_CLIENTS_BASE_ID as string;
 const CANDIDATES_BASE_ID = import.meta.env.VITE_AIRTABLE_CANDIDATES_BASE_ID as string;
 const CLIENTS_TABLE_ID = 'tblF4uPjZ7eF4BFzP';
@@ -22,48 +21,7 @@ const CANDIDATES_TABLE_ID = 'tblHhlHjb7keWPUdE';
 const CRM_TABLE_ID = 'tbl4XcHW2Gb7PF4fw';
 const MAIN_CLIENT_TABLE_ID = 'tblHJjDpCeTgevOvI';
 
-// ─── Generic fetch ────────────────────────────────────────────────────────────
-async function fetchTable<T>(
-  tableName: string,
-  params?: Record<string, string>
-): Promise<AirtableResponse<T>> {
-  const url = new URL(`${BASE_URL}/${encodeURIComponent(tableName)}`);
-  if (params) {
-    Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
-  }
-
-  const res = await fetch(url.toString(), {
-    headers: { Authorization: `Bearer ${API_KEY}` },
-  });
-
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({ error: { message: res.statusText } }));
-    throw new Error(error?.error?.message ?? `Airtable error ${res.status}`);
-  }
-
-  return res.json();
-}
-
 // ─── Multi-base fetch helpers ─────────────────────────────────────────────────
-async function fetchTableFromBase<T>(
-  baseId: string,
-  tableId: string,
-  params?: Record<string, string>
-): Promise<AirtableResponse<T>> {
-  const url = new URL(`https://api.airtable.com/v0/${baseId}/${encodeURIComponent(tableId)}`);
-  if (params) {
-    Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
-  }
-  const res = await fetch(url.toString(), {
-    headers: { Authorization: `Bearer ${API_KEY}` },
-  });
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({ error: { message: res.statusText } }));
-    throw new Error(error?.error?.message ?? `Airtable error ${res.status}`);
-  }
-  return res.json();
-}
-
 async function fetchAllFromBase<T>(
   baseId: string,
   tableId: string,
@@ -540,6 +498,128 @@ export async function fetchAusPlacements(): Promise<AusPlacement[]> {
   });
 }
 
+// ─── Retention ───────────────────────────────────────────────────────────────
+type RetentionPlacementFields = {
+  'Candidate Start Date'?: string;
+  'Replacement Guarantee End Date'?: string;
+  'Cancellation Date'?: string;
+  'Created Date'?: string;
+  [key: string]: unknown;
+};
+
+export async function fetchRetentionKPIs(): Promise<RetentionKPIs> {
+  if (!CLIENTS_BASE_ID) throw new Error('Retention credentials not configured');
+
+  const today = Date.now();
+  const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+  const sevenDaysAgo = today - sevenDaysMs;
+  const fourteenDaysAgo = today - 2 * sevenDaysMs;
+
+  const d = new Date();
+  const monthStart = new Date(d.getFullYear(), d.getMonth(), 1).getTime();
+
+  const records = await fetchAllFromBase<RetentionPlacementFields>(
+    CLIENTS_BASE_ID,
+    PLACEMENTS_TABLE_ID,
+    {}
+  );
+
+  // Resolve BOM-prefixed Status field name
+  const statusKey = records.length > 0
+    ? (Object.keys(records[0]).find(k => k.includes('Status')) ?? '')
+    : '';
+
+  const getStatus = (f: RetentionPlacementFields): string =>
+    (f[statusKey] as string | undefined) ?? '';
+
+  // ── Metric 1: Active in guarantee window ─────────────────────────────────
+  const activeInWindow = records.filter(f => {
+    const start = f['Candidate Start Date'] ? new Date(f['Candidate Start Date']).getTime() : null;
+    const end = f['Replacement Guarantee End Date'] ? new Date(f['Replacement Guarantee End Date']).getTime() : null;
+    return start !== null && end !== null && start <= today && end >= today && getStatus(f) !== 'End';
+  }).length;
+
+  const prevActiveInWindow = records.filter(f => {
+    const start = f['Candidate Start Date'] ? new Date(f['Candidate Start Date']).getTime() : null;
+    const end = f['Replacement Guarantee End Date'] ? new Date(f['Replacement Guarantee End Date']).getTime() : null;
+    return start !== null && end !== null && start <= sevenDaysAgo && end >= sevenDaysAgo && getStatus(f) !== 'End';
+  }).length;
+
+  // ── Metric 2: Past guarantee window ──────────────────────────────────────
+  const pastWindow = records.filter(f => {
+    const end = f['Replacement Guarantee End Date'] ? new Date(f['Replacement Guarantee End Date']).getTime() : null;
+    return end !== null && end < today;
+  }).length;
+
+  const prevPastWindow = records.filter(f => {
+    const end = f['Replacement Guarantee End Date'] ? new Date(f['Replacement Guarantee End Date']).getTime() : null;
+    return end !== null && end < sevenDaysAgo;
+  }).length;
+
+  // ── Metric 3: Replacements triggered ─────────────────────────────────────
+  const isTriggered = (f: RetentionPlacementFields) =>
+    getStatus(f) === 'End' && Boolean(f['Cancellation Date']);
+
+  const replacementsThisMonth = records.filter(f => {
+    if (!isTriggered(f)) return false;
+    const t = new Date(f['Cancellation Date']!).getTime();
+    return t >= monthStart && t <= today;
+  }).length;
+
+  const replacementsThisWeek = records.filter(f => {
+    if (!isTriggered(f)) return false;
+    const t = new Date(f['Cancellation Date']!).getTime();
+    return t >= sevenDaysAgo && t <= today;
+  }).length;
+
+  const replacementsPrevWeek = records.filter(f => {
+    if (!isTriggered(f)) return false;
+    const t = new Date(f['Cancellation Date']!).getTime();
+    return t >= fourteenDaysAgo && t < sevenDaysAgo;
+  }).length;
+
+  // ── Metric 4: Replacement rate % (all-time) ───────────────────────────────
+  const totalPlacements = records.length;
+  const totalTriggered = records.filter(isTriggered).length;
+  const replacementRate = totalPlacements > 0
+    ? Math.round((totalTriggered / totalPlacements) * 1000) / 10
+    : 0;
+
+  const placementsBefore7d = records.filter(f => {
+    const created = f['Created Date'] ? new Date(f['Created Date']).getTime() : 0;
+    return created < sevenDaysAgo;
+  });
+  const triggeredBefore7d = placementsBefore7d.filter(f =>
+    isTriggered(f) && new Date(f['Cancellation Date']!).getTime() < sevenDaysAgo
+  ).length;
+  const prevReplacementRate = placementsBefore7d.length > 0
+    ? Math.round((triggeredBefore7d / placementsBefore7d.length) * 1000) / 10
+    : 0;
+
+  // ── Metric 5: Replacements in progress (Status = "Replacement") ───────────
+  const inProgress = records.filter(f => getStatus(f) === 'Replacement').length;
+
+  const inProgressThisWeek = records.filter(f => {
+    if (getStatus(f) !== 'Replacement') return false;
+    const created = f['Created Date'] ? new Date(f['Created Date']).getTime() : 0;
+    return created >= sevenDaysAgo && created <= today;
+  }).length;
+
+  const inProgressPrevWeek = records.filter(f => {
+    if (getStatus(f) !== 'Replacement') return false;
+    const created = f['Created Date'] ? new Date(f['Created Date']).getTime() : 0;
+    return created >= fourteenDaysAgo && created < sevenDaysAgo;
+  }).length;
+
+  return {
+    activeInWindow, prevActiveInWindow,
+    pastWindow, prevPastWindow,
+    replacementsThisMonth, replacementsThisWeek, replacementsPrevWeek,
+    replacementRate, prevReplacementRate,
+    inProgress, inProgressThisWeek, inProgressPrevWeek,
+  };
+}
+
 // ─── Mock data (used when no API key is configured) ───────────────────────────
 export const MOCK_SALES: SalesKPIs = {
   bookedCalls: 5,
@@ -618,4 +698,14 @@ export const MOCK_REVENUE: RevenueKPIs = {
   totalRevenue: 16000, prevTotalRevenue: 8000,
   cac: 554, prevCac: 683,
   adSpend: 1107, clientsClosed: 2,
+};
+
+export const MOCK_RETENTION: RetentionKPIs = {
+  activeInWindow: 12,      prevActiveInWindow: 11,
+  pastWindow: 34,          prevPastWindow: 32,
+  replacementsThisMonth: 2,
+  replacementsThisWeek: 1, replacementsPrevWeek: 1,
+  replacementRate: 3.2,    prevReplacementRate: 3.1,
+  inProgress: 1,
+  inProgressThisWeek: 1,   inProgressPrevWeek: 0,
 };
