@@ -11,23 +11,18 @@ export interface AirtableResponse<T> {
 }
 
 // ─── Sales ────────────────────────────────────────────────────────────────────
-export interface SalesFields {
-  Month: string;          // e.g. "2026-04"
-  Revenue: number;
-  Target: number;
-  PipelineValue: number;
-  ActiveDeals: number;
-  WonDeals: number;
-  LostDeals: number;
-}
-
 export interface SalesKPIs {
-  revenueThisMonth: number;
-  target: number;
-  pipelineValue: number;
-  activeDeals: number;
-  winRate: number;
-  trend: { month: string; revenue: number }[];
+  bookedCalls: number;
+  prevBookedCalls: number;
+  closedClients: number;
+  prevClosedClients: number;
+  callsToCloseRate: number;      // %
+  prevCallsToCloseRate: number;
+  leadToCloseRate: number;       // %
+  prevLeadToCloseRate: number;
+  openPipeline: number;          // total CRM records (current snapshot)
+  newPipelineThisWeek: number;
+  newPipelinePrevWeek: number;
 }
 
 // ─── Recruiter ────────────────────────────────────────────────────────────────

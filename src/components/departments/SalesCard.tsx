@@ -1,35 +1,44 @@
 import { useCallback } from 'react';
-import { KPIMetric } from '../shared/KPIMetric';
-import { MiniSparkline } from '../shared/MiniSparkline';
 import { StatusBadge } from '../shared/StatusBadge';
+import { WoWBadge } from '../shared/WoWBadge';
 import { useAirtable } from '../../hooks/useAirtable';
 import { fetchSalesKPIs, MOCK_SALES } from '../../services/airtable';
 import { COLORS, CARD_STYLE } from '../../styles/tokens';
 import type { DepartmentStatus } from '../../types';
 
-function fmt(n: number) {
-  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `$${(n / 1_000).toFixed(0)}k`;
-  return `$${n}`;
-}
+const hasSalesCredentials =
+  Boolean(import.meta.env.VITE_AIRTABLE_API_KEY) &&
+  Boolean(import.meta.env.VITE_AIRTABLE_CLIENTS_BASE_ID);
 
 export function SalesCard() {
   const fetcher = useCallback(() => fetchSalesKPIs(), []);
-  const { data, loading, error } = useAirtable(fetcher, MOCK_SALES);
+  const { data, loading, error } = useAirtable(fetcher, MOCK_SALES, hasSalesCredentials);
 
   const status: DepartmentStatus = !data
     ? 'no-data'
-    : data.revenueThisMonth >= data.target
+    : data.callsToCloseRate >= 40
     ? 'on-track'
-    : data.revenueThisMonth >= data.target * 0.8
+    : data.callsToCloseRate >= 20
     ? 'at-risk'
     : 'off-track';
 
-  const progressPct = data
-    ? Math.min(Math.round((data.revenueThisMonth / (data.target || 1)) * 100), 100)
-    : 0;
-
-  const sparkData = (data?.trend ?? []).map((t) => ({ label: t.month, value: t.revenue }));
+  const statCard = (
+    label: string,
+    value: string | number,
+    current: number,
+    prev: number,
+    opts?: { neutral?: boolean; invertDirection?: boolean }
+  ) => (
+    <div style={{ background: COLORS.bgSubtle, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: '14px 16px' }}>
+      <div style={{ fontSize: 10, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 20, fontWeight: 800, color: COLORS.textPrimary }}>
+        {value}
+      </div>
+      <WoWBadge current={current} prev={prev} neutral={opts?.neutral} invertDirection={opts?.invertDirection} />
+    </div>
+  );
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -40,7 +49,7 @@ export function SalesCard() {
             Sales
           </h2>
           <p style={{ fontSize: 13, color: COLORS.textMuted, margin: '3px 0 0' }}>
-            {new Date().toLocaleString('default', { month: 'long', year: 'numeric' })} · Updates every 60s
+            Week to date · Updates daily
           </p>
         </div>
         <StatusBadge status={error ? 'no-data' : status} />
@@ -55,74 +64,29 @@ export function SalesCard() {
         </div>
       ) : (
         <>
-          {/* HERO CARD: Revenue this month */}
+          {/* HERO CARD: Calls to close rate */}
           <div style={{ ...CARD_STYLE, padding: 24 }}>
             <div style={{ fontSize: 11, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>
-              Revenue This Month
+              Calls to Close Rate
             </div>
-            <div style={{ display: 'flex', alignItems: 'baseline', marginBottom: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', marginBottom: 6 }}>
               <span style={{ fontSize: 44, fontWeight: 900, color: COLORS.textPrimary, letterSpacing: '-2px', lineHeight: 1 }}>
-                {fmt(data?.revenueThisMonth ?? 0)}
+                {data!.callsToCloseRate}%
               </span>
+              <WoWBadge current={data!.callsToCloseRate} prev={data!.prevCallsToCloseRate} />
             </div>
+            <p style={{ fontSize: 12, color: COLORS.textMuted, margin: '0 0 20px' }}>
+              of calls this week converted to signed terms
+            </p>
 
             {/* Stat grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 20 }}>
-              <KPIMetric
-                label="Monthly Target"
-                value={fmt(data?.target ?? 0)}
-                valueColor={COLORS.textSecondary}
-              />
-              <KPIMetric
-                label="Pipeline Value"
-                value={fmt(data?.pipelineValue ?? 0)}
-                valueColor={COLORS.textPrimary}
-              />
-              <KPIMetric
-                label="Active Deals"
-                value={data?.activeDeals ?? 0}
-                valueColor={COLORS.textPrimary}
-              />
-              <KPIMetric
-                label="Win Rate"
-                value={`${data?.winRate ?? 0}%`}
-                valueColor={data?.winRate && data.winRate >= 60 ? COLORS.accent : COLORS.warning}
-              />
-            </div>
-
-            {/* Progress bar toward target */}
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                  Target Progress
-                </span>
-                <span style={{ fontSize: 12, fontWeight: 700, color: progressPct >= 100 ? COLORS.accent : COLORS.textSecondary }}>
-                  {progressPct}%
-                </span>
-              </div>
-              <div style={{ background: COLORS.border, borderRadius: 3, height: 5, overflow: 'hidden' }}>
-                <div
-                  style={{
-                    width: `${progressPct}%`,
-                    background: progressPct >= 80 ? COLORS.accent : COLORS.warning,
-                    height: '100%',
-                    borderRadius: 3,
-                    transition: 'width 0.6s ease',
-                  }}
-                />
-              </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+              {statCard('Booked Calls', data!.bookedCalls, data!.bookedCalls, data!.prevBookedCalls)}
+              {statCard('New Clients Closed', data!.closedClients, data!.closedClients, data!.prevClosedClients)}
+              {statCard('Lead to Close', `${data!.leadToCloseRate}%`, data!.leadToCloseRate, data!.prevLeadToCloseRate)}
+              {statCard('Open Pipeline', data!.openPipeline, data!.newPipelineThisWeek, data!.newPipelinePrevWeek, { neutral: true })}
             </div>
           </div>
-
-          {/* SPARKLINE CARD */}
-          {sparkData.length > 0 && (
-            <div style={{ ...CARD_STYLE, padding: 20 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>
-                6-Month Revenue Trend
-              </div>
-              <MiniSparkline data={sparkData} color={COLORS.accent} valuePrefix="$" />
-            </div>
-          )}
         </>
       )}
 

@@ -1,6 +1,5 @@
 import type {
   AirtableResponse,
-  SalesFields,
   RecruiterFields,
   SalesKPIs,
   RecruiterKPIs,
@@ -18,6 +17,8 @@ const CLIENTS_BASE_ID = import.meta.env.VITE_AIRTABLE_CLIENTS_BASE_ID as string;
 const CANDIDATES_BASE_ID = import.meta.env.VITE_AIRTABLE_CANDIDATES_BASE_ID as string;
 const CLIENTS_TABLE_ID = 'tblF4uPjZ7eF4BFzP';
 const CANDIDATES_TABLE_ID = 'tblHhlHjb7keWPUdE';
+const CRM_TABLE_ID = 'tbl4XcHW2Gb7PF4fw';
+const MAIN_CLIENT_TABLE_ID = 'tblHJjDpCeTgevOvI';
 
 // ─── Generic fetch ────────────────────────────────────────────────────────────
 async function fetchTable<T>(
@@ -92,40 +93,42 @@ async function fetchAllFromBase<T>(
 
 // ─── Sales ────────────────────────────────────────────────────────────────────
 export async function fetchSalesKPIs(): Promise<SalesKPIs> {
-  const data = await fetchTable<SalesFields>('Sales', {
-    sort: JSON.stringify([{ field: 'Month', direction: 'desc' }]),
-    maxRecords: '12',
-  });
+  if (!CLIENTS_BASE_ID) throw new Error('Sales credentials not configured');
 
-  const records = data.records.map((r) => r.fields);
-  const current = records[0];
+  const b = weekBoundaries();
 
-  if (!current) {
-    return {
-      revenueThisMonth: 0,
-      target: 0,
-      pipelineValue: 0,
-      activeDeals: 0,
-      winRate: 0,
-      trend: [],
-    };
-  }
+  const [allClients, allCRM, allMainClient] = await Promise.all([
+    fetchAllFromBase<{ Status?: string; 'Last Updated Date'?: string; Created?: string }>(
+      CLIENTS_BASE_ID, CLIENTS_TABLE_ID, {}
+    ),
+    fetchAllFromBase<{ Created?: string }>(CLIENTS_BASE_ID, CRM_TABLE_ID, {}),
+    fetchAllFromBase<{ Created?: string }>(CLIENTS_BASE_ID, MAIN_CLIENT_TABLE_ID, {}),
+  ]);
 
-  const totalDeals = (current.WonDeals ?? 0) + (current.LostDeals ?? 0);
-  const winRate = totalDeals > 0 ? Math.round((current.WonDeals / totalDeals) * 100) : 0;
+  const bookedCalls     = allClients.filter(f => f.Status === 'Moved to CRM' && isThisWeek(f['Last Updated Date'], b)).length;
+  const prevBookedCalls = allClients.filter(f => f.Status === 'Moved to CRM' && isPrevWeek(f['Last Updated Date'], b)).length;
 
-  const trend = records
-    .slice(0, 6)
-    .reverse()
-    .map((r) => ({ month: r.Month, revenue: r.Revenue ?? 0 }));
+  const crmThis  = allCRM.filter(f => isThisWeek(f.Created, b)).length;
+  const crmPrev  = allCRM.filter(f => isPrevWeek(f.Created, b)).length;
+
+  const closedThis = allMainClient.filter(f => isThisWeek(f.Created, b)).length;
+  const closedPrev = allMainClient.filter(f => isPrevWeek(f.Created, b)).length;
+
+  const leadsThis = allClients.filter(f => isThisWeek(f.Created, b)).length;
+  const leadsPrev = allClients.filter(f => isPrevWeek(f.Created, b)).length;
 
   return {
-    revenueThisMonth: current.Revenue ?? 0,
-    target: current.Target ?? 0,
-    pipelineValue: current.PipelineValue ?? 0,
-    activeDeals: current.ActiveDeals ?? 0,
-    winRate,
-    trend,
+    bookedCalls,
+    prevBookedCalls,
+    closedClients: closedThis,
+    prevClosedClients: closedPrev,
+    callsToCloseRate:     crmThis > 0 ? Math.round(closedThis / crmThis * 100) : 0,
+    prevCallsToCloseRate: crmPrev > 0 ? Math.round(closedPrev / crmPrev * 100) : 0,
+    leadToCloseRate:     leadsThis > 0 ? Math.round(closedThis / leadsThis * 100) : 0,
+    prevLeadToCloseRate: leadsPrev > 0 ? Math.round(closedPrev / leadsPrev * 100) : 0,
+    openPipeline: allCRM.length,
+    newPipelineThisWeek: crmThis,
+    newPipelinePrevWeek: crmPrev,
   };
 }
 
@@ -348,19 +351,17 @@ export async function fetchMarketingKPIs(): Promise<MarketingKPIs> {
 
 // ─── Mock data (used when no API key is configured) ───────────────────────────
 export const MOCK_SALES: SalesKPIs = {
-  revenueThisMonth: 142500,
-  target: 180000,
-  pipelineValue: 420000,
-  activeDeals: 23,
-  winRate: 68,
-  trend: [
-    { month: '2025-11', revenue: 98000 },
-    { month: '2025-12', revenue: 115000 },
-    { month: '2026-01', revenue: 127000 },
-    { month: '2026-02', revenue: 134000 },
-    { month: '2026-03', revenue: 158000 },
-    { month: '2026-04', revenue: 142500 },
-  ],
+  bookedCalls: 5,
+  prevBookedCalls: 3,
+  closedClients: 2,
+  prevClosedClients: 1,
+  callsToCloseRate: 40,
+  prevCallsToCloseRate: 33,
+  leadToCloseRate: 18,
+  prevLeadToCloseRate: 12,
+  openPipeline: 14,
+  newPipelineThisWeek: 5,
+  newPipelinePrevWeek: 3,
 };
 
 export const MOCK_RECRUITER: RecruiterKPIs = {
