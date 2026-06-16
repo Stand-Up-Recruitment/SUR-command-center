@@ -105,6 +105,26 @@ export interface RevenueKPIs {
   clientsClosed: number;
 }
 
+// ─── Retention ────────────────────────────────────────────────────────────────
+export interface RetentionKPIs {
+  activeInWindow: number;
+  prevActiveInWindow: number;
+
+  pastWindow: number;
+  prevPastWindow: number;
+
+  replacementsThisMonth: number;
+  replacementsThisWeek: number;
+  replacementsPrevWeek: number;
+
+  replacementRate: number;
+  prevReplacementRate: number;
+
+  inProgress: number;
+  inProgressThisWeek: number;
+  inProgressPrevWeek: number;
+}
+
 // ─── Finance (Xero P&L) ───────────────────────────────────────────────────────
 export interface XeroCostRow {
   label: string;
