@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { Routes, Route } from 'react-router-dom';
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { LoginGate } from './components/auth/LoginGate';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/react';
@@ -38,6 +39,7 @@ export default function App() {
       </main>
       <Analytics />
       <SpeedInsights />
+      <ReactQueryDevtools initialIsOpen={false} />
     </div>
     </LoginGate>
   );

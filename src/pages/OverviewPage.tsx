@@ -1,28 +1,16 @@
-import { useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { COLORS, CARD_STYLE } from '../styles/tokens';
 import { StatusBadge } from '../components/shared/StatusBadge';
 import { Skeleton } from '../components/shared/Skeleton';
-import { useAirtable } from '../hooks/useAirtable';
 import {
-  fetchMarketingKPIs,
-  fetchSalesKPIs,
-  fetchRecruiterKPIs,
-  fetchRevenueKPIs,
-  fetchRetentionKPIs,
-} from '../services/airtable';
-import { fetchXeroFinanceData, hasXeroCredentials } from '../services/xero';
+  useSalesKPIs,
+  useMarketingKPIs,
+  useRecruiterKPIs,
+  useRevenueKPIs,
+  useRetentionKPIs,
+  useXeroFinanceData,
+} from '../hooks/queries';
 import type { DepartmentStatus } from '../types';
-
-const hasAirtableKey   = Boolean(import.meta.env.VITE_AIRTABLE_API_KEY);
-const hasClientsBase   = Boolean(import.meta.env.VITE_AIRTABLE_CLIENTS_BASE_ID);
-const hasCandidatesBase = Boolean(import.meta.env.VITE_AIRTABLE_CANDIDATES_BASE_ID);
-
-const hasMarketingCredentials  = hasAirtableKey && hasClientsBase && hasCandidatesBase && Boolean(import.meta.env.VITE_META_TOKEN);
-const hasSalesCredentials      = hasAirtableKey && hasClientsBase;
-const hasRecruitmentCredentials = hasAirtableKey && hasCandidatesBase && hasClientsBase;
-const hasRevenueCredentials    = hasAirtableKey && hasClientsBase;
-const hasRetentionCredentials  = hasAirtableKey && hasClientsBase;
 
 const departments = [
   { name: 'Marketing',   path: '/marketing',   description: 'Leads, ad spend & channel performance' },
@@ -38,19 +26,12 @@ function fmtMoney(n: number): string {
 }
 
 export function OverviewPage() {
-  const mktFetcher  = useCallback(() => fetchMarketingKPIs(),  []);
-  const salFetcher  = useCallback(() => fetchSalesKPIs(),       []);
-  const recFetcher  = useCallback(() => fetchRecruiterKPIs(),   []);
-  const revFetcher  = useCallback(() => fetchRevenueKPIs(),     []);
-  const retFetcher  = useCallback(() => fetchRetentionKPIs(),   []);
-  const finFetcher  = useCallback(() => fetchXeroFinanceData(), []);
-
-  const { data: mkt, loading: mktLoading } = useAirtable(mktFetcher, hasMarketingCredentials);
-  const { data: sal, loading: salLoading } = useAirtable(salFetcher, hasSalesCredentials);
-  const { data: rec, loading: recLoading } = useAirtable(recFetcher, hasRecruitmentCredentials);
-  const { data: rev, loading: revLoading } = useAirtable(revFetcher, hasRevenueCredentials);
-  const { data: ret, loading: retLoading } = useAirtable(retFetcher, hasRetentionCredentials);
-  const { data: fin, loading: finLoading } = useAirtable(finFetcher, hasXeroCredentials);
+  const { data: mkt, isLoading: mktLoading } = useMarketingKPIs();
+  const { data: sal, isLoading: salLoading } = useSalesKPIs();
+  const { data: rec, isLoading: recLoading } = useRecruiterKPIs();
+  const { data: rev, isLoading: revLoading } = useRevenueKPIs();
+  const { data: ret, isLoading: retLoading } = useRetentionKPIs();
+  const { data: fin, isLoading: finLoading } = useXeroFinanceData();
 
   const indicators: Record<string, { loading: boolean; status: DepartmentStatus; kpi: string; showStatus: boolean }> = {
     '/marketing': {

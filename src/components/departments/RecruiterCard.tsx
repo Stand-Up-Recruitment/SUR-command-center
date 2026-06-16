@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useState } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
@@ -6,15 +6,9 @@ import { StatusBadge } from '../shared/StatusBadge';
 import { WoWBadge } from '../shared/WoWBadge';
 import { TimeFramePicker } from '../shared/TimeFramePicker';
 import { Skeleton } from '../shared/Skeleton';
-import { useAirtable } from '../../hooks/useAirtable';
-import { fetchRecruiterKPIs } from '../../services/airtable';
+import { useRecruiterKPIs } from '../../hooks/queries';
 import { COLORS, CARD_STYLE } from '../../styles/tokens';
 import type { DepartmentStatus, TimeFrame } from '../../types';
-
-const hasRecruitCredentials =
-  Boolean(import.meta.env.VITE_AIRTABLE_API_KEY) &&
-  Boolean(import.meta.env.VITE_AIRTABLE_CANDIDATES_BASE_ID) &&
-  Boolean(import.meta.env.VITE_AIRTABLE_CLIENTS_BASE_ID);
 
 function RecruiterSkeleton() {
   const statBlock = (i: number) => (
@@ -57,10 +51,9 @@ function RecruiterSkeleton() {
 
 export function RecruiterCard() {
   const [frame, setFrame] = useState<TimeFrame>('month');
-  const fetcher = useCallback(() => fetchRecruiterKPIs(frame), [frame]);
-  const { data, error } = useAirtable(fetcher, hasRecruitCredentials);
+  const { data, error, isLoading, isFetching } = useRecruiterKPIs(frame);
 
-  if (!data) return <RecruiterSkeleton />;
+  if (isLoading) return <RecruiterSkeleton />;
 
   const status: DepartmentStatus =
     data.placements >= 2 ? 'on-track' :
@@ -88,10 +81,19 @@ export function RecruiterCard() {
           <p style={{ fontSize: 13, color: COLORS.textMuted, margin: '3px 0 0' }}>{subtitleText} · Updates daily</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {isFetching && (
+            <div style={{
+              width: 14, height: 14, borderRadius: '50%',
+              border: `2px solid ${COLORS.border}`,
+              borderTopColor: COLORS.accent,
+              animation: 'spin 0.7s linear infinite',
+            }} />
+          )}
           <TimeFramePicker value={frame} onChange={setFrame} />
           <StatusBadge status={error ? 'no-data' : status} />
         </div>
       </div>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
       <div style={{ ...CARD_STYLE, padding: 24 }}>
         <div style={{ fontSize: 11, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Placements</div>
@@ -173,7 +175,7 @@ export function RecruiterCard() {
       )}
 
       {error && (
-        <p style={{ color: COLORS.warning, fontSize: 12, margin: 0 }}>⚠ Connection error — {error}</p>
+        <p style={{ color: COLORS.warning, fontSize: 12, margin: 0 }}>⚠ Connection error — {error?.message}</p>
       )}
     </div>
   );

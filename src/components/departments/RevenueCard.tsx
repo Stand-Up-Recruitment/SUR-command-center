@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useState } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
@@ -6,14 +6,9 @@ import { StatusBadge } from '../shared/StatusBadge';
 import { WoWBadge } from '../shared/WoWBadge';
 import { TimeFramePicker } from '../shared/TimeFramePicker';
 import { Skeleton } from '../shared/Skeleton';
-import { useAirtable } from '../../hooks/useAirtable';
-import { fetchRevenueKPIs } from '../../services/airtable';
+import { useRevenueKPIs } from '../../hooks/queries';
 import { COLORS, CARD_STYLE } from '../../styles/tokens';
 import type { DepartmentStatus, TimeFrame } from '../../types';
-
-const hasRevenueCredentials =
-  Boolean(import.meta.env.VITE_AIRTABLE_API_KEY) &&
-  Boolean(import.meta.env.VITE_AIRTABLE_CLIENTS_BASE_ID);
 
 function RevenueCardSkeleton() {
   const statBlock = (i: number) => (
@@ -120,10 +115,9 @@ function StatCard({
 
 export function RevenueCard() {
   const [frame, setFrame] = useState<TimeFrame>('month');
-  const fetcher = useCallback(() => fetchRevenueKPIs(frame), [frame]);
-  const { data, error } = useAirtable(fetcher, hasRevenueCredentials);
+  const { data, error, isLoading, isFetching } = useRevenueKPIs(frame);
 
-  if (!data) return <RevenueCardSkeleton />;
+  if (isLoading) return <RevenueCardSkeleton />;
 
   const status: DepartmentStatus =
     data.totalRevenue >= 16000 ? 'on-track' :
@@ -148,10 +142,19 @@ export function RevenueCard() {
           </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {isFetching && (
+            <div style={{
+              width: 14, height: 14, borderRadius: '50%',
+              border: `2px solid ${COLORS.border}`,
+              borderTopColor: COLORS.accent,
+              animation: 'spin 0.7s linear infinite',
+            }} />
+          )}
           <TimeFramePicker value={frame} onChange={setFrame} />
           <StatusBadge status={error ? 'no-data' : status} />
         </div>
       </div>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
       {/* HERO: Total Revenue */}
       <div style={{ ...CARD_STYLE, padding: 24 }}>
@@ -244,7 +247,7 @@ export function RevenueCard() {
 
       {error && (
         <p style={{ color: COLORS.warning, fontSize: 12, margin: 0 }}>
-          ⚠ Using demo data — {error}
+          ⚠ Using demo data — {error?.message}
         </p>
       )}
     </div>

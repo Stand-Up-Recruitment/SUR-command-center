@@ -1,13 +1,9 @@
-import { useCallback } from 'react';
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, Tooltip,
   Cell, ResponsiveContainer,
 } from 'recharts';
 import { Skeleton } from '../shared/Skeleton';
-import { useAirtable } from '../../hooks/useAirtable';
-import { fetchXeroFinanceData, hasXeroCredentials } from '../../services/xero';
-import { fetchAusPlacements } from '../../services/airtable';
-import type { XeroFinanceData, AusPlacement } from '../../types';
+import { useXeroFinanceData, useAusPlacements } from '../../hooks/queries';
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
 const NZ   = '#1D9E75';
@@ -164,11 +160,8 @@ function FinanceSkeleton() {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function FinanceCard() {
-  const fetcher = useCallback(() => fetchXeroFinanceData(), []);
-  const { data, error } = useAirtable<XeroFinanceData>(fetcher, hasXeroCredentials);
-
-  const placementsFetcher = useCallback(() => fetchAusPlacements(), []);
-  const { data: placements } = useAirtable<AusPlacement[]>(placementsFetcher, true);
+  const { data, error } = useXeroFinanceData();
+  const { data: placements } = useAusPlacements();
 
   if (!data) return <FinanceSkeleton />;
 
@@ -389,7 +382,7 @@ export function FinanceCard() {
       )}
 
       {error && (
-        <p style={{ color: RD, fontSize: 12, margin: '8px 0 0' }}>⚠ Xero connection error — {error}</p>
+        <p style={{ color: RD, fontSize: 12, margin: '8px 0 0' }}>⚠ Xero connection error — {error?.message}</p>
       )}
     </div>
   );

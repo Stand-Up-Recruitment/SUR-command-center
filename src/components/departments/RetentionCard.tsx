@@ -1,15 +1,9 @@
-import { useCallback } from 'react';
 import { StatusBadge } from '../shared/StatusBadge';
 import { WoWBadge } from '../shared/WoWBadge';
 import { Skeleton } from '../shared/Skeleton';
-import { useAirtable } from '../../hooks/useAirtable';
-import { fetchRetentionKPIs } from '../../services/airtable';
+import { useRetentionKPIs } from '../../hooks/queries';
 import { COLORS, CARD_STYLE } from '../../styles/tokens';
 import type { DepartmentStatus } from '../../types';
-
-const hasRetentionCredentials =
-  Boolean(import.meta.env.VITE_AIRTABLE_API_KEY) &&
-  Boolean(import.meta.env.VITE_AIRTABLE_CLIENTS_BASE_ID);
 
 function RetentionSkeleton() {
   const tile = (i: number) => (
@@ -48,8 +42,7 @@ function RetentionSkeleton() {
 }
 
 export function RetentionCard() {
-  const fetcher = useCallback(() => fetchRetentionKPIs(), []);
-  const { data, error } = useAirtable(fetcher, hasRetentionCredentials);
+  const { data, error } = useRetentionKPIs();
 
   if (!data) return <RetentionSkeleton />;
 
@@ -174,7 +167,7 @@ export function RetentionCard() {
 
       {error && (
         <p style={{ color: COLORS.warning, fontSize: 12, margin: 0 }}>
-          ⚠ Connection error — {error}
+          ⚠ Connection error — {error?.message}
         </p>
       )}
     </div>

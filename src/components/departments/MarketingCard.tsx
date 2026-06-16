@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useState } from 'react';
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
@@ -6,20 +6,13 @@ import { StatusBadge } from '../shared/StatusBadge';
 import { WoWBadge } from '../shared/WoWBadge';
 import { TimeFramePicker } from '../shared/TimeFramePicker';
 import { Skeleton } from '../shared/Skeleton';
-import { useAirtable } from '../../hooks/useAirtable';
-import { fetchMarketingKPIs } from '../../services/airtable';
+import { useMarketingKPIs } from '../../hooks/queries';
 import { COLORS, CARD_STYLE } from '../../styles/tokens';
 import type { DepartmentStatus, TimeFrame } from '../../types';
 
 function fmtCurrency(n: number) {
   return `$${n.toLocaleString('en-AU', { maximumFractionDigits: 0 })}`;
 }
-
-const hasMarketingCredentials =
-  Boolean(import.meta.env.VITE_AIRTABLE_API_KEY) &&
-  Boolean(import.meta.env.VITE_AIRTABLE_CLIENTS_BASE_ID) &&
-  Boolean(import.meta.env.VITE_AIRTABLE_CANDIDATES_BASE_ID) &&
-  Boolean(import.meta.env.VITE_META_TOKEN);
 
 function MarketingSkeleton() {
   const miniCard = (i: number) => (
@@ -88,10 +81,9 @@ function MarketingSkeleton() {
 
 export function MarketingCard() {
   const [frame, setFrame] = useState<TimeFrame>('month');
-  const fetcher = useCallback(() => fetchMarketingKPIs(frame), [frame]);
-  const { data, error } = useAirtable(fetcher, hasMarketingCredentials);
+  const { data, error, isLoading, isFetching } = useMarketingKPIs(frame);
 
-  if (!data) return <MarketingSkeleton />;
+  if (isLoading) return <MarketingSkeleton />;
 
   const qualCandidates = data.candidates.qualified;
   const qualClients    = data.clients.qualified;
@@ -121,10 +113,19 @@ export function MarketingCard() {
           </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {isFetching && (
+            <div style={{
+              width: 14, height: 14, borderRadius: '50%',
+              border: `2px solid ${COLORS.border}`,
+              borderTopColor: COLORS.accent,
+              animation: 'spin 0.7s linear infinite',
+            }} />
+          )}
           <TimeFramePicker value={frame} onChange={setFrame} />
           <StatusBadge status={error ? 'no-data' : status} />
         </div>
       </div>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
       {/* HERO CARD: Candidate + Client leads */}
           <div style={{ ...CARD_STYLE, padding: 24 }}>
@@ -331,7 +332,7 @@ export function MarketingCard() {
           </div>
       {error && (
         <p style={{ color: COLORS.warning, fontSize: 12, margin: 0 }}>
-          ⚠ Using demo data — {error}
+          ⚠ Using demo data — {error?.message}
         </p>
       )}
     </div>

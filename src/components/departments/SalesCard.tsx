@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useState } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
@@ -6,14 +6,9 @@ import { StatusBadge } from '../shared/StatusBadge';
 import { WoWBadge } from '../shared/WoWBadge';
 import { TimeFramePicker } from '../shared/TimeFramePicker';
 import { Skeleton } from '../shared/Skeleton';
-import { useAirtable } from '../../hooks/useAirtable';
-import { fetchSalesKPIs } from '../../services/airtable';
+import { useSalesKPIs } from '../../hooks/queries';
 import { COLORS, CARD_STYLE } from '../../styles/tokens';
 import type { DepartmentStatus, TimeFrame } from '../../types';
-
-const hasSalesCredentials =
-  Boolean(import.meta.env.VITE_AIRTABLE_API_KEY) &&
-  Boolean(import.meta.env.VITE_AIRTABLE_CLIENTS_BASE_ID);
 
 function funnelConversion(numerator: number, denominator: number): string {
   if (denominator === 0) return '—';
@@ -59,10 +54,9 @@ function SalesSkeleton() {
 
 export function SalesCard() {
   const [frame, setFrame] = useState<TimeFrame>('month');
-  const fetcher = useCallback(() => fetchSalesKPIs(frame), [frame]);
-  const { data, error } = useAirtable(fetcher, hasSalesCredentials);
+  const { data, error, isLoading, isFetching } = useSalesKPIs(frame);
 
-  if (!data) return <SalesSkeleton />;
+  if (isLoading) return <SalesSkeleton />;
 
   const status: DepartmentStatus =
     data.callsToCloseRate >= 40 ? 'on-track' :
@@ -98,9 +92,18 @@ export function SalesCard() {
           <p style={{ fontSize: 13, color: COLORS.textMuted, margin: '3px 0 0' }}>{subtitleText} · Updates daily</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {isFetching && (
+            <div style={{
+              width: 14, height: 14, borderRadius: '50%',
+              border: `2px solid ${COLORS.border}`,
+              borderTopColor: COLORS.accent,
+              animation: 'spin 0.7s linear infinite',
+            }} />
+          )}
           <TimeFramePicker value={frame} onChange={setFrame} />
           <StatusBadge status={error ? 'no-data' : status} />
         </div>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
 
       <div style={{ ...CARD_STYLE, padding: 24 }}>
@@ -184,7 +187,7 @@ export function SalesCard() {
       </div>
 
       {error && (
-        <p style={{ color: COLORS.warning, fontSize: 12, margin: 0 }}>⚠ Connection error — {error}</p>
+        <p style={{ color: COLORS.warning, fontSize: 12, margin: 0 }}>⚠ Connection error — {error?.message}</p>
       )}
     </div>
   );
