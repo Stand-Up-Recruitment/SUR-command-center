@@ -307,6 +307,10 @@ export async function fetchMarketingKPIs(): Promise<MarketingKPIs> {
   const thisClients = allClients.filter(f => isThisWeek(f.Created, b));
   const prevClients = allClients.filter(f => isPrevWeek(f.Created, b));
 
+  // Debug
+  const movedToCRM = allClients.filter(f => f.Status === 'Moved to CRM');
+  console.log('[Marketing] Moved to CRM total:', movedToCRM.length, 'sample:', JSON.stringify(movedToCRM[0]));
+
   // Client qualified: moved to CRM this week (by Last Updated Date, not Created)
   const qualClientsThis = allClients.filter(
     f => f.Status === 'Moved to CRM' && isThisWeek(f['Last Updated Date'], b)
