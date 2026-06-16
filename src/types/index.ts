@@ -158,7 +158,7 @@ export interface XeroFinanceData {
   ausNetContribution: number;
   advertising: number;
   travelInternational: number;
-  nzActiveWorkers: number;
+  nzActiveWorkers?: number;
   cashFlow: CashWeek[];
   cashKpis: {
     openingBalance: number;
