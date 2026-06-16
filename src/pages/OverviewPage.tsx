@@ -5,11 +5,11 @@ import { StatusBadge } from '../components/shared/StatusBadge';
 import { Skeleton } from '../components/shared/Skeleton';
 import { useAirtable } from '../hooks/useAirtable';
 import {
-  fetchMarketingKPIs, MOCK_MARKETING,
-  fetchSalesKPIs, MOCK_SALES,
-  fetchRecruiterKPIs, MOCK_RECRUITER,
-  fetchRevenueKPIs, MOCK_REVENUE,
-  fetchRetentionKPIs, MOCK_RETENTION,
+  fetchMarketingKPIs,
+  fetchSalesKPIs,
+  fetchRecruiterKPIs,
+  fetchRevenueKPIs,
+  fetchRetentionKPIs,
 } from '../services/airtable';
 import { fetchXeroFinanceData, hasXeroCredentials } from '../services/xero';
 import type { DepartmentStatus } from '../types';
@@ -45,12 +45,12 @@ export function OverviewPage() {
   const retFetcher  = useCallback(() => fetchRetentionKPIs(),   []);
   const finFetcher  = useCallback(() => fetchXeroFinanceData(), []);
 
-  const { data: mkt, loading: mktLoading } = useAirtable(mktFetcher, MOCK_MARKETING,  hasMarketingCredentials);
-  const { data: sal, loading: salLoading } = useAirtable(salFetcher, MOCK_SALES,       hasSalesCredentials);
-  const { data: rec, loading: recLoading } = useAirtable(recFetcher, MOCK_RECRUITER,   hasRecruitmentCredentials);
-  const { data: rev, loading: revLoading } = useAirtable(revFetcher, MOCK_REVENUE,     hasRevenueCredentials);
-  const { data: ret, loading: retLoading } = useAirtable(retFetcher, MOCK_RETENTION,   hasRetentionCredentials);
-  const { data: fin, loading: finLoading } = useAirtable(finFetcher, undefined,        hasXeroCredentials);
+  const { data: mkt, loading: mktLoading } = useAirtable(mktFetcher, hasMarketingCredentials);
+  const { data: sal, loading: salLoading } = useAirtable(salFetcher, hasSalesCredentials);
+  const { data: rec, loading: recLoading } = useAirtable(recFetcher, hasRecruitmentCredentials);
+  const { data: rev, loading: revLoading } = useAirtable(revFetcher, hasRevenueCredentials);
+  const { data: ret, loading: retLoading } = useAirtable(retFetcher, hasRetentionCredentials);
+  const { data: fin, loading: finLoading } = useAirtable(finFetcher, hasXeroCredentials);
 
   const indicators: Record<string, { loading: boolean; status: DepartmentStatus; kpi: string; showStatus: boolean }> = {
     '/marketing': {

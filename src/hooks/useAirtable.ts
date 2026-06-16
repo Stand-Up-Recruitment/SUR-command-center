@@ -12,7 +12,6 @@ interface UseAirtableResult<T> {
 
 export function useAirtable<T>(
   fetcher: () => Promise<T>,
-  mockData?: T,
   credentialsReady?: boolean
 ): UseAirtableResult<T> {
   const hasApiKey =
@@ -21,17 +20,14 @@ export function useAirtable<T>(
       : Boolean(import.meta.env.VITE_AIRTABLE_API_KEY) &&
         Boolean(import.meta.env.VITE_AIRTABLE_BASE_ID);
 
-  const [data, setData] = useState<T | null>(mockData ?? null);
-  const [loading, setLoading] = useState(!mockData || hasApiKey);
+  const [data, setData] = useState<T | null>(null);
+  const [loading, setLoading] = useState(hasApiKey);
   const [error, setError] = useState<string | null>(null);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(
-    mockData && !hasApiKey ? new Date() : null
-  );
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const load = useCallback(async () => {
     if (!hasApiKey) {
-      // Use mock data — already set in initial state
       setLoading(false);
       return;
     }
@@ -45,12 +41,10 @@ export function useAirtable<T>(
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
       setError(msg);
-      // Fall back to mock data if available
-      if (mockData) setData(mockData);
     } finally {
       setLoading(false);
     }
-  }, [fetcher, hasApiKey, mockData]);
+  }, [fetcher, hasApiKey]);
 
   useEffect(() => {
     load();

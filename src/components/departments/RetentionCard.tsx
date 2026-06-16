@@ -3,7 +3,7 @@ import { StatusBadge } from '../shared/StatusBadge';
 import { WoWBadge } from '../shared/WoWBadge';
 import { Skeleton } from '../shared/Skeleton';
 import { useAirtable } from '../../hooks/useAirtable';
-import { fetchRetentionKPIs, MOCK_RETENTION } from '../../services/airtable';
+import { fetchRetentionKPIs } from '../../services/airtable';
 import { COLORS, CARD_STYLE } from '../../styles/tokens';
 import type { DepartmentStatus } from '../../types';
 
@@ -49,7 +49,7 @@ function RetentionSkeleton() {
 
 export function RetentionCard() {
   const fetcher = useCallback(() => fetchRetentionKPIs(), []);
-  const { data, error } = useAirtable(fetcher, MOCK_RETENTION, hasRetentionCredentials);
+  const { data, error } = useAirtable(fetcher, hasRetentionCredentials);
 
   if (!data) return <RetentionSkeleton />;
 
