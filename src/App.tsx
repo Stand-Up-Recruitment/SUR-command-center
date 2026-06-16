@@ -1,5 +1,7 @@
 import { useCallback } from 'react';
 import { Routes, Route } from 'react-router-dom';
+import { Analytics } from '@vercel/analytics/react';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 import { Header } from './components/layout/Header';
 import { OverviewPage } from './pages/OverviewPage';
 import { MarketingPage } from './pages/MarketingPage';
@@ -32,6 +34,8 @@ export default function App() {
           <Route path="/retention"   element={<RetentionPage />} />
         </Routes>
       </main>
+      <Analytics />
+      <SpeedInsights />
     </div>
   );
 }
