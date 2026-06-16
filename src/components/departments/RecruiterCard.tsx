@@ -54,6 +54,7 @@ export function RecruiterCard() {
   const { data, error, isLoading, isFetching } = useRecruiterKPIs(frame);
 
   if (isLoading) return <RecruiterSkeleton />;
+  if (!data) return null;
 
   const status: DepartmentStatus =
     data.placements >= 2 ? 'on-track' :

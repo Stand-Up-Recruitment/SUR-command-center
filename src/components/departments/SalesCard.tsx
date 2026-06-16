@@ -57,6 +57,7 @@ export function SalesCard() {
   const { data, error, isLoading, isFetching } = useSalesKPIs(frame);
 
   if (isLoading) return <SalesSkeleton />;
+  if (!data) return null;
 
   const status: DepartmentStatus =
     data.callsToCloseRate >= 40 ? 'on-track' :

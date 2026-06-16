@@ -84,6 +84,7 @@ export function MarketingCard() {
   const { data, error, isLoading, isFetching } = useMarketingKPIs(frame);
 
   if (isLoading) return <MarketingSkeleton />;
+  if (!data) return null;
 
   const qualCandidates = data.candidates.qualified;
   const qualClients    = data.clients.qualified;

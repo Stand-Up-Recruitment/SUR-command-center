@@ -118,6 +118,7 @@ export function RevenueCard() {
   const { data, error, isLoading, isFetching } = useRevenueKPIs(frame);
 
   if (isLoading) return <RevenueCardSkeleton />;
+  if (!data) return null;
 
   const status: DepartmentStatus =
     data.totalRevenue >= 16000 ? 'on-track' :
