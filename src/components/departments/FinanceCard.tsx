@@ -173,6 +173,11 @@ export function FinanceCard() {
   const pct = Math.min(Math.round((data.netProfit / MILESTONE) * 100 * 10) / 10, 100);
   const remaining = MILESTONE - data.netProfit;
   const placementsNeeded = Math.round(remaining / NET_PER_PLACEMENT);
+
+  const daysSinceFYStart = Math.max(0, (Date.now() - new Date(data.fyStart).getTime()) / 86_400_000);
+  const elapsedPct = Math.min(daysSinceFYStart / 365, 1);
+  const onTrack = (data.netProfit / MILESTONE) >= elapsedPct;
+  const paceGap = Math.abs(data.netProfit - elapsedPct * MILESTONE);
   const cac = ausPlacementsCount > 0 ? Math.round((data.advertising + data.travelInternational) / ausPlacementsCount) : 0;
   const nzCogsMax = Math.max(...data.nzCogs.map(r => r.value), 1);
   const ausCostsMax = Math.max(...data.ausCosts.map(r => r.value), 1);
@@ -190,7 +195,19 @@ export function FinanceCard() {
 
       <Card accent={PU}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '.4rem' }}>
-          <div style={{ fontSize: 13, fontWeight: 500, color: TEXT }}>FY{fyYear} net profit towards $1,000,000</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ fontSize: 13, fontWeight: 500, color: TEXT }}>FY{fyYear} net profit towards $1,000,000</div>
+            <span style={{
+              fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 20,
+              background: onTrack ? 'rgba(29,158,117,0.15)' : 'rgba(216,90,48,0.15)',
+              color: onTrack ? NZ : RD,
+            }}>
+              {onTrack ? '↑ On Track' : '↓ Off Track'}
+            </span>
+            <span style={{ fontSize: 11, color: MUTED }}>
+              {fmtNZD(paceGap)} {onTrack ? 'ahead of pace' : 'behind pace'}
+            </span>
+          </div>
           <div style={{ fontSize: 12, color: PU, fontWeight: 500 }}>{pct}% complete</div>
         </div>
         <div style={{ background: BORDER, borderRadius: 4, height: 8, marginBottom: 4 }}>
