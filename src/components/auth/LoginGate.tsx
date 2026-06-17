@@ -58,7 +58,7 @@ export function LoginGate({ children }: { children: React.ReactNode }) {
           <img
             src={logoUrl}
             alt="Stand Up Recruitment"
-            style={{ height: 40, width: 'auto', filter: 'invert(1)', marginBottom: 16 }}
+            style={{ height: 40, width: 'auto', filter: 'brightness(0) invert(1)', marginBottom: 16 }}
           />
           <div style={{ fontSize: 13, color: '#737373' }}>
             Command Centre

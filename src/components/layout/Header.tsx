@@ -52,7 +52,7 @@ export function Header({ onRefresh, isDemo }: HeaderProps) {
         <img
           src={logoUrl}
           alt="Stand Up Recruitment"
-          style={{ height: 28, width: 'auto' }}
+          style={{ height: 28, width: 'auto', filter: 'brightness(0) invert(1)' }}
         />
       </div>
 
