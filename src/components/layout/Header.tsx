@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { COLORS } from '../../styles/tokens';
-import logoUrl from '../../assets/logo.svg';
+import logoUrl from '../../assets/logo.png';
 
 const TABS = [
   { label: 'Overview',    to: '/',            end: true  },
@@ -52,7 +52,7 @@ export function Header({ onRefresh, isDemo }: HeaderProps) {
         <img
           src={logoUrl}
           alt="Stand Up Recruitment"
-          style={{ height: 28, width: 'auto', filter: 'brightness(0) invert(1)' }}
+          style={{ height: 28, width: 'auto' }}
         />
       </div>
 

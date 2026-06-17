@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import logoUrl from '../../assets/logo.svg';
+import logoUrl from '../../assets/logo.png';
 
 const ENV_USER = import.meta.env.VITE_AUTH_USERNAME as string | undefined;
 const ENV_PASS = import.meta.env.VITE_AUTH_PASSWORD as string | undefined;
@@ -58,7 +58,7 @@ export function LoginGate({ children }: { children: React.ReactNode }) {
           <img
             src={logoUrl}
             alt="Stand Up Recruitment"
-            style={{ height: 40, width: 'auto', filter: 'brightness(0) invert(1)', marginBottom: 16 }}
+            style={{ height: 40, width: 'auto', marginBottom: 16 }}
           />
           <div style={{ fontSize: 13, color: '#737373' }}>
             Command Centre
