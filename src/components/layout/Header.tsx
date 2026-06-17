@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { COLORS } from '../../styles/tokens';
+import logoUrl from '../../assets/logo.svg';
 
 const TABS = [
   { label: 'Overview',    to: '/',            end: true  },
@@ -47,27 +48,12 @@ export function Header({ onRefresh, isDemo }: HeaderProps) {
       }}
     >
       {/* Brand */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginRight: 32 }}>
-        <div
-          style={{
-            width: 28, height: 28,
-            background: COLORS.accent,
-            borderRadius: 7,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="white" />
-          </svg>
-        </div>
-        <div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: COLORS.textPrimary, lineHeight: 1 }}>
-            Stand Up Recruitment
-          </div>
-          <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 2 }}>
-            Command Center
-          </div>
-        </div>
+      <div style={{ display: 'flex', alignItems: 'center', marginRight: 32 }}>
+        <img
+          src={logoUrl}
+          alt="Stand Up Recruitment"
+          style={{ height: 28, width: 'auto' }}
+        />
       </div>
 
       {/* Tabs */}
