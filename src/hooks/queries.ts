@@ -10,15 +10,15 @@ import {
 import { fetchXeroFinanceData, hasXeroCredentials } from '../services/xero';
 import type { TimeFrame } from '../types';
 
-const hasAirtableKey    = Boolean(import.meta.env.VITE_AIRTABLE_API_KEY);
-const hasClientsBase    = Boolean(import.meta.env.VITE_AIRTABLE_CLIENTS_BASE_ID);
-const hasCandidatesBase = Boolean(import.meta.env.VITE_AIRTABLE_CANDIDATES_BASE_ID);
+const hasSupabase = Boolean(
+  import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY
+);
 
-export const hasSalesCredentials      = hasAirtableKey && hasClientsBase;
-export const hasMarketingCredentials  = hasAirtableKey && hasClientsBase && hasCandidatesBase && Boolean(import.meta.env.VITE_META_TOKEN);
-export const hasRecruitCredentials    = hasAirtableKey && hasCandidatesBase && hasClientsBase;
-export const hasRevenueCredentials    = hasAirtableKey && hasClientsBase;
-export const hasRetentionCredentials  = hasAirtableKey && hasClientsBase;
+export const hasSalesCredentials      = hasSupabase;
+export const hasMarketingCredentials  = hasSupabase && Boolean(import.meta.env.VITE_META_TOKEN);
+export const hasRecruitCredentials    = hasSupabase;
+export const hasRevenueCredentials    = hasSupabase;
+export const hasRetentionCredentials  = hasSupabase;
 
 export function useSalesKPIs(frame: TimeFrame = 'month') {
   return useQuery({
