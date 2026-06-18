@@ -75,35 +75,34 @@ function LTGPSkeleton() {
             </div>
           ))}
         </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          {[0, 1].map(i => (
+            <div key={i} style={{ background: COLORS.bgSubtle, border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: '14px 16px' }}>
+              <Skeleton height={10} width={80} style={{ marginBottom: 10 }} />
+              {[0, 1, 2, 3].map(j => <Skeleton key={j} height={10} width="90%" style={{ marginBottom: 6 }} />)}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
 }
 
-function FormulaRow({ variable, formula, value }: { variable: string; formula: string; value: string }) {
-  return (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: '200px 1fr 120px',
-      gap: 12,
-      padding: '8px 0',
-      borderBottom: `1px solid ${COLORS.borderSubtle}`,
-      alignItems: 'baseline',
-    }}>
-      <span style={{ fontFamily: 'monospace', fontSize: 11, color: COLORS.textSecondary }}>{variable}</span>
-      <span style={{ fontSize: 11, color: COLORS.textMuted }}>{formula}</span>
-      <span style={{ fontSize: 12, fontWeight: 700, color: COLORS.textPrimary, textAlign: 'right' }}>{value}</span>
-    </div>
-  );
-}
 
-function KpiTile({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function KpiTile({ label, value, sub, ratio, ratioColor: rc }: {
+  label: string; value: string; sub?: string; ratio?: string; ratioColor?: string;
+}) {
   return (
     <div style={{ background: COLORS.bgSubtle, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: '14px 16px' }}>
       <div style={{ fontSize: 10, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
         {label}
       </div>
       <div style={{ fontSize: 22, fontWeight: 800, color: COLORS.textPrimary }}>{value}</div>
+      {ratio && (
+        <div style={{ fontSize: 12, fontWeight: 700, color: rc ?? COLORS.textSecondary, marginTop: 6 }}>
+          {ratio}
+        </div>
+      )}
       {sub && <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 4 }}>{sub}</div>}
     </div>
   );
@@ -178,11 +177,21 @@ function LTGPContent({ data, frame }: { data: LTGPKPIs; frame: LTGPFrame }) {
         <KpiTile
           label="Client CAC"
           value={data.clientCac > 0 ? fmtAud(data.clientCac) : '—'}
+          ratio={ratio > 0 ? `${ratio.toFixed(1)}:1 LTGP ratio` : undefined}
+          ratioColor={ratio > 0 ? ratioColor(ratio) : undefined}
           sub="Cost to acquire one client"
         />
         <KpiTile
           label="Candidate CAC"
           value={data.candidateCac > 0 ? fmtAud(data.candidateCac) : '—'}
+          ratio={data.candidateCac > 0 && data.grossProfitPerPlacement > 0
+            ? `${(data.grossProfitPerPlacement / data.candidateCac).toFixed(1)}:1 GP ratio`
+            : undefined}
+          ratioColor={(() => {
+            if (!data.candidateCac || !data.grossProfitPerPlacement) return undefined;
+            const r = data.grossProfitPerPlacement / data.candidateCac;
+            return r >= 3 ? COLORS.success : r >= 1.5 ? COLORS.warning : COLORS.danger;
+          })()}
           sub="Meta spend per placement"
         />
       </div>
@@ -233,41 +242,43 @@ function LTGPContent({ data, frame }: { data: LTGPKPIs; frame: LTGPFrame }) {
         </div>
       </div>
 
-      {/* Formula breakdown — no black boxes */}
-      <div style={{ ...CARD_STYLE, padding: '20px 24px' }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 16 }}>
-          Formula Breakdown — All Inputs
+      {/* Compact inputs */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div style={{ background: COLORS.bgSubtle, border: `1px solid ${COLORS.borderSubtle}`, borderRadius: 8, padding: '14px 16px' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
+            CAC Inputs
+          </div>
+          {([
+            ['Cand. Meta Spend', fmtAudFull(data.candidateMetaSpend)],
+            ['Client Meta Spend', fmtAudFull(data.clientMetaSpend)],
+            ['Owner Calls', String(data.ownerCallsCompleted)],
+            ['Owner Acq. Cost', fmtAudFull(data.ownerAcquisitionCost)],
+            ['Candidates Placed', String(data.candidatesPlaced)],
+            ['Clients Won', String(data.clientsWon)],
+          ] as [string, string][]).map(([label, val]) => (
+            <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '4px 0', borderBottom: `1px solid ${COLORS.borderSubtle}` }}>
+              <span style={{ fontSize: 11, color: COLORS.textMuted }}>{label}</span>
+              <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, fontFamily: 'monospace' }}>{val}</span>
+            </div>
+          ))}
         </div>
 
-        <div style={{ fontSize: 10, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8, marginTop: 4 }}>
-          CAC Inputs
+        <div style={{ background: COLORS.bgSubtle, border: `1px solid ${COLORS.borderSubtle}`, borderRadius: 8, padding: '14px 16px' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
+            LTGP Inputs
+          </div>
+          {([
+            ['Avg Placement Value', fmtAudFull(data.avgPlacementValueAud)],
+            ['Monthly Recruiter Cost', fmtAudFull(data.monthlyRecruiterCostAud)],
+            ['GP / Placement', data.grossProfitPerPlacement > 0 ? fmtAudFull(data.grossProfitPerPlacement) : '—'],
+            ['Placements / Client', data.avgPlacementsPerClient.toFixed(2)],
+          ] as [string, string][]).map(([label, val]) => (
+            <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '4px 0', borderBottom: `1px solid ${COLORS.borderSubtle}` }}>
+              <span style={{ fontSize: 11, color: COLORS.textMuted }}>{label}</span>
+              <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, fontFamily: 'monospace' }}>{val}</span>
+            </div>
+          ))}
         </div>
-        <FormulaRow variable="candidate_meta_spend" formula={`Meta campaign spend (candidate) × 0.90 NZD→AUD${data.metaSplitIsEstimated ? ' [estimated 60%]' : ''}`} value={fmtAudFull(data.candidateMetaSpend)} />
-        <FormulaRow variable="client_meta_spend" formula={`Meta campaign spend (client) × 0.90 NZD→AUD${data.metaSplitIsEstimated ? ' [estimated 40%]' : ''}`} value={fmtAudFull(data.clientMetaSpend)} />
-        <FormulaRow variable="owner_calls_completed" formula={`Airtable: Status = 'Moved to CRM' in period`} value={String(data.ownerCallsCompleted)} />
-        <FormulaRow variable="owner_cost_per_call" formula="NZD $2,500/mo ÷ (42.5hrs × 4.33wks) × 0.5hrs × 0.90" value={fmtAudFull(data.ownerCostPerCall)} />
-        <FormulaRow variable="owner_acquisition_cost" formula="owner_calls_completed × owner_cost_per_call" value={fmtAudFull(data.ownerAcquisitionCost)} />
-        <FormulaRow variable="candidates_placed" formula="Airtable Placements by Created Date in period" value={String(data.candidatesPlaced)} />
-        <FormulaRow variable="clients_won" formula="Airtable Main Clients by Signed Date in period" value={String(data.clientsWon)} />
-        <FormulaRow variable="candidate_cac" formula="candidate_meta_spend ÷ candidates_placed" value={data.candidateCac > 0 ? fmtAudFull(data.candidateCac) : '—'} />
-        <FormulaRow variable="client_cac" formula="(client_meta_spend + owner_acquisition_cost) ÷ clients_won" value={data.clientCac > 0 ? fmtAudFull(data.clientCac) : '—'} />
-
-        <div style={{ fontSize: 10, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8, marginTop: 20 }}>
-          LTGP Inputs
-        </div>
-        <FormulaRow variable="avg_placement_value" formula="Total Airtable invoice amounts ÷ unique placements (all-time)" value={fmtAudFull(data.avgPlacementValueAud)} />
-        <FormulaRow variable="monthly_recruiter_cost" formula="NZD $30/hr × 42.5hrs × 2 recruiters × 4.33wks × 0.90" value={fmtAudFull(data.monthlyRecruiterCostAud)} />
-        <FormulaRow variable="recruiter_cost_per_placement" formula="monthly_recruiter_cost ÷ candidates_placed" value={data.recruiterCostPerPlacement > 0 ? fmtAudFull(data.recruiterCostPerPlacement) : '—'} />
-        <FormulaRow variable="gross_profit_per_placement" formula="avg_placement_value − recruiter_cost_per_placement" value={data.grossProfitPerPlacement > 0 ? fmtAudFull(data.grossProfitPerPlacement) : '—'} />
-        <FormulaRow variable="avg_placements_per_client" formula="All-time placements ÷ unique companies (Airtable, lifetime)" value={data.avgPlacementsPerClient.toFixed(2)} />
-        <FormulaRow variable="ltgp_per_client" formula="gross_profit_per_placement × avg_placements_per_client" value={data.ltgpPerClient > 0 ? fmtAudFull(data.ltgpPerClient) : '—'} />
-
-        <div style={{ fontSize: 10, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8, marginTop: 20 }}>
-          Output
-        </div>
-        <FormulaRow variable="ltgp_cac_ratio" formula="ltgp_per_client ÷ client_cac" value={ratio > 0 ? `${ratio.toFixed(2)}:1` : '—'} />
-        <FormulaRow variable="payback_period" formula={`client_cac ÷ gross_profit_per_placement × ${AVG_PLACEMENT_CYCLE_DAYS}d`} value={data.paybackPeriodDays > 0 ? `${Math.round(data.paybackPeriodDays)} days` : '—'} />
-        <FormulaRow variable="client_financed_check" formula="$8,000 > 2 × client_cac" value={data.clientCac > 0 ? (data.clientFinancedPass ? 'PASS' : 'FAIL') : '—'} />
       </div>
 
       {/* Automated flags */}

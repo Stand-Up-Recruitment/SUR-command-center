@@ -11,6 +11,7 @@ const TABS = [
   { label: 'Revenue',     to: '/revenue'                },
   { label: 'Finance',     to: '/finance'                    },
   { label: 'Retention',   to: '/retention'                  },
+  { label: 'LTGP:CAC',   to: '/ltgp'                       },
 ] as const;
 
 interface HeaderProps {

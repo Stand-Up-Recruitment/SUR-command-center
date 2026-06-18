@@ -11,6 +11,15 @@ import {
   useXeroFinanceData,
   useLTGPKPIs,
 } from '../hooks/queries';
+import {
+  OverviewMarketingChart,
+  OverviewSalesChart,
+  OverviewRecruitmentChart,
+  OverviewRevenueChart,
+  OverviewFinanceChart,
+  OverviewRetentionChart,
+  OverviewLTGPChart,
+} from '../components/overview/OverviewCharts';
 import type { DepartmentStatus } from '../types';
 
 const departments = [
@@ -94,8 +103,19 @@ export function OverviewPage() {
     },
   };
 
+  const chartFor = (path: string) => {
+    if (path === '/marketing') return mkt ? <OverviewMarketingChart data={mkt} /> : null;
+    if (path === '/sales') return sal ? <OverviewSalesChart data={sal} /> : null;
+    if (path === '/recruitment') return rec ? <OverviewRecruitmentChart data={rec} /> : null;
+    if (path === '/revenue') return rev ? <OverviewRevenueChart data={rev} /> : null;
+    if (path === '/finance') return fin ? <OverviewFinanceChart data={fin} /> : null;
+    if (path === '/retention') return ret ? <OverviewRetentionChart data={ret} /> : null;
+    if (path === '/ltgp') return ltgp ? <OverviewLTGPChart data={ltgp} /> : null;
+    return null;
+  };
+
   return (
-    <div style={{ maxWidth: 900, margin: '0 auto', padding: '28px 24px' }}>
+    <div style={{ maxWidth: 1000, margin: '0 auto', padding: '28px 24px' }}>
       <div style={{ marginBottom: 24 }}>
         <h2 style={{ fontSize: 22, fontWeight: 900, color: COLORS.textPrimary, letterSpacing: '-0.5px', margin: 0 }}>
           Command Center
@@ -105,9 +125,10 @@ export function OverviewPage() {
         </p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
         {departments.map((dept) => {
           const ind = indicators[dept.path];
+          const chart = chartFor(dept.path);
           return (
             <Link
               key={dept.path}
@@ -115,11 +136,11 @@ export function OverviewPage() {
               style={{
                 ...CARD_STYLE,
                 borderTop: `3px solid ${COLORS.accent}`,
-                padding: 20,
                 textDecoration: 'none',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: 8,
+                padding: 18,
+                gap: 6,
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -140,10 +161,18 @@ export function OverviewPage() {
                 }
               </div>
 
-              <p style={{ fontSize: 13, fontWeight: 500, color: COLORS.textSecondary, margin: 0 }}>
+              <p style={{ fontSize: 12, color: COLORS.textSecondary, margin: 0 }}>
                 {dept.description}
               </p>
-              <p style={{ fontSize: 12, fontWeight: 600, color: COLORS.accent, margin: 0, marginTop: 4 }}>
+
+              <div style={{ marginTop: 6 }}>
+                {ind.loading
+                  ? <Skeleton height={110} width="100%" />
+                  : (chart ?? null)
+                }
+              </div>
+
+              <p style={{ fontSize: 12, fontWeight: 600, color: COLORS.accent, margin: '2px 0 0' }}>
                 View →
               </p>
             </Link>

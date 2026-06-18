@@ -18,8 +18,10 @@ const BORDER = 'rgba(255,255,255,0.10)';
 const TEXT   = '#f5f5f5';
 const MUTED  = '#a3a3a3';
 
-const fmtNZD = (n: number) =>
-  '$' + Math.abs(n).toLocaleString('en-NZ', { maximumFractionDigits: 0 });
+const fmtNZD = (n: number) => {
+  const abs = Math.abs(n).toLocaleString('en-NZ', { maximumFractionDigits: 0 });
+  return n < 0 ? `-$${abs}` : `$${abs}`;
+};
 
 const fmtDate = (iso: string) =>
   new Date(iso).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -182,7 +184,7 @@ export function FinanceCard() {
   const nzCogsMax = Math.max(...data.nzCogs.map(r => r.value), 1);
   const ausCostsMax = Math.max(...data.ausCosts.map(r => r.value), 1);
   const cashFlow = data.cashFlow ?? [];
-  const cashKpis = data.cashKpis ?? { openingBalance: 0, closingBalance: 0, avgWeeklyOutflow: 0, openingDate: data.asOf, closingDate: data.asOf };
+  const cashKpis = data.cashKpis ?? { openingBalance: 0, closingBalance: 0, closingBalanceActual: 0, avgWeeklyOutflow: 0, openingDate: data.asOf, closingDate: data.asOf };
   const minBal = cashFlow.length > 0 ? Math.min(...cashFlow.map(d => d.balance)) : 0;
   const maxBal = cashFlow.length > 0 ? Math.max(...cashFlow.map(d => d.balance)) : 0;
   const nzActiveWorkers = data.nzActiveWorkers ?? '—';
@@ -323,10 +325,10 @@ export function FinanceCard() {
         <KP label="Opening balance"
             value={fmtNZD(cashKpis.openingBalance)}
             sub={fmtDate(cashKpis.openingDate)} />
-        <KP label="W8 closing (actual)"
-            value={fmtNZD(cashKpis.closingBalance)}
-            sub={fmtDate(cashKpis.closingDate)}
-            valueColor={cashKpis.closingBalance < cashKpis.openingBalance ? RD : NZ} />
+        <KP label="Current bank balance"
+            value={fmtNZD(cashKpis.closingBalanceActual ?? cashKpis.closingBalance)}
+            sub={`Xero reconciled · ${fmtDate(cashKpis.closingDate)}`}
+            valueColor={(cashKpis.closingBalanceActual ?? cashKpis.closingBalance) >= 0 ? NZ : RD} />
         <KP label="Avg weekly outflow"
             value={`−${fmtNZD(cashKpis.avgWeeklyOutflow)}`}
             sub="Negative-flow weeks avg" valueColor={RD} />
@@ -338,7 +340,7 @@ export function FinanceCard() {
             <ComposedChart data={cashFlow} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
               <XAxis dataKey="label" tick={{ fontSize: 11, fill: MUTED }} axisLine={false} tickLine={false} />
               <YAxis yAxisId="left" tickFormatter={v => (v < 0 ? '−' : '') + Math.abs(v / 1000).toFixed(0) + 'k'} tick={{ fontSize: 11, fill: MUTED }} axisLine={false} tickLine={false} width={36} />
-              <YAxis yAxisId="right" orientation="right" domain={['auto', 'auto']} tickFormatter={v => '$' + (v / 1000).toFixed(0) + 'k'} tick={{ fontSize: 11, fill: AUS }} axisLine={false} tickLine={false} width={42} />
+              <YAxis yAxisId="right" orientation="right" domain={['auto', 'auto']} tickFormatter={v => (v < 0 ? '-$' : '$') + Math.abs(v / 1000).toFixed(0) + 'k'} tick={{ fontSize: 11, fill: AUS }} axisLine={false} tickLine={false} width={42} />
               <Tooltip
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 formatter={(value: any, name: any) => {
@@ -390,7 +392,7 @@ export function FinanceCard() {
                 <tr key={i} style={{ background: d.balance === maxBal ? 'rgba(29,158,117,0.15)' : d.balance === minBal ? 'rgba(216,90,48,0.15)' : 'transparent' }}>
                   <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, color: MUTED }}>{d.weekLabel}</td>
                   <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, textAlign: 'right', color: d.net >= 0 ? NZ : RD }}>{d.net >= 0 ? '+' : '−'}{fmtNZD(Math.abs(d.net))}</td>
-                  <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, textAlign: 'right', color: TEXT }}>{fmtNZD(d.balance)}</td>
+                  <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, textAlign: 'right', color: d.balance >= 0 ? TEXT : RD }}>{fmtNZD(d.balance)}</td>
                 </tr>
               ))}
             </tbody>

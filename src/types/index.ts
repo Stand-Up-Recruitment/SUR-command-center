@@ -163,6 +163,7 @@ export interface XeroFinanceData {
   cashKpis: {
     openingBalance: number;
     closingBalance: number;
+    closingBalanceActual?: number;
     avgWeeklyOutflow: number;
     openingDate: string;
     closingDate: string;

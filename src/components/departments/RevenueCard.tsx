@@ -6,7 +6,7 @@ import { StatusBadge } from '../shared/StatusBadge';
 import { WoWBadge } from '../shared/WoWBadge';
 import { TimeFramePicker } from '../shared/TimeFramePicker';
 import { Skeleton } from '../shared/Skeleton';
-import { useRevenueKPIs } from '../../hooks/queries';
+import { useRevenueKPIs, useXeroFinanceData } from '../../hooks/queries';
 import { COLORS, CARD_STYLE } from '../../styles/tokens';
 import type { DepartmentStatus, TimeFrame } from '../../types';
 
@@ -116,6 +116,7 @@ function StatCard({
 export function RevenueCard() {
   const [frame, setFrame] = useState<TimeFrame>('month');
   const { data, error, isLoading, isFetching } = useRevenueKPIs(frame);
+  const { data: xero, isLoading: xeroLoading } = useXeroFinanceData();
 
   if (isLoading) return <RevenueCardSkeleton />;
   if (!data) return null;
@@ -244,6 +245,61 @@ export function RevenueCard() {
             <Bar dataKey="prev"    name="Prior period" fill={COLORS.textMuted} radius={[3,3,0,0]} maxBarSize={32} opacity={0.5} />
           </BarChart>
         </ResponsiveContainer>
+      </div>
+
+      {/* Xero Revenue cross-check */}
+      <div style={{ ...CARD_STYLE, padding: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 14 }}>
+          <div style={{ fontSize: 10, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+            Xero Revenue — Accounting (FY to date)
+          </div>
+          {xero?.asOf && (
+            <div style={{ fontSize: 10, color: COLORS.textMuted }}>
+              as of {new Date(xero.asOf).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}
+            </div>
+          )}
+        </div>
+
+        {xeroLoading && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+            {[0, 1, 2].map(i => (
+              <div key={i} style={{ background: COLORS.bgSubtle, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: '14px 16px' }}>
+                <Skeleton height={10} width={60} style={{ marginBottom: 10 }} />
+                <Skeleton height={22} width={80} />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {xero && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+            <div style={{ background: COLORS.bgSubtle, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: '14px 16px' }}>
+              <div style={{ fontSize: 10, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+                NZ Revenue
+              </div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: COLORS.textPrimary }}>{fmtAUD(xero.nzRevenue)}</div>
+              <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 4 }}>New Zealand division</div>
+            </div>
+            <div style={{ background: COLORS.bgSubtle, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: '14px 16px' }}>
+              <div style={{ fontSize: 10, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+                AUS Revenue
+              </div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: COLORS.textPrimary }}>{fmtAUD(xero.ausRevenue)}</div>
+              <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 4 }}>Australia division</div>
+            </div>
+            <div style={{ background: COLORS.bgSubtle, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: '14px 16px' }}>
+              <div style={{ fontSize: 10, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+                Total (Xero)
+              </div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: COLORS.textPrimary }}>{fmtAUD(xero.nzRevenue + xero.ausRevenue)}</div>
+              <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 4 }}>Combined · AUD</div>
+            </div>
+          </div>
+        )}
+
+        {!xeroLoading && !xero && (
+          <p style={{ fontSize: 12, color: COLORS.textMuted, margin: 0 }}>Xero data unavailable</p>
+        )}
       </div>
 
       {error && (
