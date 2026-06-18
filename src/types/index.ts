@@ -169,6 +169,44 @@ export interface XeroFinanceData {
   };
 }
 
+// ─── LTGP:CAC ─────────────────────────────────────────────────────────────────
+export type LTGPFrame = '30d' | '90d' | '12m' | 'all';
+
+export interface LTGPFlag {
+  label: string;
+  triggered: boolean;
+  severity: 'amber' | 'red';
+  formula: string;
+  actual: string;
+  suggestion: string;
+}
+
+export interface LTGPKPIs {
+  // CAC inputs
+  candidateMetaSpend: number;
+  clientMetaSpend: number;
+  metaSplitIsEstimated: boolean;
+  ownerCallsCompleted: number;
+  ownerCostPerCall: number;
+  ownerAcquisitionCost: number;
+  candidatesPlaced: number;
+  clientsWon: number;
+  // LTGP inputs
+  avgPlacementValueAud: number;
+  monthlyRecruiterCostAud: number;
+  recruiterCostPerPlacement: number;
+  grossProfitPerPlacement: number;
+  avgPlacementsPerClient: number;
+  // Outputs
+  candidateCac: number;
+  clientCac: number;
+  ltgpPerClient: number;
+  ltgpCacRatio: number;
+  paybackPeriodDays: number;
+  clientFinancedPass: boolean;
+  flags: LTGPFlag[];
+}
+
 // ─── Shared ───────────────────────────────────────────────────────────────────
 export type DepartmentStatus = 'on-track' | 'at-risk' | 'off-track' | 'no-data';
 export type TimeFrame = 'day' | 'week' | 'month' | 'year';

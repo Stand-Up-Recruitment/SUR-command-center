@@ -6,9 +6,10 @@ import {
   fetchRevenueKPIs,
   fetchRetentionKPIs,
   fetchAusPlacements,
+  fetchLTGPKPIs,
 } from '../services/airtable';
 import { fetchXeroFinanceData, hasXeroCredentials } from '../services/xero';
-import type { TimeFrame } from '../types';
+import type { TimeFrame, LTGPFrame } from '../types';
 
 const hasAirtableKey    = Boolean(import.meta.env.VITE_AIRTABLE_API_KEY);
 const hasClientsBase    = Boolean(import.meta.env.VITE_AIRTABLE_CLIENTS_BASE_ID);
@@ -76,5 +77,16 @@ export function useAusPlacements() {
   return useQuery({
     queryKey: ['finance-aus-placements'],
     queryFn: fetchAusPlacements,
+  });
+}
+
+export const hasLTGPCredentials = hasAirtableKey && hasClientsBase;
+
+export function useLTGPKPIs(frame: LTGPFrame = '30d') {
+  return useQuery({
+    queryKey: ['ltgp', frame],
+    queryFn: () => fetchLTGPKPIs(frame),
+    enabled: hasLTGPCredentials,
+    placeholderData: keepPreviousData,
   });
 }

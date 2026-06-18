@@ -10,8 +10,11 @@ import type {
   TimeFrame,
   AusPlacement,
   RetentionKPIs,
+  LTGPFrame,
+  LTGPKPIs,
+  LTGPFlag,
 } from '../types';
-import { fetchMetaSpend } from './metaAds';
+import { fetchMetaSpend, fetchMetaSpendByFrame } from './metaAds';
 
 const API_KEY = import.meta.env.VITE_AIRTABLE_API_KEY as string;
 const CLIENTS_BASE_ID = import.meta.env.VITE_AIRTABLE_CLIENTS_BASE_ID as string;
@@ -628,5 +631,201 @@ export async function fetchRetentionKPIs(): Promise<RetentionKPIs> {
     replacementsThisMonth, replacementsThisWeek, replacementsPrevWeek,
     replacementRate, prevReplacementRate,
     inProgress, inProgressThisWeek, inProgressPrevWeek,
+  };
+}
+
+// ─── LTGP:CAC ─────────────────────────────────────────────────────────────────
+// Actual contracted rates — update here if contracts change
+const NZD_TO_AUD = 0.90;
+const RECRUITER_HOURLY_NZD = 30;
+const RECRUITER_HOURS_WEEK = 42.5;
+const RECRUITER_COUNT = 2;
+const WEEKS_PER_MONTH = 4.33;
+const OWNER_MONTHLY_GROSS_NZD = 2500;
+const OWNER_HOURS_WEEK = 42.5;
+const CALL_DURATION_HRS = 0.5;
+// Avg days from placement confirmed to fully billed ($8k at start + $8k at 30d = ~45 day midpoint)
+const AVG_PLACEMENT_CYCLE_DAYS = 45;
+
+function ltgpBoundaries(frame: LTGPFrame): { start: number; now: number } {
+  const now = Date.now();
+  if (frame === '30d')  return { start: now - 30  * 86_400_000, now };
+  if (frame === '90d')  return { start: now - 90  * 86_400_000, now };
+  if (frame === '12m')  return { start: now - 365 * 86_400_000, now };
+  return { start: 0, now }; // 'all'
+}
+
+type LTGPPlacementFields = {
+  'Created Date'?: string;
+  'Company Name'?: string[] | string;
+};
+
+type LTGPInstalmentFields = {
+  'Installments #'?: number;
+  'Invoice Amount'?: number;
+  Placements?: string[];
+};
+
+export async function fetchLTGPKPIs(frame: LTGPFrame): Promise<LTGPKPIs> {
+  if (!CLIENTS_BASE_ID) throw new Error('LTGP credentials not configured');
+
+  const [allPlacements, allInstalments, allMainClients, allClientLeads, metaResult] = await Promise.all([
+    fetchAllFromBase<LTGPPlacementFields>(CLIENTS_BASE_ID, PLACEMENTS_TABLE_ID),
+    fetchAllFromBase<LTGPInstalmentFields>(CLIENTS_BASE_ID, INSTALMENTS_TABLE_ID),
+    fetchAllFromBase<{ 'Signed Date'?: string }>(CLIENTS_BASE_ID, MAIN_CLIENT_TABLE_ID),
+    fetchAllFromBase<{ Status?: string; 'Last Updated Date'?: string }>(CLIENTS_BASE_ID, CLIENTS_TABLE_ID),
+    fetchMetaSpendByFrame(frame).catch(() => ({ candidateSpend: 0, clientSpend: 0, isEstimated: true })),
+  ]);
+
+  // ── avg_placements_per_client (all-time, lifetime metric) ──────────────────
+  const companySet = new Set<string>();
+  let totalPlacementsAllTime = 0;
+  for (const p of allPlacements) {
+    const co = Array.isArray(p['Company Name']) ? p['Company Name'][0] : p['Company Name'];
+    const name = co?.trim();
+    if (name) { companySet.add(name); totalPlacementsAllTime++; }
+  }
+  const avgPlacementsPerClient = companySet.size > 0 ? totalPlacementsAllTime / companySet.size : 1;
+
+  // ── avg_placement_value from real invoice data (all-time) ──────────────────
+  const feeByPlacement = new Map<string, number>();
+  for (const inst of allInstalments) {
+    const pid = inst.Placements?.[0];
+    if (pid && inst['Invoice Amount']) {
+      feeByPlacement.set(pid, (feeByPlacement.get(pid) ?? 0) + inst['Invoice Amount']);
+    }
+  }
+  const totalFees = Array.from(feeByPlacement.values()).reduce((s, v) => s + v, 0);
+  const avgPlacementValueAud = feeByPlacement.size > 0 ? totalFees / feeByPlacement.size : 16_000;
+
+  // ── Period-filtered counts ─────────────────────────────────────────────────
+  const { start, now } = ltgpBoundaries(frame);
+  const candidatesPlaced = allPlacements.filter(p => isInPeriod(p['Created Date'], start, now)).length;
+  const clientsWon = allMainClients.filter(c => isInPeriod(c['Signed Date'], start, now)).length;
+  const ownerCallsCompleted = allClientLeads.filter(
+    f => f.Status === 'Moved to CRM' && isInPeriod(f['Last Updated Date'], start, now)
+  ).length;
+
+  // ── Cost calculations ──────────────────────────────────────────────────────
+  const monthlyRecruiterCostAud =
+    RECRUITER_HOURLY_NZD * RECRUITER_HOURS_WEEK * RECRUITER_COUNT * WEEKS_PER_MONTH * NZD_TO_AUD;
+  const ownerHourlyAud = (OWNER_MONTHLY_GROSS_NZD / (OWNER_HOURS_WEEK * WEEKS_PER_MONTH)) * NZD_TO_AUD;
+  const ownerCostPerCall = ownerHourlyAud * CALL_DURATION_HRS;
+  const ownerAcquisitionCost = ownerCallsCompleted * ownerCostPerCall;
+
+  // Meta spend is billed in NZD — convert to AUD
+  const candidateMetaSpend = metaResult.candidateSpend * NZD_TO_AUD;
+  const clientMetaSpend = metaResult.clientSpend * NZD_TO_AUD;
+
+  // ── CAC ───────────────────────────────────────────────────────────────────
+  const candidateCac = candidatesPlaced > 0 ? candidateMetaSpend / candidatesPlaced : 0;
+  const clientCac = clientsWon > 0
+    ? (clientMetaSpend + ownerAcquisitionCost) / clientsWon
+    : 0;
+
+  // ── LTGP ──────────────────────────────────────────────────────────────────
+  const recruiterCostPerPlacement = candidatesPlaced > 0 ? monthlyRecruiterCostAud / candidatesPlaced : 0;
+  const grossProfitPerPlacement = avgPlacementValueAud - recruiterCostPerPlacement;
+  const ltgpPerClient = grossProfitPerPlacement * avgPlacementsPerClient;
+
+  // ── Ratio & checks ────────────────────────────────────────────────────────
+  const ltgpCacRatio = clientCac > 0 ? ltgpPerClient / clientCac : 0;
+  const paybackPeriodDays = grossProfitPerPlacement > 0
+    ? (clientCac / grossProfitPerPlacement) * AVG_PLACEMENT_CYCLE_DAYS
+    : 0;
+  const clientFinancedPass = clientCac > 0 ? 8_000 > 2 * clientCac : false;
+
+  // ── Flags ─────────────────────────────────────────────────────────────────
+  const candidateCplNzd = candidatesPlaced > 0 ? (candidateMetaSpend / NZD_TO_AUD) / candidatesPlaced : 0;
+  const clientCplNzd    = clientsWon > 0 ? (clientMetaSpend / NZD_TO_AUD) / clientsWon : 0;
+
+  const flags: LTGPFlag[] = [
+    {
+      label: 'LTGP:CAC below 9:1',
+      triggered: ltgpCacRatio > 0 && ltgpCacRatio < 9,
+      severity: 'amber',
+      formula: 'LTGP:CAC ratio < 9',
+      actual: `${ltgpCacRatio.toFixed(1)}:1`,
+      suggestion: 'Check candidate conversion rate, Meta lead quality, and avg placements per client.',
+    },
+    {
+      label: 'LTGP:CAC below 6:1',
+      triggered: ltgpCacRatio > 0 && ltgpCacRatio < 6,
+      severity: 'red',
+      formula: 'LTGP:CAC ratio < 6',
+      actual: `${ltgpCacRatio.toFixed(1)}:1`,
+      suggestion: 'Critical — acquisition is eating margin. Immediate review required.',
+    },
+    {
+      label: 'Client-financed check fail',
+      triggered: clientCac > 0 && !clientFinancedPass,
+      severity: 'amber',
+      formula: '$8,000 < 2 × Client CAC',
+      actual: `$8,000 vs 2 × $${Math.round(clientCac).toLocaleString()}`,
+      suggestion: 'First payment does not cover acquisition cost. Review client CAC and payment terms.',
+    },
+    {
+      label: 'Candidate cost per lead > NZD $150',
+      triggered: candidateCplNzd > 150,
+      severity: 'amber',
+      formula: 'Candidate Meta spend ÷ candidates placed > $150 NZD',
+      actual: `NZD $${Math.round(candidateCplNzd).toLocaleString()}`,
+      suggestion: 'Meta candidate spend is inefficient. Review creative and audience targeting.',
+    },
+    {
+      label: 'Client cost per lead > NZD $200',
+      triggered: clientCplNzd > 200,
+      severity: 'amber',
+      formula: 'Client Meta spend ÷ clients won > $200 NZD',
+      actual: `NZD $${Math.round(clientCplNzd).toLocaleString()}`,
+      suggestion: 'Client Meta spend is inefficient. Check creative and owner close rate.',
+    },
+    {
+      label: 'Avg placements per client < 1.5',
+      triggered: avgPlacementsPerClient < 1.5,
+      severity: 'amber',
+      formula: 'All-time placements ÷ unique clients < 1.5',
+      actual: avgPlacementsPerClient.toFixed(2),
+      suggestion: 'Clients not returning. Investigate post-placement relationship.',
+    },
+    {
+      label: 'Candidates placed < 3 in period',
+      triggered: candidatesPlaced > 0 && candidatesPlaced < 3,
+      severity: 'amber',
+      formula: 'candidates placed < 3',
+      actual: String(candidatesPlaced),
+      suggestion: 'Volume low relative to fixed recruiter cost. Candidate CAC will spike.',
+    },
+    {
+      label: 'No placements in period',
+      triggered: candidatesPlaced === 0,
+      severity: 'red',
+      formula: 'candidates placed = 0',
+      actual: '0',
+      suggestion: 'No placements recorded. Check date range or Airtable data.',
+    },
+  ];
+
+  return {
+    candidateMetaSpend,
+    clientMetaSpend,
+    metaSplitIsEstimated: metaResult.isEstimated,
+    ownerCallsCompleted,
+    ownerCostPerCall,
+    ownerAcquisitionCost,
+    candidatesPlaced,
+    clientsWon,
+    avgPlacementValueAud,
+    monthlyRecruiterCostAud,
+    recruiterCostPerPlacement,
+    grossProfitPerPlacement,
+    avgPlacementsPerClient,
+    candidateCac,
+    clientCac,
+    ltgpPerClient,
+    ltgpCacRatio,
+    paybackPeriodDays,
+    clientFinancedPass,
+    flags,
   };
 }
