@@ -126,6 +126,27 @@ export interface RetentionKPIs {
 }
 
 // ─── Finance (Xero P&L) ───────────────────────────────────────────────────────
+export interface XeroAgedReceivable {
+  contact: string;
+  outstanding: number;
+  current: number;
+  overdue30: number;   // 1–30 days
+  overdue60: number;   // 31–60 days
+  overdue90: number;   // 61+ days
+}
+
+export interface XeroRevenueData {
+  asOf: string;
+  periodStart: string;
+  periodEnd: string;
+  invoicesRaised: { count: number; amount: number };
+  paymentsReceived: { count: number; amount: number };
+  outstandingTotal: number;
+  outstandingCount: number;
+  agedReceivables: XeroAgedReceivable[];
+}
+
+
 export interface XeroCostRow {
   label: string;
   value: number;
@@ -165,6 +186,7 @@ export interface XeroFinanceData {
   recommendation?: string | null;
   cashFlow: CashWeek[];
   cashOutlook?: CashWeek[];
+  revenue?: XeroRevenueData;
   cashKpis: {
     openingBalance: number;
     closingBalance: number;

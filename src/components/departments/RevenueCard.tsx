@@ -8,7 +8,15 @@ import { TimeFramePicker } from '../shared/TimeFramePicker';
 import { Skeleton } from '../shared/Skeleton';
 import { useRevenueKPIs, useXeroFinanceData } from '../../hooks/queries';
 import { COLORS, CARD_STYLE } from '../../styles/tokens';
-import type { DepartmentStatus, TimeFrame } from '../../types';
+import type { DepartmentStatus, TimeFrame, XeroAgedReceivable } from '../../types';
+
+function fmtNZD(n: number) {
+  return `$${n.toLocaleString('en-NZ', { maximumFractionDigits: 0 })}`;
+}
+
+function fmtAUD(n: number) {
+  return `$${n.toLocaleString('en-AU', { maximumFractionDigits: 0 })}`;
+}
 
 function RevenueCardSkeleton() {
   const statBlock = (i: number) => (
@@ -33,11 +41,24 @@ function RevenueCardSkeleton() {
         </div>
         <Skeleton height={28} width={140} radius={8} />
       </div>
+      {/* Xero hero skeleton */}
+      <div style={{ ...CARD_STYLE, padding: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <Skeleton height={11} width={180} />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          {[0, 1].map(i => (
+            <div key={i} style={{ background: COLORS.bgSubtle, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: '18px 20px' }}>
+              <Skeleton height={10} width={80} style={{ marginBottom: 12 }} />
+              <Skeleton height={36} width={120} style={{ marginBottom: 8 }} />
+              <Skeleton height={10} width={60} />
+            </div>
+          ))}
+        </div>
+      </div>
+      {/* Operations skeleton */}
       <div style={{ ...CARD_STYLE, padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
         <Skeleton height={11} width={160} />
         <Skeleton height={44} width={120} radius={4} />
         <Skeleton height={11} width={200} />
-        <Skeleton height={11} width={110} />
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {[0, 1, 2].map(i => (
             <div key={i} style={{ display: 'contents' }}>
@@ -54,8 +75,26 @@ function RevenueCardSkeleton() {
   );
 }
 
-function fmtAUD(n: number) {
-  return `$${n.toLocaleString('en-AU', { maximumFractionDigits: 0 })}`;
+function HeroTile({ label, amount, count, countLabel, currency = 'NZD' }: {
+  label: string;
+  amount: number;
+  count: number;
+  countLabel: string;
+  currency?: string;
+}) {
+  return (
+    <div style={{ background: COLORS.bgSubtle, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: '18px 20px' }}>
+      <div style={{ fontSize: 10, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 36, fontWeight: 900, color: COLORS.textPrimary, letterSpacing: '-1.5px', lineHeight: 1, marginBottom: 6 }}>
+        {fmtNZD(amount)}
+      </div>
+      <div style={{ fontSize: 12, color: COLORS.textMuted }}>
+        {count} {countLabel} · {currency}
+      </div>
+    </div>
+  );
 }
 
 function FlowStage({ label, count, amount }: { label: string; count: number; amount?: number }) {
@@ -87,9 +126,7 @@ function FlowArrow() {
   );
 }
 
-function StatCard({
-  label, value, badge, sub,
-}: {
+function StatCard({ label, value, badge, sub }: {
   label: string;
   value: string | number;
   badge?: React.ReactNode;
@@ -104,12 +141,33 @@ function StatCard({
         {value}
       </div>
       {badge}
-      {sub && (
-        <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 4 }}>
-          {sub}
-        </div>
-      )}
+      {sub && <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 4 }}>{sub}</div>}
     </div>
+  );
+}
+
+function ReceivablesRow({ row }: { row: XeroAgedReceivable }) {
+  const isRed    = row.overdue60 > 0 || row.overdue90 > 0;
+  const isAmber  = !isRed && row.overdue30 > 0;
+  const rowColor = isRed ? '#dc2626' : isAmber ? '#f59e0b' : COLORS.textPrimary;
+  const cell = (val: number) => (
+    <td style={{ padding: '7px 10px', textAlign: 'right', fontSize: 12, color: val > 0 ? rowColor : COLORS.textMuted }}>
+      {val > 0 ? fmtNZD(val) : '—'}
+    </td>
+  );
+  return (
+    <tr>
+      <td style={{ padding: '7px 10px', fontSize: 12, color: COLORS.textPrimary, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {row.contact}
+      </td>
+      {cell(row.current)}
+      {cell(row.overdue30)}
+      {cell(row.overdue60)}
+      {cell(row.overdue90)}
+      <td style={{ padding: '7px 10px', textAlign: 'right', fontSize: 12, fontWeight: 700, color: rowColor }}>
+        {fmtNZD(row.outstanding)}
+      </td>
+    </tr>
   );
 }
 
@@ -121,15 +179,29 @@ export function RevenueCard() {
   if (isLoading) return <RevenueCardSkeleton />;
   if (!data) return null;
 
+  const rev = xero?.revenue;
+
   const status: DepartmentStatus =
-    data.totalRevenue >= 16000 ? 'on-track' :
-    data.totalRevenue >= 8000  ? 'at-risk'  : 'off-track';
+    rev
+      ? (rev.paymentsReceived.amount >= 16000 ? 'on-track' : rev.paymentsReceived.amount >= 8000 ? 'at-risk' : 'off-track')
+      : (data.totalRevenue >= 16000 ? 'on-track' : data.totalRevenue >= 8000 ? 'at-risk' : 'off-track');
 
   const subtitleText =
     frame === 'day'   ? 'Today vs yesterday' :
     frame === 'week'  ? 'This week vs last week' :
     frame === 'month' ? 'Month to date vs prior period' :
                         'Year to date vs prior period';
+
+  const thStyle: React.CSSProperties = {
+    padding: '6px 10px',
+    textAlign: 'right',
+    fontSize: 10,
+    fontWeight: 600,
+    color: COLORS.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: '0.06em',
+    whiteSpace: 'nowrap',
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -144,7 +216,7 @@ export function RevenueCard() {
           </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {isFetching && (
+          {(isFetching || xeroLoading) && (
             <div style={{
               width: 14, height: 14, borderRadius: '50%',
               border: `2px solid ${COLORS.border}`,
@@ -158,18 +230,72 @@ export function RevenueCard() {
       </div>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
-      {/* HERO: Total Revenue */}
+      {/* SECTION 1: Xero Revenue Hero */}
       <div style={{ ...CARD_STYLE, padding: 24 }}>
-        <div style={{ fontSize: 11, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>
-          Total Revenue Collected
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 16 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+            Xero Revenue — Accounting · Month to Date
+          </div>
+          {rev?.asOf && (
+            <div style={{ fontSize: 10, color: COLORS.textMuted }}>
+              as of {new Date(rev.asOf).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })}
+            </div>
+          )}
         </div>
-        <div style={{ display: 'flex', alignItems: 'baseline', marginBottom: 6 }}>
-          <span style={{ fontSize: 44, fontWeight: 900, color: COLORS.textPrimary, letterSpacing: '-2px', lineHeight: 1 }}>
+
+        {xeroLoading && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            {[0, 1].map(i => (
+              <div key={i} style={{ background: COLORS.bgSubtle, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: '18px 20px' }}>
+                <Skeleton height={10} width={80} style={{ marginBottom: 12 }} />
+                <Skeleton height={36} width={120} style={{ marginBottom: 8 }} />
+                <Skeleton height={10} width={60} />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {rev && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <HeroTile
+              label="Invoiced (MTD)"
+              amount={rev.invoicesRaised.amount}
+              count={rev.invoicesRaised.count}
+              countLabel="invoices raised"
+            />
+            <HeroTile
+              label="Collected (MTD)"
+              amount={rev.paymentsReceived.amount}
+              count={rev.paymentsReceived.count}
+              countLabel="invoices paid"
+            />
+          </div>
+        )}
+
+        {!xeroLoading && !rev && (
+          <p style={{ fontSize: 12, color: COLORS.textMuted, margin: 0 }}>
+            Xero revenue data unavailable — webhook not configured or still loading
+          </p>
+        )}
+      </div>
+
+      {/* SECTION 2: Placement Operations (Airtable) */}
+      <div style={{ ...CARD_STYLE, padding: 24 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 16 }}>
+          Placement Operations — Airtable Tracking
+        </div>
+
+        {/* Total collected (Airtable) */}
+        <div style={{ fontSize: 11, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>
+          Total Collected (Airtable)
+        </div>
+        <div style={{ display: 'flex', alignItems: 'baseline', marginBottom: 4 }}>
+          <span style={{ fontSize: 36, fontWeight: 900, color: COLORS.textPrimary, letterSpacing: '-1.5px', lineHeight: 1 }}>
             {fmtAUD(data.totalRevenue)}
           </span>
           <WoWBadge current={data.totalRevenue} prev={data.prevTotalRevenue} />
         </div>
-        <p style={{ fontSize: 12, color: COLORS.textMuted, margin: '0 0 24px' }}>
+        <p style={{ fontSize: 12, color: COLORS.textMuted, margin: '0 0 20px' }}>
           first + second payments received this period · AUD
         </p>
 
@@ -185,7 +311,7 @@ export function RevenueCard() {
           <FlowStage label="Collected ($8k)" count={data.firstCollected} amount={data.firstCollectedAmount} />
         </div>
 
-        {/* Stat grid: second payments + CAC */}
+        {/* Stat grid */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
           <StatCard
             label="Pending 2nd Payment"
@@ -226,10 +352,10 @@ export function RevenueCard() {
         <ResponsiveContainer width="100%" height={180}>
           <BarChart
             data={[
-              { name: 'Placements',   current: data.placements,    prev: data.prevPlacements },
-              { name: '1st Invoiced', current: data.firstInvoiced, prev: data.prevFirstInvoiced },
-              { name: '1st Collected',current: data.firstCollected,prev: data.prevFirstCollected },
-              { name: '2nd Collected',current: data.secondCollected,prev: data.prevSecondCollected },
+              { name: 'Placements',    current: data.placements,     prev: data.prevPlacements },
+              { name: '1st Invoiced',  current: data.firstInvoiced,  prev: data.prevFirstInvoiced },
+              { name: '1st Collected', current: data.firstCollected,  prev: data.prevFirstCollected },
+              { name: '2nd Collected', current: data.secondCollected, prev: data.prevSecondCollected },
             ]}
             margin={{ top: 4, right: 4, left: -20, bottom: 0 }}
             barGap={3}
@@ -247,11 +373,84 @@ export function RevenueCard() {
         </ResponsiveContainer>
       </div>
 
-      {/* Xero Revenue cross-check */}
+      {/* SECTION 3: Outstanding Receivables */}
+      <div style={{ ...CARD_STYLE, padding: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 16 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+            Outstanding Receivables — Xero
+          </div>
+          {rev?.asOf && (
+            <div style={{ fontSize: 10, color: COLORS.textMuted }}>
+              as of {new Date(rev.asOf).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })}
+            </div>
+          )}
+        </div>
+
+        {xeroLoading && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <Skeleton height={11} width={120} style={{ marginBottom: 6 }} />
+            {[0, 1, 2].map(i => <Skeleton key={i} height={32} width="100%" />)}
+          </div>
+        )}
+
+        {rev && rev.agedReceivables.length > 0 && (
+          <>
+            {/* Hero outstanding */}
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 16 }}>
+              <span style={{ fontSize: 32, fontWeight: 900, color: COLORS.textPrimary, letterSpacing: '-1px' }}>
+                {fmtNZD(rev.outstandingTotal)}
+              </span>
+              <span style={{ fontSize: 13, color: COLORS.textMuted }}>
+                across {rev.outstandingCount} client{rev.outstandingCount !== 1 ? 's' : ''}
+              </span>
+            </div>
+
+            {/* Aged table */}
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ borderBottom: `1px solid ${COLORS.border}` }}>
+                    <th style={{ ...thStyle, textAlign: 'left' }}>Contact</th>
+                    <th style={thStyle}>Current</th>
+                    <th style={thStyle}>1–30d</th>
+                    <th style={thStyle}>31–60d</th>
+                    <th style={thStyle}>61d+</th>
+                    <th style={thStyle}>Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rev.agedReceivables.slice(0, 5).map((row, i) => (
+                    <ReceivablesRow key={i} row={row} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {rev.agedReceivables.length > 5 && (
+              <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 8 }}>
+                +{rev.agedReceivables.length - 5} more contacts not shown
+              </div>
+            )}
+          </>
+        )}
+
+        {rev && rev.agedReceivables.length === 0 && (
+          <p style={{ fontSize: 13, color: '#22c55e', margin: 0, fontWeight: 600 }}>
+            No outstanding receivables — all invoices cleared ✓
+          </p>
+        )}
+
+        {!xeroLoading && !rev && (
+          <p style={{ fontSize: 12, color: COLORS.textMuted, margin: 0 }}>
+            Xero data unavailable
+          </p>
+        )}
+      </div>
+
+      {/* SECTION 4: Xero FY Revenue cross-check */}
       <div style={{ ...CARD_STYLE, padding: 20 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 14 }}>
           <div style={{ fontSize: 10, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
-            Xero Revenue — Accounting (FY to date)
+            Xero Revenue — FY to Date
           </div>
           {xero?.asOf && (
             <div style={{ fontSize: 10, color: COLORS.textMuted }}>
@@ -277,22 +476,22 @@ export function RevenueCard() {
               <div style={{ fontSize: 10, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
                 NZ Revenue
               </div>
-              <div style={{ fontSize: 20, fontWeight: 800, color: COLORS.textPrimary }}>{fmtAUD(xero.nzRevenue)}</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: COLORS.textPrimary }}>{fmtNZD(xero.nzRevenue)}</div>
               <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 4 }}>New Zealand division</div>
             </div>
             <div style={{ background: COLORS.bgSubtle, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: '14px 16px' }}>
               <div style={{ fontSize: 10, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
                 AUS Revenue
               </div>
-              <div style={{ fontSize: 20, fontWeight: 800, color: COLORS.textPrimary }}>{fmtAUD(xero.ausRevenue)}</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: COLORS.textPrimary }}>{fmtNZD(xero.ausRevenue)}</div>
               <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 4 }}>Australia division</div>
             </div>
             <div style={{ background: COLORS.bgSubtle, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: '14px 16px' }}>
               <div style={{ fontSize: 10, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
                 Total (Xero)
               </div>
-              <div style={{ fontSize: 20, fontWeight: 800, color: COLORS.textPrimary }}>{fmtAUD(xero.nzRevenue + xero.ausRevenue)}</div>
-              <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 4 }}>Combined · AUD</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: COLORS.textPrimary }}>{fmtNZD(xero.nzRevenue + xero.ausRevenue)}</div>
+              <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 4 }}>Combined · NZD</div>
             </div>
           </div>
         )}
