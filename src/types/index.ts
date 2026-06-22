@@ -159,7 +159,12 @@ export interface XeroFinanceData {
   advertising: number;
   travelInternational: number;
   nzActiveWorkers?: number;
+  bankAccounts?: { name: string; balance: number }[];
+  plLastMonth?: { revenue: number; grossProfit: number; netProfit: number };
+  varianceCommentary?: string | null;
+  recommendation?: string | null;
   cashFlow: CashWeek[];
+  cashOutlook?: CashWeek[];
   cashKpis: {
     openingBalance: number;
     closingBalance: number;
