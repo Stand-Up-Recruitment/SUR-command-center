@@ -157,6 +157,8 @@ export interface CashWeek {
   weekLabel: string; // e.g. 'W1 Jun 9–13'
   net: number;
   balance: number;
+  inflow?: number;
+  outflow?: number;
 }
 
 export interface AusPlacement {
@@ -194,6 +196,8 @@ export interface XeroFinanceData {
     avgWeeklyOutflow: number;
     openingDate: string;
     closingDate: string;
+    totalInflow?: number;
+    totalOutflow?: number;
   };
 }
 

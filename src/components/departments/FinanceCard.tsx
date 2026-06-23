@@ -255,6 +255,9 @@ export function FinanceCard() {
     : null;
   const runwayColor = runwayWeeks == null ? MUTED : runwayWeeks >= 8 ? NZ : runwayWeeks >= 4 ? AM : RD;
 
+  const cashFlowHasDetail = cashFlow.some(d => d.inflow != null || d.outflow != null);
+  const hasInflowOutflow  = cashKpis.totalInflow != null || cashKpis.totalOutflow != null;
+
   const minBal = cashFlow.length > 0 ? Math.min(...cashFlow.map(d => d.balance)) : 0;
   const maxBal = cashFlow.length > 0 ? Math.max(...cashFlow.map(d => d.balance)) : 0;
   const minOutlook = cashOutlook.length > 0 ? Math.min(...cashOutlook.map(d => d.balance)) : 0;
@@ -311,7 +314,7 @@ export function FinanceCard() {
           ? `8-week actuals · ${fmtDate(cashKpis.openingDate)} – ${fmtDate(cashKpis.closingDate)}`
           : '8-week actuals'} />
 
-      <G3>
+      <div style={{ display: 'grid', gridTemplateColumns: hasInflowOutflow ? 'repeat(5, minmax(0,1fr))' : 'repeat(3, minmax(0,1fr))', gap: 10, marginBottom: '.875rem' }}>
         <KP label="Current bank balance"
             value={fmtNZD(closingBalance)}
             sub={`Xero reconciled · ${fmtDate(cashKpis.closingDate)}`}
@@ -323,7 +326,19 @@ export function FinanceCard() {
             value={runwayWeeks != null ? `${runwayWeeks} weeks` : '—'}
             sub="At current avg outflow rate"
             valueColor={runwayColor} />
-      </G3>
+        {cashKpis.totalInflow != null && (
+          <KP label="8-week total inflow"
+              value={fmtNZD(cashKpis.totalInflow)}
+              sub="Gross receipts, 8 weeks"
+              valueColor={NZ} />
+        )}
+        {cashKpis.totalOutflow != null && (
+          <KP label="8-week total outflow"
+              value={`−${fmtNZD(cashKpis.totalOutflow)}`}
+              sub="Gross payments, 8 weeks"
+              valueColor={RD} />
+        )}
+      </div>
 
       {/* Bank accounts (Profit First) */}
       {data.bankAccounts && data.bankAccounts.length > 0 ? (
@@ -348,15 +363,31 @@ export function FinanceCard() {
           <table style={{ width: '100%', fontSize: 11, borderCollapse: 'collapse' }}>
             <thead>
               <tr>
-                {['Week', 'Net flow', 'Close balance'].map(h => (
-                  <th key={h} style={{ fontSize: 10, fontWeight: 500, color: MUTED, textAlign: h === 'Week' ? 'left' : 'right', padding: '4px 6px', borderBottom: `.5px solid ${BORDER}` }}>{h}</th>
-                ))}
+                <th style={{ fontSize: 10, fontWeight: 500, color: MUTED, textAlign: 'left', padding: '4px 6px', borderBottom: `.5px solid ${BORDER}` }}>Week</th>
+                {cashFlowHasDetail && (
+                  <th style={{ fontSize: 10, fontWeight: 500, color: MUTED, textAlign: 'right', padding: '4px 6px', borderBottom: `.5px solid ${BORDER}` }}>Inflow</th>
+                )}
+                {cashFlowHasDetail && (
+                  <th style={{ fontSize: 10, fontWeight: 500, color: MUTED, textAlign: 'right', padding: '4px 6px', borderBottom: `.5px solid ${BORDER}` }}>Outflow</th>
+                )}
+                <th style={{ fontSize: 10, fontWeight: 500, color: MUTED, textAlign: 'right', padding: '4px 6px', borderBottom: `.5px solid ${BORDER}` }}>Net flow</th>
+                <th style={{ fontSize: 10, fontWeight: 500, color: MUTED, textAlign: 'right', padding: '4px 6px', borderBottom: `.5px solid ${BORDER}` }}>Close balance</th>
               </tr>
             </thead>
             <tbody>
               {cashFlow.map((d, i) => (
                 <tr key={i} style={{ background: d.balance === maxBal ? 'rgba(29,158,117,0.15)' : d.balance === minBal ? 'rgba(216,90,48,0.15)' : 'transparent' }}>
                   <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, color: MUTED }}>{d.weekLabel}</td>
+                  {cashFlowHasDetail && (
+                    <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, textAlign: 'right', color: NZ }}>
+                      {d.inflow != null ? fmtNZD(d.inflow) : '—'}
+                    </td>
+                  )}
+                  {cashFlowHasDetail && (
+                    <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, textAlign: 'right', color: RD }}>
+                      {d.outflow != null ? `−${fmtNZD(d.outflow)}` : '—'}
+                    </td>
+                  )}
                   <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, textAlign: 'right', color: d.net >= 0 ? NZ : RD }}>{d.net >= 0 ? '+' : '−'}{fmtNZD(Math.abs(d.net))}</td>
                   <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, textAlign: 'right', color: d.balance >= 0 ? TEXT : RD }}>{fmtNZD(d.balance)}</td>
                 </tr>
