@@ -9,6 +9,7 @@ import {
   fetchLTGPKPIs,
 } from '../services/airtable';
 import { fetchXeroFinanceData, hasXeroCredentials } from '../services/xero';
+import { fetchMetaSpendByFrame } from '../services/metaAds';
 import type { TimeFrame, LTGPFrame } from '../types';
 
 const hasAirtableKey    = Boolean(import.meta.env.VITE_AIRTABLE_API_KEY);
@@ -77,6 +78,17 @@ export function useAusPlacements() {
   return useQuery({
     queryKey: ['finance-aus-placements'],
     queryFn: fetchAusPlacements,
+  });
+}
+
+export const hasMetaCredentials = Boolean(import.meta.env.VITE_META_TOKEN);
+
+export function useMetaAusSpend(frame: LTGPFrame = '30d') {
+  return useQuery({
+    queryKey: ['meta-aus-spend', frame],
+    queryFn: () => fetchMetaSpendByFrame(frame),
+    enabled: hasMetaCredentials,
+    placeholderData: keepPreviousData,
   });
 }
 

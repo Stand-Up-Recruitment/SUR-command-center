@@ -1,5 +1,5 @@
 import { Skeleton } from '../shared/Skeleton';
-import { useXeroFinanceData, useAusPlacements } from '../../hooks/queries';
+import { useXeroFinanceData, useAusPlacements, useMetaAusSpend } from '../../hooks/queries';
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
 const NZ   = '#1D9E75';
@@ -173,6 +173,7 @@ function FinanceSkeleton() {
 export function FinanceCard() {
   const { data, error } = useXeroFinanceData();
   const { data: placements } = useAusPlacements();
+  const { data: metaSpend } = useMetaAusSpend('30d');
 
   if (!data) return <FinanceSkeleton />;
 
@@ -216,6 +217,17 @@ export function FinanceCard() {
   const nzCogsMax  = Math.max(...data.nzCogs.map(r => r.value), 1);
   const ausCostsMax = Math.max(...data.ausCosts.map(r => r.value), 1);
   const nzActiveWorkers = data.nzActiveWorkers ?? '—';
+
+  // ── AUS per-placement net profit breakdown ───────────────────────────────────
+  const audNzdRate              = data.audNzdRate ?? 1.08;
+  const revNzdPerPlacement      = ausPlacementsCount > 0 ? Math.round(data.ausRevenue / ausPlacementsCount) : 0;
+  const revAudPerPlacement      = Math.round(revNzdPerPlacement / audNzdRate);
+  const clientCacPerPlacement   = ausPlacementsCount > 0 && metaSpend ? Math.round(metaSpend.clientSpend / ausPlacementsCount) : 0;
+  const candidateCacPerPlacement = ausPlacementsCount > 0 && metaSpend ? Math.round(metaSpend.candidateSpend / ausPlacementsCount) : 0;
+  const grossPerPlacement       = revNzdPerPlacement - clientCacPerPlacement - candidateCacPerPlacement;
+  const overheadPerPlacement    = ausPlacementsCount > 0 ? Math.round((data.ausTotalCosts * 0.90) / ausPlacementsCount) : 0;
+  const netPerPlacement         = grossPerPlacement - overheadPerPlacement;
+  const showPerPlacement        = ausPlacementsCount > 0 && revNzdPerPlacement > 0;
 
   return (
     <div style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
@@ -417,6 +429,58 @@ export function FinanceCard() {
         )}
       </Card>
 
+      {/* ── NZ Net Profit per Worker ────────────────────────────────── */}
+      {(() => {
+        const nw = data.nzWorkerStats;
+        if (!nw?.dataAvailable) return null;
+        const accPct = Math.round(nw.accLevyRate * 100 * 100) / 100;
+        return (
+          <Card accent={NZ}>
+            <div style={{ fontSize: 13, fontWeight: 500, color: TEXT, marginBottom: '1rem' }}>
+              Net profit per NZ worker per week
+              <span style={{ fontSize: 11, color: MUTED, fontWeight: 400, marginLeft: 8 }}>
+                avg across {nw.matchedWorkers} worker{nw.matchedWorkers !== 1 ? 's' : ''}
+              </span>
+            </div>
+            {[
+              { label: 'Bill rate (avg)', value: nw.avgBillRate, sub: `Xero invoice rate / hr · avg ${nw.avgHoursPerWorker}h/week`, color: NZ, prefix: '' },
+              { label: 'Pay rate (avg)', value: -nw.avgPayRate, sub: 'Xero payslip · ordinary time', color: RD, prefix: '−' },
+              { label: 'Gross margin / hr', value: nw.grossMarginPerHour, sub: 'Bill rate − pay rate', color: nw.grossMarginPerHour >= 0 ? NZ : RD, prefix: '', divider: true },
+              { label: 'Casual loading (8%)', value: -nw.casualLoadingPerHour, sub: 'Pay rate × 8%', color: RD, prefix: '−' },
+              { label: `ACC levy (${accPct}%)`, value: -nw.accLevyPerHour, sub: `Pay rate × ${accPct}% (labour hire)`, color: RD, prefix: '−' },
+              { label: 'Net margin / hr', value: nw.netMarginPerHour, sub: null, color: nw.netMarginPerHour >= 0 ? NZ : RD, prefix: '', divider: true },
+              { label: `× avg hours/week`, value: nw.netProfitPerWorkerPerWeek, sub: `${nw.netMarginPerHour.toFixed(2)} × ${nw.avgHoursPerWorker}h`, color: nw.netProfitPerWorkerPerWeek >= 0 ? NZ : RD, prefix: '', divider: true },
+              { label: 'Overhead / worker / week', value: -nw.overheadPerWorkerPerWeek, sub: `Shared opex × 10% ÷ ${nw.workerCount} workers ÷ 4.33 wks`, color: RD, prefix: '−' },
+            ].map(({ label, value, sub, color, prefix, divider }) => (
+              <div key={label}>
+                {divider && <div style={{ height: .5, background: BORDER, margin: '.5rem 0' }} />}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '4px 0' }}>
+                  <div>
+                    <span style={{ fontSize: 12, color: MUTED }}>{label}</span>
+                    {sub && <div style={{ fontSize: 10, color: 'rgba(163,163,163,0.6)', marginTop: 1 }}>{sub}</div>}
+                  </div>
+                  <span style={{ fontSize: 13, fontWeight: 500, color }}>{prefix}{fmtNZD(Math.abs(value))}/hr</span>
+                </div>
+              </div>
+            ))}
+            <div style={{ height: .5, background: BORDER, margin: '.5rem 0' }} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0' }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: TEXT }}>True net / worker / week</span>
+              <span style={{ fontSize: 20, fontWeight: 600, color: nw.trueNetPerWorkerPerWeek >= 0 ? NZ : RD }}>{fmtNZD(nw.trueNetPerWorkerPerWeek)}</span>
+            </div>
+            {nw.totalWeeklyNetProfit != null && (
+              <>
+                <div style={{ height: .5, background: BORDER, margin: '.5rem 0' }} />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0' }}>
+                  <span style={{ fontSize: 12, color: MUTED }}>Total NZ weekly net profit ({nw.matchedWorkers} workers)</span>
+                  <span style={{ fontSize: 15, fontWeight: 600, color: nw.totalWeeklyNetProfit >= 0 ? NZ : RD }}>{fmtNZD(nw.totalWeeklyNetProfit)}</span>
+                </div>
+              </>
+            )}
+          </Card>
+        );
+      })()}
+
       {/* ── AUS Business (detail) ───────────────────────────────────── */}
       <SH color={AUS} label="Australia Business" sub="International placements & operations" />
 
@@ -470,6 +534,42 @@ export function FinanceCard() {
           </div>
         </div>
       </Card>
+
+      {/* ── AUS Net Profit per Placement ──────────────────────────── */}
+      {showPerPlacement && (
+        <Card accent={AUS}>
+          <div style={{ fontSize: 13, fontWeight: 500, color: TEXT, marginBottom: '1rem' }}>
+            Net profit per AUS placement
+            <span style={{ fontSize: 11, color: MUTED, fontWeight: 400, marginLeft: 8 }}>÷ {ausPlacementsCount} placement{ausPlacementsCount !== 1 ? 's' : ''}</span>
+          </div>
+          {[
+            { label: 'Revenue (avg)', value: revNzdPerPlacement, sub: `≈ $${revAudPerPlacement.toLocaleString()} AUD @ ${audNzdRate.toFixed(3)}`, color: NZ, prefix: '' },
+            { label: 'Client CAC', value: -clientCacPerPlacement, sub: 'Meta client campaigns ÷ placements', color: RD, prefix: '−' },
+            { label: 'Candidate CAC', value: -candidateCacPerPlacement, sub: 'Meta candidate campaigns ÷ placements', color: RD, prefix: '−' },
+            { label: 'Gross per placement', value: grossPerPlacement, sub: null, color: grossPerPlacement >= 0 ? NZ : RD, prefix: '', divider: true },
+            { label: 'Overhead (90% opex)', value: -overheadPerPlacement, sub: `${fmtNZD(data.ausTotalCosts)} × 90% ÷ ${ausPlacementsCount}`, color: RD, prefix: '−' },
+          ].map(({ label, value, sub, color, prefix, divider }) => (
+            <div key={label}>
+              {divider && <div style={{ height: .5, background: BORDER, margin: '.5rem 0' }} />}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '4px 0' }}>
+                <div>
+                  <span style={{ fontSize: 12, color: MUTED }}>{label}</span>
+                  {sub && <div style={{ fontSize: 10, color: 'rgba(163,163,163,0.6)', marginTop: 1 }}>{sub}</div>}
+                </div>
+                <span style={{ fontSize: 13, fontWeight: 500, color }}>{prefix}{fmtNZD(Math.abs(value))}</span>
+              </div>
+            </div>
+          ))}
+          <div style={{ height: .5, background: BORDER, margin: '.5rem 0' }} />
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0' }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: TEXT }}>Net per placement</span>
+            <span style={{ fontSize: 20, fontWeight: 600, color: netPerPlacement >= 0 ? NZ : RD }}>{fmtNZD(netPerPlacement)}</span>
+          </div>
+          {!metaSpend && (
+            <div style={{ fontSize: 10, color: MUTED, marginTop: 6 }}>CAC figures unavailable — Meta token not configured. CAC shown as $0.</div>
+          )}
+        </Card>
+      )}
 
       {error && (
         <p style={{ color: RD, fontSize: 12, margin: '8px 0 0' }}>⚠ Xero connection error — {error?.message}</p>

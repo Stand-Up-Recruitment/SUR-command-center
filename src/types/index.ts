@@ -167,6 +167,33 @@ export interface AusPlacement {
   status: string;
 }
 
+export interface NZWorkerStats {
+  dataAvailable: boolean;
+  matchedWorkers: number;
+  workerCount: number;
+  avgBillRate: number;
+  avgPayRate: number;
+  avgHoursPerWorker: number;
+  grossMarginPerHour: number;
+  casualLoadingPerHour: number;
+  accLevyPerHour: number;
+  accLevyRate: number;
+  netMarginPerHour: number;
+  netProfitPerWorkerPerWeek: number;
+  overheadPerWorkerPerWeek: number;
+  trueNetPerWorkerPerWeek: number;
+  totalWeeklyNetProfit: number | null;
+  workers: Array<{
+    name: string;
+    billRate: number;
+    payRate: number;
+    hours: number;
+    grossMarginPerHour: number;
+    netMarginPerHour: number;
+    netProfitThisWeek: number;
+  }>;
+}
+
 export interface XeroFinanceData {
   asOf: string;
   fyStart: string;
@@ -191,6 +218,8 @@ export interface XeroFinanceData {
   plLastMonth?: { revenue: number; grossProfit: number; netProfit: number };
   varianceCommentary?: string | null;
   recommendation?: string | null;
+  audNzdRate?: number;
+  nzWorkerStats?: NZWorkerStats;
   cashFlow: CashWeek[];
   cashOutlook?: CashWeek[];
   revenue?: XeroRevenueData;
