@@ -199,7 +199,7 @@ export function FinanceCard() {
   const ytdNets = combined.map(r => { runningYtd += r.net; return runningYtd; });
 
   const cashFlowHasDetail = last4Actuals.some(d => d.inflow != null || d.outflow != null);
-  const hasInflowOutflow  = cashKpis.totalInflow != null || cashKpis.totalOutflow != null;
+
 
   const minBal = combined.length > 0 ? Math.min(...combined.map(d => d.balance)) : 0;
   const maxBal = combined.length > 0 ? Math.max(...combined.map(d => d.balance)) : 0;
