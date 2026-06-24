@@ -180,8 +180,13 @@ export interface XeroFinanceData {
   ausTotalCosts: number;
   ausNetContribution: number;
   advertising: number;
+  ausAdvertising?: number;
+  nzAdvertising?: number;
+  subscriptions?: number;
   travelInternational: number;
   nzActiveWorkers?: number;
+  nzNetProfit?: number;
+  ausNetProfit?: number;
   bankAccounts?: { name: string; balance: number }[];
   plLastMonth?: { revenue: number; grossProfit: number; netProfit: number };
   varianceCommentary?: string | null;
