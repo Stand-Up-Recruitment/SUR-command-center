@@ -213,7 +213,6 @@ export function FinanceCard() {
   const onTrack = (data.netProfit / MILESTONE) >= elapsedPct;
   const paceGap = Math.abs(data.netProfit - elapsedPct * MILESTONE);
 
-  const cac = ausPlacementsCount > 0 ? Math.round(((data.ausAdvertising ?? data.advertising) + data.travelInternational) / ausPlacementsCount) : 0;
   const nzCogsMax  = Math.max(...data.nzCogs.map(r => r.value), 1);
   const ausCostsMax = Math.max(...data.ausCosts.map(r => r.value), 1);
   const nzActiveWorkers = data.nzActiveWorkers ?? '—';
@@ -254,22 +253,26 @@ export function FinanceCard() {
           ? `4-week actuals · 4-week forecast · as at ${fmtDate(cashKpis.closingDate)}`
           : '4-week actuals · 4-week forecast'} />
 
-      <div style={{ display: 'grid', gridTemplateColumns: hasInflowOutflow ? 'repeat(5, minmax(0,1fr))' : 'repeat(3, minmax(0,1fr))', gap: 10, marginBottom: '.875rem' }}>
-        <KP label="Current bank balance"
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${2 + (cashKpis.totalInflow != null ? 1 : 0) + (cashKpis.totalOutflow != null ? 1 : 0)}, minmax(0,1fr))`, gap: 10, marginBottom: '.875rem' }}>
+        <KP accent={closingBalance >= 0 ? NZ : RD}
+            label="Current bank balance"
             value={fmtNZD(closingBalance)}
             sub={`Xero reconciled · ${fmtDate(cashKpis.closingDate)}`}
             valueColor={closingBalance >= 0 ? NZ : RD} />
-        <KP label="Avg weekly outflow"
+        <KP accent={RD}
+            label="Avg weekly outflow"
             value={`−${fmtNZD(cashKpis.avgWeeklyOutflow)}`}
             sub="Negative-flow weeks avg" valueColor={RD} />
         {cashKpis.totalInflow != null && (
-          <KP label="8-week total inflow"
+          <KP accent={NZ}
+              label="8-week total inflow"
               value={fmtNZD(cashKpis.totalInflow)}
               sub="Gross receipts, 8 weeks"
               valueColor={NZ} />
         )}
         {cashKpis.totalOutflow != null && (
-          <KP label="8-week total outflow"
+          <KP accent={RD}
+              label="8-week total outflow"
               value={`−${fmtNZD(cashKpis.totalOutflow)}`}
               sub="Gross payments, 8 weeks"
               valueColor={RD} />
@@ -322,12 +325,12 @@ export function FinanceCard() {
                     </td>
                     {cashFlowHasDetail && (
                       <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, borderTop: forecastBorder, textAlign: 'right', color: NZ }}>
-                        {!d.isForecast && d.inflow != null ? fmtNZD(d.inflow) : '—'}
+                        {d.inflow != null ? fmtNZD(d.inflow) : '—'}
                       </td>
                     )}
                     {cashFlowHasDetail && (
                       <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, borderTop: forecastBorder, textAlign: 'right', color: RD }}>
-                        {!d.isForecast && d.outflow != null ? `−${fmtNZD(d.outflow)}` : '—'}
+                        {d.outflow != null ? `−${fmtNZD(d.outflow)}` : '—'}
                       </td>
                     )}
                     <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, borderTop: forecastBorder, textAlign: 'right', color: d.net >= 0 ? NZ : RD }}>{d.net >= 0 ? '+' : '−'}{fmtNZD(Math.abs(d.net))}</td>
@@ -437,12 +440,6 @@ export function FinanceCard() {
                 color={i === 0 ? AUS : AM}
               />
             ))}
-            {ausPlacementsCount > 0 && (
-              <div style={{ marginTop: 10, fontSize: 11, color: MUTED }}>
-                CAC per placement: <span style={{ color: AUS, fontWeight: 500 }}>{fmtNZD(cac)}</span>
-                <span style={{ marginLeft: 4 }}>(adv. {fmtNZD(data.ausAdvertising ?? data.advertising)} + travel {fmtNZD(data.travelInternational)} ÷ {ausPlacementsCount} placements)</span>
-              </div>
-            )}
           </div>
           <div>
             <div style={{ fontSize: 13, fontWeight: 500, color: TEXT, marginBottom: '.75rem' }}>FY{fyYear} placements — {ausPlacementsCount} confirmed</div>
