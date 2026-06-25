@@ -196,8 +196,10 @@ export function FinanceCard() {
     ...next4Outlook.map(r => ({ ...r, isForecast: true })),
   ];
 
-  let runningYtd = 0;
-  const ytdNets = combined.map(r => { runningYtd += r.net; return runningYtd; });
+  const fyOpeningBalance = cashKpis.fyOpeningBalance ?? null;
+  const ytdNets = combined.map(r =>
+    r.ytdNet != null ? r.ytdNet : fyOpeningBalance != null ? Math.round(r.balance - fyOpeningBalance) : null
+  );
 
   const cashFlowHasDetail = last4Actuals.some(d => d.inflow != null || d.outflow != null);
 
@@ -337,16 +339,18 @@ export function FinanceCard() {
                     </td>
                     {cashFlowHasDetail && (
                       <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, borderTop: forecastBorder, textAlign: 'right', color: NZ }}>
-                        {d.inflow != null ? fmtNZD(d.inflow) : '—'}
+                        {!d.isForecast && d.inflow != null ? fmtNZD(d.inflow) : '—'}
                       </td>
                     )}
                     {cashFlowHasDetail && (
                       <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, borderTop: forecastBorder, textAlign: 'right', color: RD }}>
-                        {d.outflow != null ? `−${fmtNZD(d.outflow)}` : '—'}
+                        {!d.isForecast && d.outflow != null ? `−${fmtNZD(d.outflow)}` : '—'}
                       </td>
                     )}
                     <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, borderTop: forecastBorder, textAlign: 'right', color: d.net >= 0 ? NZ : RD }}>{d.net >= 0 ? '+' : '−'}{fmtNZD(Math.abs(d.net))}</td>
-                    <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, borderTop: forecastBorder, textAlign: 'right', color: ytd >= 0 ? NZ : RD }}>{ytd >= 0 ? '+' : '−'}{fmtNZD(Math.abs(ytd))}</td>
+                    <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, borderTop: forecastBorder, textAlign: 'right', color: ytd != null ? (ytd >= 0 ? NZ : RD) : MUTED }}>
+                      {ytd != null ? `${ytd >= 0 ? '+' : '−'}${fmtNZD(Math.abs(ytd))}` : '—'}
+                    </td>
                   </tr>
                 );
               })}
