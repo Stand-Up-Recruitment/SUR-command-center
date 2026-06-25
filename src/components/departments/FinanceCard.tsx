@@ -339,12 +339,12 @@ export function FinanceCard() {
                     </td>
                     {cashFlowHasDetail && (
                       <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, borderTop: forecastBorder, textAlign: 'right', color: NZ }}>
-                        {!d.isForecast && d.inflow != null ? fmtNZD(d.inflow) : '—'}
+                        {d.inflow != null ? fmtNZD(d.inflow) : '—'}
                       </td>
                     )}
                     {cashFlowHasDetail && (
                       <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, borderTop: forecastBorder, textAlign: 'right', color: RD }}>
-                        {!d.isForecast && d.outflow != null ? `−${fmtNZD(d.outflow)}` : '—'}
+                        {d.outflow != null ? `−${fmtNZD(d.outflow)}` : '—'}
                       </td>
                     )}
                     <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, borderTop: forecastBorder, textAlign: 'right', color: d.net >= 0 ? NZ : RD }}>{d.net >= 0 ? '+' : '−'}{fmtNZD(Math.abs(d.net))}</td>
