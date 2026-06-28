@@ -347,7 +347,14 @@ export function FinanceCard() {
                         {d.outflow != null ? `−${fmtNZD(d.outflow)}` : '—'}
                       </td>
                     )}
-                    <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, borderTop: forecastBorder, textAlign: 'right', color: d.net >= 0 ? NZ : RD }}>{d.net >= 0 ? '+' : '−'}{fmtNZD(Math.abs(d.net))}</td>
+                    {(() => {
+                      const netFlow = d.inflow != null && d.outflow != null ? d.inflow - d.outflow : d.net;
+                      return (
+                        <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, borderTop: forecastBorder, textAlign: 'right', color: netFlow >= 0 ? NZ : RD }}>
+                          {netFlow >= 0 ? '+' : '−'}{fmtNZD(Math.abs(netFlow))}
+                        </td>
+                      );
+                    })()}
                     <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, borderTop: forecastBorder, textAlign: 'right', color: ytd != null ? (ytd >= 0 ? NZ : RD) : MUTED }}>
                       {ytd != null ? `${ytd >= 0 ? '+' : '−'}${fmtNZD(Math.abs(ytd))}` : '—'}
                     </td>
