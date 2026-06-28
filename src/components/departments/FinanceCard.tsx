@@ -348,7 +348,7 @@ export function FinanceCard() {
                       </td>
                     )}
                     {(() => {
-                      const netFlow = d.inflow != null && d.outflow != null ? d.inflow - d.outflow : d.net;
+                      const netFlow = (d.inflow ?? 0) - (d.outflow ?? 0);
                       return (
                         <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, borderTop: forecastBorder, textAlign: 'right', color: netFlow >= 0 ? NZ : RD }}>
                           {netFlow >= 0 ? '+' : '−'}{fmtNZD(Math.abs(netFlow))}
