@@ -339,12 +339,12 @@ export function FinanceCard() {
                     </td>
                     {cashFlowHasDetail && (
                       <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, borderTop: forecastBorder, textAlign: 'right', color: NZ }}>
-                        {d.inflow != null ? fmtNZD(d.inflow) : '—'}
+                        {fmtNZD(d.inflow ?? 0)}
                       </td>
                     )}
                     {cashFlowHasDetail && (
                       <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, borderTop: forecastBorder, textAlign: 'right', color: RD }}>
-                        {d.outflow != null ? `−${fmtNZD(d.outflow)}` : '—'}
+                        {`−${fmtNZD(d.outflow ?? 0)}`}
                       </td>
                     )}
                     {(() => {
@@ -355,8 +355,8 @@ export function FinanceCard() {
                         </td>
                       );
                     })()}
-                    <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, borderTop: forecastBorder, textAlign: 'right', color: ytd != null ? (ytd >= 0 ? NZ : RD) : MUTED }}>
-                      {ytd != null ? `${ytd >= 0 ? '+' : '−'}${fmtNZD(Math.abs(ytd))}` : '—'}
+                    <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, borderTop: forecastBorder, textAlign: 'right', color: (ytd ?? 0) >= 0 ? NZ : RD }}>
+                      {(() => { const v = ytd ?? 0; return `${v >= 0 ? '+' : '−'}${fmtNZD(Math.abs(v))}`; })()}
                     </td>
                   </tr>
                 );
