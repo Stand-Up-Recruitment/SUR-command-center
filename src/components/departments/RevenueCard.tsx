@@ -172,7 +172,7 @@ function ReceivablesRow({ row }: { row: XeroAgedReceivable }) {
 }
 
 export function RevenueCard() {
-  const [frame, setFrame] = useState<TimeFrame>('month');
+  const [frame, setFrame] = useState<TimeFrame>('week');
   const { data, error, isLoading, isFetching } = useRevenueKPIs(frame);
   const { data: xero, isLoading: xeroLoading } = useXeroFinanceData();
 

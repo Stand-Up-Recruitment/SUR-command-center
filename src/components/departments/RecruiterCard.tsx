@@ -50,7 +50,7 @@ function RecruiterSkeleton() {
 }
 
 export function RecruiterCard() {
-  const [frame, setFrame] = useState<TimeFrame>('month');
+  const [frame, setFrame] = useState<TimeFrame>('week');
   const { data, error, isLoading, isFetching } = useRecruiterKPIs(frame);
 
   if (isLoading) return <RecruiterSkeleton />;

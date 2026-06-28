@@ -53,7 +53,7 @@ function SalesSkeleton() {
 }
 
 export function SalesCard() {
-  const [frame, setFrame] = useState<TimeFrame>('month');
+  const [frame, setFrame] = useState<TimeFrame>('week');
   const { data, error, isLoading, isFetching } = useSalesKPIs(frame);
 
   if (isLoading) return <SalesSkeleton />;

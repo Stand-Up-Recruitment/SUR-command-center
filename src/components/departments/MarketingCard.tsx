@@ -80,7 +80,7 @@ function MarketingSkeleton() {
 }
 
 export function MarketingCard() {
-  const [frame, setFrame] = useState<TimeFrame>('month');
+  const [frame, setFrame] = useState<TimeFrame>('week');
   const { data, error, isLoading, isFetching } = useMarketingKPIs(frame);
 
   if (isLoading) return <MarketingSkeleton />;
