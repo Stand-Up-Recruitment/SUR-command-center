@@ -197,9 +197,18 @@ export function FinanceCard() {
   ];
 
   const fyOpeningBalance = cashKpis.fyOpeningBalance ?? null;
-  const ytdNets = combined.map(r =>
-    r.ytdNet != null ? r.ytdNet : fyOpeningBalance != null ? Math.round(r.balance - fyOpeningBalance) : null
-  );
+  let prevWeekNum = -1;
+  let currentFyOpening = fyOpeningBalance;
+  const ytdNets = combined.map((r, i) => {
+    const match = (r.weekLabel || r.label || '').match(/W(\d+)/i);
+    const weekNum = match ? parseInt(match[1], 10) : null;
+    if (weekNum !== null && prevWeekNum > 1 && weekNum < prevWeekNum) {
+      currentFyOpening = i > 0 ? combined[i - 1].balance : fyOpeningBalance;
+    }
+    if (weekNum !== null) prevWeekNum = weekNum;
+    if (r.ytdNet != null) return r.ytdNet;
+    return currentFyOpening != null ? Math.round(r.balance - currentFyOpening) : null;
+  });
 
   const cashFlowHasDetail = last4Actuals.some(d => d.inflow != null || d.outflow != null);
 
