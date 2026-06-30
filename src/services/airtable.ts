@@ -14,7 +14,7 @@ import type {
   LTGPKPIs,
   LTGPFlag,
 } from '../types';
-import { fetchMetaSpend, fetchMetaSpendByFrame } from './metaAds';
+import { fetchMetaSpend, fetchMetaSpendByFrame, fetchMetaCprByGroup } from './metaAds';
 
 const API_KEY = import.meta.env.VITE_AIRTABLE_API_KEY as string;
 const CLIENTS_BASE_ID = import.meta.env.VITE_AIRTABLE_CLIENTS_BASE_ID as string;
@@ -318,6 +318,7 @@ export async function fetchMarketingKPIs(frame: TimeFrame = 'month'): Promise<Ma
     allCandidates,
     spend,
     budgetRecords,
+    cpr,
   ] = await Promise.all([
     fetchAllFromBase<ClientLeadFields>(CLIENTS_BASE_ID, CLIENTS_TABLE_ID, {}),
     fetchAllFromBase<CandidateLeadFields>(CANDIDATES_BASE_ID, CANDIDATES_TABLE_ID, {}),
@@ -325,6 +326,7 @@ export async function fetchMarketingKPIs(frame: TimeFrame = 'month'): Promise<Ma
     fetchAllFromBase<MarketingConfigFields>(CLIENTS_BASE_ID, 'Marketing Config', {
       maxRecords: '1',
     }).catch(() => [] as MarketingConfigFields[]),
+    fetchMetaCprByGroup(),
   ]);
 
   const b = timeBoundaries(frame);
@@ -349,26 +351,26 @@ export async function fetchMarketingKPIs(frame: TimeFrame = 'month'): Promise<Ma
     ? Math.round((qualClientsThis.length / thisClients.length) * 100) : 0;
   const clientPrevQualRate = prevClients.length > 0
     ? Math.round((qualClientsPrev.length / prevClients.length) * 100) : 0;
-  const clientCpl = qualClientsThis.length > 0
-    ? Math.round(spend.thisWeek / qualClientsThis.length) : 0;
-  const clientPrevCpl = qualClientsPrev.length > 0
-    ? Math.round(spend.prevWeek / qualClientsPrev.length) : 0;
 
   const clientMetric: LeadMetric = {
     total: thisClients.length,
     qualified: qualClientsThis.length,
     qualRate: clientQualRate,
-    cpl: clientCpl,
+    cpl: cpr.clientCpr,
     prevTotal: prevClients.length,
     prevQualified: qualClientsPrev.length,
     prevQualRate: clientPrevQualRate,
-    prevCpl: clientPrevCpl,
+    prevCpl: cpr.prevClientCpr,
   };
 
   const weeklyBudget = budgetRecords[0]?.['Weekly Budget'] ?? 0;
 
+  const candidateMetric = buildLeadMetric(thisCandidates, prevCandidates, isCandidateQualified, spend.thisWeek, spend.prevWeek);
+  candidateMetric.cpl = cpr.candidateCpr;
+  candidateMetric.prevCpl = cpr.prevCandidateCpr;
+
   return {
-    candidates: buildLeadMetric(thisCandidates, prevCandidates, isCandidateQualified, spend.thisWeek, spend.prevWeek),
+    candidates: candidateMetric,
     clients: clientMetric,
     channels: buildChannels(thisClients, thisCandidates, spend.thisWeek),
     spend,
