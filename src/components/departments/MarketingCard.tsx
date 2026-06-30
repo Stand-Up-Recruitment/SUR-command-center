@@ -1,7 +1,4 @@
 import { useState } from 'react';
-import {
-  ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
-} from 'recharts';
 import { StatusBadge } from '../shared/StatusBadge';
 import { WoWBadge } from '../shared/WoWBadge';
 import { TimeFramePicker } from '../shared/TimeFramePicker';
@@ -248,33 +245,6 @@ export function MarketingCard() {
               </tbody>
             </table>
           </div>
-
-          {/* CHANNEL CHART */}
-          {data.channels.some(c => c.leads > 0) && (
-            <div style={{ ...CARD_STYLE, padding: 20 }}>
-              <div style={{ fontSize: 10, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 14 }}>
-                Channel Performance
-              </div>
-              <ResponsiveContainer width="100%" height={180}>
-                <ComposedChart
-                  data={data.channels.map(c => ({ name: c.channel, Leads: c.leads, 'Qual %': c.qualRate }))}
-                  margin={{ top: 4, right: 20, left: -20, bottom: 0 }}
-                >
-                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: COLORS.textMuted }} axisLine={false} tickLine={false} />
-                  <YAxis yAxisId="left" allowDecimals={false} tick={{ fontSize: 11, fill: COLORS.textMuted }} axisLine={false} tickLine={false} />
-                  <YAxis yAxisId="right" orientation="right" tickFormatter={v => `${v}%`} domain={[0, 100]} tick={{ fontSize: 11, fill: COLORS.accent }} axisLine={false} tickLine={false} width={36} />
-                  <Tooltip
-                    formatter={(value, name) => name === 'Qual %' ? [`${Number(value)}%`, String(name)] : [value, name]}
-                    contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${COLORS.border}`, background: '#1a1a1a' }}
-                    cursor={{ fill: 'rgba(255,255,255,0.04)' }}
-                  />
-                  <Legend iconType="square" iconSize={8} wrapperStyle={{ fontSize: 11, color: COLORS.textMuted, paddingTop: 8 }} />
-                  <Bar yAxisId="left" dataKey="Leads" fill={COLORS.accent} radius={[3,3,0,0]} maxBarSize={48} opacity={0.85} />
-                  <Line yAxisId="right" type="monotone" dataKey="Qual %" stroke="#f59e0b" strokeWidth={2} dot={{ r: 4, fill: '#f59e0b' }} />
-                </ComposedChart>
-              </ResponsiveContainer>
-            </div>
-          )}
 
           {/* AD SPEND CARD */}
           <div style={{ ...CARD_STYLE, padding: 20 }}>
