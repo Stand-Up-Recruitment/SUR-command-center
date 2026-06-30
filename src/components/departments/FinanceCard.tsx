@@ -195,19 +195,20 @@ export function FinanceCard() {
     ...next4Outlook.map(r => ({ ...r, isForecast: true })),
   ];
 
-  const fyOpeningBalance = cashKpis.fyOpeningBalance ?? null;
-  let prevWeekNum = -1;
-  let currentFyOpening = fyOpeningBalance;
-  const ytdNets = combined.map((r, i) => {
-    const match = (r.weekLabel || r.label || '').match(/W(\d+)/i);
-    const weekNum = match ? parseInt(match[1], 10) : null;
-    if (weekNum !== null && prevWeekNum > 1 && weekNum < prevWeekNum) {
-      currentFyOpening = i > 0 ? combined[i - 1].balance : fyOpeningBalance;
+  const opsAccount = data.bankAccounts?.find(a => /business ops account/i.test(a.name));
+  const opsAccountBalance = opsAccount?.balance ?? closingBalance;
+  const netFlows = combined.map(r => (r.inflow ?? 0) - (r.outflow ?? 0));
+  const currentIdx = combined.reduce((last, r, i) => (r.isForecast ? last : i), -1);
+  const ytdNets = combined.map(() => null as number | null);
+  if (currentIdx >= 0) {
+    ytdNets[currentIdx] = Math.round(opsAccountBalance);
+    for (let i = currentIdx + 1; i < combined.length; i++) {
+      ytdNets[i] = Math.round((ytdNets[i - 1] ?? 0) + netFlows[i]);
     }
-    if (weekNum !== null) prevWeekNum = weekNum;
-    if (r.ytdNet != null) return r.ytdNet;
-    return currentFyOpening != null ? Math.round(r.balance - currentFyOpening) : null;
-  });
+    for (let i = currentIdx - 1; i >= 0; i--) {
+      ytdNets[i] = Math.round((ytdNets[i + 1] ?? 0) - netFlows[i + 1]);
+    }
+  }
 
   const cashFlowHasDetail = last4Actuals.some(d => d.inflow != null || d.outflow != null);
 
@@ -345,7 +346,7 @@ export function FinanceCard() {
                       </td>
                     )}
                     {(() => {
-                      const netFlow = (d.inflow ?? 0) - (d.outflow ?? 0);
+                      const netFlow = netFlows[i];
                       return (
                         <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, borderTop: forecastBorder, textAlign: 'right', color: netFlow >= 0 ? NZ : RD }}>
                           {netFlow >= 0 ? '+' : '−'}{fmtNZD(Math.abs(netFlow))}
