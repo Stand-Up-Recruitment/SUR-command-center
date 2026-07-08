@@ -671,10 +671,10 @@ type LTGPInstalmentFields = {
 export async function fetchLTGPKPIs(frame: LTGPFrame): Promise<LTGPKPIs> {
   if (!CLIENTS_BASE_ID) throw new Error('LTGP credentials not configured');
 
-  const [allPlacements, allInstalments, allCrmRecords, allClientLeads, metaResult] = await Promise.all([
+  const [allPlacements, allInstalments, allMainClients, allClientLeads, metaResult] = await Promise.all([
     fetchAllFromBase<LTGPPlacementFields>(CLIENTS_BASE_ID, PLACEMENTS_TABLE_ID),
     fetchAllFromBase<LTGPInstalmentFields>(CLIENTS_BASE_ID, INSTALMENTS_TABLE_ID),
-    fetchAllFromBase<{ 'TOB Status'?: string; 'Signed Date'?: string }>(CLIENTS_BASE_ID, CRM_TABLE_ID),
+    fetchAllFromBase<{ 'Signed Date'?: string }>(CLIENTS_BASE_ID, MAIN_CLIENT_TABLE_ID),
     fetchAllFromBase<{ 'Call Booked'?: string }>(CLIENTS_BASE_ID, CLIENTS_TABLE_ID),
     fetchMetaSpendByFrame(frame).catch(() => ({ candidateSpend: 0, clientSpend: 0, isEstimated: true })),
   ]);
@@ -703,9 +703,7 @@ export async function fetchLTGPKPIs(frame: LTGPFrame): Promise<LTGPKPIs> {
   // ── Period-filtered counts ─────────────────────────────────────────────────
   const { start, now } = ltgpBoundaries(frame);
   const candidatesPlaced = allPlacements.filter(p => isInPeriod(p['Created Date'], start, now)).length;
-  const clientsWon = allCrmRecords.filter(
-    c => c['TOB Status'] === 'Signed' && isInPeriod(c['Signed Date'], start, now)
-  ).length;
+  const clientsWon = allMainClients.filter(c => isInPeriod(c['Signed Date'], start, now)).length;
   const ownerCallsCompleted = allClientLeads.filter(
     f => f['Call Booked'] != null && f['Call Booked'] !== '' && isInPeriod(f['Call Booked'], start, now)
   ).length;
