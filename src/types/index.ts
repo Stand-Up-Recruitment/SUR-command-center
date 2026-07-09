@@ -205,8 +205,9 @@ export interface XeroFinanceData {
   nzGrossProfit: number;
   ausRevenue: number;
   ausCosts: XeroCostRow[];
+  ausTotalCogs: number;
   ausTotalCosts: number;
-  ausNetContribution: number;
+  ausGrossProfit: number;
   advertising: number;
   ausAdvertising?: number;
   nzAdvertising?: number;

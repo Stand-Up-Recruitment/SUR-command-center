@@ -181,7 +181,7 @@ export function FinanceCard() {
 
   // ── Computed values ─────────────────────────────────────────────────────────
   const totalRevenue    = data.nzRevenue + data.ausRevenue;
-  const totalGrossProfit = data.nzGrossProfit + data.ausNetContribution;
+  const totalGrossProfit = data.nzGrossProfit + data.ausGrossProfit;
   const lm = data.plLastMonth;
 
   const cashKpis    = data.cashKpis ?? { openingBalance: 0, closingBalance: 0, closingBalanceActual: 0, avgWeeklyOutflow: 0, openingDate: data.asOf, closingDate: data.asOf };
@@ -494,16 +494,16 @@ export function FinanceCard() {
       <SH color={AUS} label="Australia Business" sub="International placements & operations" />
 
       <G4>
-        <KP accent={AUS} label="Revenue" value={fmtNZD(data.ausRevenue)}         sub="Placement + relocation fees (NZD)" />
-        <KP accent={AUS} label="Costs"   value={fmtNZD(data.ausTotalCosts)}      sub="All operating expenses" valueColor={RD} />
-        <KP accent={AUS} label="Gross"   value={fmtNZD(data.ausNetContribution)} sub={`${Math.round(data.ausNetContribution / data.ausRevenue * 100)}% margin`} valueColor={data.ausNetContribution >= 0 ? NZ : RD} />
-        <KP accent={AUS} label="Net"     value={fmtNZD(data.ausNetProfit ?? data.ausNetContribution)} sub="Net contribution" valueColor={(data.ausNetProfit ?? data.ausNetContribution) >= 0 ? NZ : RD} />
+        <KP accent={AUS} label="Revenue" value={fmtNZD(data.ausRevenue)}      sub="Sales - International" />
+        <KP accent={AUS} label="COGS"    value={fmtNZD(data.ausTotalCogs)}   sub="10% of NZ+AUS combined COGS" valueColor={RD} />
+        <KP accent={AUS} label="Gross"   value={fmtNZD(data.ausGrossProfit)} sub={`${Math.round(data.ausGrossProfit / data.ausRevenue * 100)}% margin`} valueColor={data.ausGrossProfit >= 0 ? NZ : RD} />
+        <KP accent={AUS} label="Net"     value={fmtNZD(data.ausNetProfit ?? data.ausGrossProfit)} sub="Net contribution" valueColor={(data.ausNetProfit ?? data.ausGrossProfit) >= 0 ? NZ : RD} />
       </G4>
 
       <Card accent={AUS}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
           <div>
-            <div style={{ fontSize: 13, fontWeight: 500, color: TEXT, marginBottom: '.75rem' }}>AUS cost breakdown — {fmtNZD(data.ausTotalCosts)}</div>
+            <div style={{ fontSize: 13, fontWeight: 500, color: TEXT, marginBottom: '.75rem' }}>AUS operating expenses breakdown — {fmtNZD(data.ausTotalCosts)}</div>
             {data.ausCosts.map((row, i) => (
               <BR
                 key={row.label}
