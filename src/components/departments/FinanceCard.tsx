@@ -1,5 +1,5 @@
 import { Skeleton } from '../shared/Skeleton';
-import { useXeroFinanceData, useAusPlacements } from '../../hooks/queries';
+import { useXeroFinanceData, useAusPlacements, useScheduledInvoices } from '../../hooks/queries';
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
 const NZ   = '#1D9E75';
@@ -173,6 +173,7 @@ function FinanceSkeleton() {
 export function FinanceCard() {
   const { data, error } = useXeroFinanceData();
   const { data: placements } = useAusPlacements();
+  const { data: scheduledInvoices } = useScheduledInvoices();
 
   if (!data) return <FinanceSkeleton />;
 
@@ -197,8 +198,25 @@ export function FinanceCard() {
 
   const opsAccount = data.bankAccounts?.find(a => /business ops account/i.test(a.name));
   const opsAccountBalance = opsAccount?.balance ?? closingBalance;
-  const netFlows = combined.map(r => (r.inflow ?? 0) - (r.outflow ?? 0));
   const currentIdx = combined.reduce((last, r, i) => (r.isForecast ? last : i), -1);
+
+  // Scheduled-but-unbilled Airtable invoices (Status = Scheduled, InvoiceID blank), bucketed into
+  // forecast weeks by anchoring on cashKpis.closingDate and stepping 7 days per week. This
+  // approximates the n8n-computed week boundaries since CashWeek only carries a label, not dates.
+  const closing = new Date(cashKpis.closingDate).getTime();
+  const scheduledByWeek = combined.map((_, i) => {
+    if (i <= currentIdx) return 0;
+    const weekStart = closing + (i - currentIdx - 1) * 7 * 86_400_000;
+    const weekEnd = weekStart + 7 * 86_400_000;
+    return (scheduledInvoices ?? [])
+      .filter(s => {
+        const t = new Date(s.dueDate).getTime();
+        return t >= weekStart && t < weekEnd;
+      })
+      .reduce((sum, s) => sum + s.amount, 0);
+  });
+
+  const netFlows = combined.map((r, i) => (r.inflow ?? 0) + scheduledByWeek[i] - (r.outflow ?? 0));
   const ytdNets = combined.map(() => null as number | null);
   if (currentIdx >= 0) {
     ytdNets[currentIdx] = Math.round(opsAccountBalance);
@@ -211,6 +229,7 @@ export function FinanceCard() {
   }
 
   const cashFlowHasDetail = last4Actuals.some(d => d.inflow != null || d.outflow != null);
+  const hasScheduledInvoices = scheduledByWeek.some(v => v > 0);
 
 
   const minBal = combined.length > 0 ? Math.min(...combined.map(d => d.balance)) : 0;
@@ -320,6 +339,9 @@ export function FinanceCard() {
                 {cashFlowHasDetail && (
                   <th style={{ fontSize: 10, fontWeight: 500, color: MUTED, textAlign: 'right', padding: '4px 6px', borderBottom: `.5px solid ${BORDER}` }}>Outflow</th>
                 )}
+                {hasScheduledInvoices && (
+                  <th style={{ fontSize: 10, fontWeight: 500, color: MUTED, textAlign: 'right', padding: '4px 6px', borderBottom: `.5px solid ${BORDER}` }}>Scheduled*</th>
+                )}
                 <th style={{ fontSize: 10, fontWeight: 500, color: MUTED, textAlign: 'right', padding: '4px 6px', borderBottom: `.5px solid ${BORDER}` }}>Net flow</th>
                 <th style={{ fontSize: 10, fontWeight: 500, color: MUTED, textAlign: 'right', padding: '4px 6px', borderBottom: `.5px solid ${BORDER}` }}>YTD net</th>
               </tr>
@@ -329,6 +351,7 @@ export function FinanceCard() {
                 const isFirstForecast = d.isForecast && (i === 0 || !combined[i - 1].isForecast);
                 const forecastBorder = isFirstForecast ? `1px dashed rgba(255,255,255,0.15)` : undefined;
                 const ytd = ytdNets[i];
+                const scheduled = scheduledByWeek[i];
                 return (
                   <tr key={i} style={{ background: d.balance === maxBal ? 'rgba(29,158,117,0.15)' : d.balance === minBal ? 'rgba(216,90,48,0.15)' : 'transparent' }}>
                     <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, borderTop: forecastBorder, color: MUTED }}>
@@ -343,6 +366,11 @@ export function FinanceCard() {
                     {cashFlowHasDetail && (
                       <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, borderTop: forecastBorder, textAlign: 'right', color: RD }}>
                         {`−${fmtNZD(d.outflow ?? 0)}`}
+                      </td>
+                    )}
+                    {hasScheduledInvoices && (
+                      <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, borderTop: forecastBorder, textAlign: 'right', color: scheduled > 0 ? AUS : MUTED }}>
+                        {scheduled > 0 ? `+${fmtNZD(scheduled)}` : '—'}
                       </td>
                     )}
                     {(() => {
@@ -361,6 +389,9 @@ export function FinanceCard() {
               })}
             </tbody>
           </table>
+          {hasScheduledInvoices && (
+            <NoteBox>*Scheduled invoices raised in Airtable but not yet issued in Xero (Status = Scheduled, no InvoiceID), bucketed by Due Date. Already included in Net flow and YTD net.</NoteBox>
+          )}
         </Card>
       )}
 

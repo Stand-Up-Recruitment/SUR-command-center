@@ -6,6 +6,7 @@ import {
   fetchRevenueKPIs,
   fetchRetentionKPIs,
   fetchAusPlacements,
+  fetchScheduledInvoices,
   fetchLTGPKPIs,
 } from '../services/airtable';
 import { fetchXeroFinanceData, hasXeroCredentials } from '../services/xero';
@@ -78,6 +79,13 @@ export function useAusPlacements() {
   return useQuery({
     queryKey: ['finance-aus-placements'],
     queryFn: fetchAusPlacements,
+  });
+}
+
+export function useScheduledInvoices() {
+  return useQuery({
+    queryKey: ['finance-scheduled-invoices'],
+    queryFn: fetchScheduledInvoices,
   });
 }
 

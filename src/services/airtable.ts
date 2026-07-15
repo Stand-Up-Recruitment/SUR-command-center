@@ -9,6 +9,7 @@ import type {
   ChannelRow,
   TimeFrame,
   AusPlacement,
+  ScheduledInvoice,
   RetentionKPIs,
   LTGPFrame,
   LTGPKPIs,
@@ -512,6 +513,23 @@ export async function fetchAusPlacements(): Promise<AusPlacement[]> {
       status: rawStatus,
     };
   });
+}
+
+export async function fetchScheduledInvoices(): Promise<ScheduledInvoice[]> {
+  if (!CLIENTS_BASE_ID) throw new Error('Airtable credentials not configured');
+
+  const records = await fetchAllFromBase<{
+    Status?: string;
+    InvoiceID?: string;
+    'Invoice Amount'?: number;
+    'Due Date'?: string;
+  }>(CLIENTS_BASE_ID, INSTALMENTS_TABLE_ID, {
+    filterByFormula: `AND({Status} = 'Scheduled', {InvoiceID} = '')`,
+  });
+
+  return records
+    .filter(f => f['Due Date'])
+    .map(f => ({ amount: f['Invoice Amount'] ?? 0, dueDate: f['Due Date']! }));
 }
 
 // ─── Retention ───────────────────────────────────────────────────────────────

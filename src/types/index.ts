@@ -168,6 +168,11 @@ export interface AusPlacement {
   status: string;
 }
 
+export interface ScheduledInvoice {
+  amount: number;
+  dueDate: string; // ISO date
+}
+
 export interface NZWorkerStats {
   dataAvailable: boolean;
   matchedWorkers: number;
