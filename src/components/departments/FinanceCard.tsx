@@ -168,6 +168,400 @@ function FinanceSkeleton() {
   );
 }
 
+// ─── Section components ───────────────────────────────────────────────────────
+
+function PLSummarySection({ totalRevenue, totalGrossProfit, netProfit, lm }: {
+  totalRevenue: number; totalGrossProfit: number; netProfit: number;
+  lm: { revenue: number; grossProfit: number; netProfit: number } | undefined;
+}) {
+  return (
+    <>
+      <SH color={TEXT} label="P&L Summary" sub="revenue · gross profit · net profit" />
+
+      <G3>
+        <KPDelta
+          accent={NZ}
+          label="Total revenue"
+          value={fmtNZD(totalRevenue)}
+          valueColor={NZ}
+          delta={lm ? { value: totalRevenue - lm.revenue, label: 'vs last month' } : null}
+        />
+        <KPDelta
+          accent={NZ}
+          label="Gross profit"
+          value={fmtNZD(totalGrossProfit)}
+          valueColor={totalGrossProfit >= 0 ? NZ : RD}
+          delta={lm ? { value: totalGrossProfit - lm.grossProfit, label: 'vs last month' } : null}
+        />
+        <KPDelta
+          accent={PU}
+          label="Net profit (FY to date)"
+          value={fmtNZD(netProfit)}
+          valueColor={netProfit >= 0 ? NZ : RD}
+          delta={lm ? { value: netProfit - lm.netProfit, label: 'vs last month' } : null}
+        />
+      </G3>
+    </>
+  );
+}
+
+function CashPositionSection({
+  cashKpis, closingBalance, combined, bankAccounts, cashFlowHasDetail, hasScheduledInvoices,
+  scheduledByWeek, netFlows, ytdNets, minBal, maxBal,
+}: {
+  cashKpis: { closingDate: string; avgWeeklyOutflow: number; totalInflow?: number; totalOutflow?: number };
+  closingBalance: number;
+  combined: Array<{ weekLabel: string; isForecast: boolean; inflow?: number; outflow?: number; balance: number }>;
+  bankAccounts: Array<{ name: string; balance: number }> | undefined;
+  cashFlowHasDetail: boolean;
+  hasScheduledInvoices: boolean;
+  scheduledByWeek: number[];
+  netFlows: number[];
+  ytdNets: (number | null)[];
+  minBal: number;
+  maxBal: number;
+}) {
+  return (
+    <>
+      <SH color={MUTED} label="Cash Position"
+        sub={combined.length > 0
+          ? `4-week actuals · 4-week forecast · as at ${fmtDate(cashKpis.closingDate)}`
+          : '4-week actuals · 4-week forecast'} />
+
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${2 + (cashKpis.totalInflow != null ? 1 : 0) + (cashKpis.totalOutflow != null ? 1 : 0)}, minmax(0,1fr))`, gap: 10, marginBottom: '.875rem' }}>
+        <KP accent={closingBalance >= 0 ? NZ : RD}
+            label="Current bank balance"
+            value={fmtNZD(closingBalance)}
+            sub={`Xero reconciled · ${fmtDate(cashKpis.closingDate)}`}
+            valueColor={closingBalance >= 0 ? NZ : RD} />
+        <KP accent={RD}
+            label="Avg weekly outflow"
+            value={`−${fmtNZD(cashKpis.avgWeeklyOutflow)}`}
+            sub="Negative-flow weeks avg" valueColor={RD} />
+        {cashKpis.totalInflow != null && (
+          <KP accent={NZ}
+              label="8-week total inflow"
+              value={fmtNZD(cashKpis.totalInflow)}
+              sub="Gross receipts, 8 weeks"
+              valueColor={NZ} />
+        )}
+        {cashKpis.totalOutflow != null && (
+          <KP accent={RD}
+              label="8-week total outflow"
+              value={`−${fmtNZD(cashKpis.totalOutflow)}`}
+              sub="Gross payments, 8 weeks"
+              valueColor={RD} />
+        )}
+      </div>
+
+      {/* Bank accounts (Profit First) */}
+      {bankAccounts && bankAccounts.length > 0 ? (
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: '.875rem' }}>
+          {bankAccounts.map(acct => (
+            <div key={acct.name} style={{ background: BG, border: `.5px solid ${BORDER}`, borderRadius: 8, padding: '.625rem .875rem', flex: '1 1 auto', minWidth: 120 }}>
+              <div style={{ fontSize: 10, color: MUTED, marginBottom: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{acct.name}</div>
+              <div style={{ fontSize: 17, fontWeight: 500, color: acct.balance >= 0 ? TEXT : RD }}>{fmtNZD(acct.balance)}</div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div style={{ background: BG, border: `.5px solid ${BORDER}`, borderRadius: 8, padding: '.625rem 1rem', marginBottom: '.875rem', fontSize: 12, color: MUTED, fontStyle: 'italic' }}>
+          Bank account breakdown not yet available
+        </div>
+      )}
+
+      {/* 4-week actuals + 4-week forecast table */}
+      {combined.length > 0 && (
+        <Card>
+          <table style={{ width: '100%', fontSize: 11, borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                <th style={{ fontSize: 10, fontWeight: 500, color: MUTED, textAlign: 'left', padding: '4px 6px', borderBottom: `.5px solid ${BORDER}` }}>Week</th>
+                {cashFlowHasDetail && (
+                  <th style={{ fontSize: 10, fontWeight: 500, color: MUTED, textAlign: 'right', padding: '4px 6px', borderBottom: `.5px solid ${BORDER}` }}>Inflow</th>
+                )}
+                {cashFlowHasDetail && (
+                  <th style={{ fontSize: 10, fontWeight: 500, color: MUTED, textAlign: 'right', padding: '4px 6px', borderBottom: `.5px solid ${BORDER}` }}>Outflow</th>
+                )}
+                {hasScheduledInvoices && (
+                  <th style={{ fontSize: 10, fontWeight: 500, color: MUTED, textAlign: 'right', padding: '4px 6px', borderBottom: `.5px solid ${BORDER}` }}>Scheduled*</th>
+                )}
+                <th style={{ fontSize: 10, fontWeight: 500, color: MUTED, textAlign: 'right', padding: '4px 6px', borderBottom: `.5px solid ${BORDER}` }}>Net flow</th>
+                <th style={{ fontSize: 10, fontWeight: 500, color: MUTED, textAlign: 'right', padding: '4px 6px', borderBottom: `.5px solid ${BORDER}` }}>YTD net</th>
+              </tr>
+            </thead>
+            <tbody>
+              {combined.map((d, i) => {
+                const isFirstForecast = d.isForecast && (i === 0 || !combined[i - 1].isForecast);
+                const forecastBorder = isFirstForecast ? `1px dashed rgba(255,255,255,0.15)` : undefined;
+                const ytd = ytdNets[i];
+                const scheduled = scheduledByWeek[i];
+                return (
+                  <tr key={i} style={{ background: d.balance === maxBal ? 'rgba(29,158,117,0.15)' : d.balance === minBal ? 'rgba(216,90,48,0.15)' : 'transparent' }}>
+                    <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, borderTop: forecastBorder, color: MUTED }}>
+                      {d.weekLabel}
+                      {d.isForecast && <span style={{ color: 'rgba(163,163,163,0.5)', marginLeft: 4 }}>(est.)</span>}
+                    </td>
+                    {cashFlowHasDetail && (
+                      <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, borderTop: forecastBorder, textAlign: 'right', color: NZ }}>
+                        {fmtNZD(d.inflow ?? 0)}
+                      </td>
+                    )}
+                    {cashFlowHasDetail && (
+                      <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, borderTop: forecastBorder, textAlign: 'right', color: RD }}>
+                        {`−${fmtNZD(d.outflow ?? 0)}`}
+                      </td>
+                    )}
+                    {hasScheduledInvoices && (
+                      <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, borderTop: forecastBorder, textAlign: 'right', color: scheduled > 0 ? AUS : MUTED }}>
+                        {scheduled > 0 ? `+${fmtNZD(scheduled)}` : '—'}
+                      </td>
+                    )}
+                    {(() => {
+                      const netFlow = netFlows[i];
+                      return (
+                        <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, borderTop: forecastBorder, textAlign: 'right', color: netFlow >= 0 ? NZ : RD }}>
+                          {netFlow >= 0 ? '+' : '−'}{fmtNZD(Math.abs(netFlow))}
+                        </td>
+                      );
+                    })()}
+                    <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, borderTop: forecastBorder, textAlign: 'right', color: (ytd ?? 0) >= 0 ? NZ : RD }}>
+                      {(() => { const v = ytd ?? 0; return `${v >= 0 ? '+' : '−'}${fmtNZD(Math.abs(v))}`; })()}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {hasScheduledInvoices && (
+            <NoteBox>*Scheduled invoices raised in Airtable but not yet issued in Xero (Status = Scheduled, no InvoiceID), bucketed by Due Date. Already included in Net flow and YTD net.</NoteBox>
+          )}
+        </Card>
+      )}
+    </>
+  );
+}
+
+function YTDPaceSection({ fyYear, netProfit, onTrack, paceGap, pct, remaining, placementsNeeded }: {
+  fyYear: number; netProfit: number; onTrack: boolean; paceGap: number; pct: number;
+  remaining: number; placementsNeeded: number;
+}) {
+  return (
+    <>
+      <SH color={PU} label="YTD Pace — $1M Net Profit" />
+
+      <Card accent={PU}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '.4rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ fontSize: 13, fontWeight: 500, color: TEXT }}>FY{fyYear} net profit towards $1,000,000</div>
+            <span style={{
+              fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 20,
+              background: onTrack ? 'rgba(29,158,117,0.15)' : 'rgba(216,90,48,0.15)',
+              color: onTrack ? NZ : RD,
+            }}>
+              {onTrack ? '↑ On Track' : '↓ Off Track'}
+            </span>
+            <span style={{ fontSize: 11, color: MUTED }}>
+              {fmtNZD(paceGap)} {onTrack ? 'ahead of pace' : 'behind pace'}
+            </span>
+          </div>
+          <div style={{ fontSize: 12, color: PU, fontWeight: 500 }}>{pct}% complete</div>
+        </div>
+        <div style={{ background: BORDER, borderRadius: 4, height: 8, marginBottom: 4 }}>
+          <div style={{ width: `${pct}%`, height: 8, borderRadius: 4, background: PU }} />
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: MUTED, marginBottom: '.75rem' }}>
+          <span>{fmtNZD(netProfit)} net profit earned</span>
+          <span>{fmtNZD(remaining)} remaining to target</span>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, margin: '.6rem 0' }}>
+          {[
+            { value: fmtNZD(netProfit), color: NZ, label: 'Net profit to date\nFY' + fyYear },
+            { value: fmtNZD(remaining),      color: RD, label: 'Still needed\nto hit $1M' },
+            { value: String(placementsNeeded), color: PU, label: 'AUS placements needed*\nat $11,600 net each' },
+          ].map(m => (
+            <div key={m.label} style={{ background: BG, border: `.5px solid ${BORDER}`, borderRadius: 8, padding: '.75rem', textAlign: 'center' }}>
+              <div style={{ fontSize: 20, fontWeight: 500, color: m.color }}>{m.value}</div>
+              <div style={{ fontSize: 11, color: MUTED, marginTop: 3, lineHeight: 1.4, whiteSpace: 'pre-line' }}>{m.label}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{ fontSize: 10, color: MUTED }}>*Remaining ÷ $11,600 est. net per AUS placement (60% margin, ex NZ labour costs).</div>
+      </Card>
+    </>
+  );
+}
+
+function NZBusinessSection({ data, nzActiveWorkers, nzCogsMax }: {
+  data: {
+    nzRevenue: number; nzTotalCogs: number; nzGrossProfit: number; nzNetProfit?: number;
+    nzCogs: Array<{ label: string; value: number }>;
+    nzWorkerStats?: {
+      dataAvailable: boolean; matchedWorkers: number; avgBillRate: number; avgHoursPerWorker: number;
+      avgPayRate: number; grossMarginPerHour: number; casualLoadingPerHour: number; accLevyPerHour: number;
+      accLevyRate: number; netMarginPerHour: number; netProfitPerWorkerPerWeek: number;
+      overheadPerWorkerPerWeek: number; workerCount: number; trueNetPerWorkerPerWeek: number;
+      totalWeeklyNetProfit?: number | null;
+    };
+  };
+  nzActiveWorkers: number | string;
+  nzCogsMax: number;
+}) {
+  const nw = data.nzWorkerStats;
+  return (
+    <>
+      <SH color={NZ} label="New Zealand Business" sub="Labour hire operations" />
+
+      <G4>
+        <KP accent={NZ} label="Revenue"      value={fmtNZD(data.nzRevenue)}     sub="NZ sales income" />
+        <KP accent={NZ} label="COGS"         value={fmtNZD(data.nzTotalCogs)}   sub={`${Math.round(data.nzTotalCogs / data.nzRevenue * 100)}% of revenue`} valueColor={RD} />
+        <KP accent={NZ} label="Gross profit" value={fmtNZD(data.nzGrossProfit)} sub={`${Math.round(data.nzGrossProfit / data.nzRevenue * 100)}% GP margin`} valueColor={data.nzGrossProfit >= 0 ? NZ : RD} />
+        <KP accent={NZ} label="Net"          value={fmtNZD(data.nzNetProfit ?? data.nzGrossProfit)} sub="Net contribution" valueColor={(data.nzNetProfit ?? data.nzGrossProfit) >= 0 ? NZ : RD} />
+      </G4>
+
+      <Card accent={NZ}>
+        <div style={{ fontSize: 13, fontWeight: 500, color: TEXT, marginBottom: '.75rem' }}>NZ cost of goods sold — {fmtNZD(data.nzTotalCogs)}</div>
+        {data.nzCogs
+          .slice()
+          .sort((a, b) => b.value - a.value)
+          .map(row => (
+            <BR
+              key={row.label}
+              label={row.label}
+              value={fmtNZD(row.value)}
+              pct={Math.round((row.value / nzCogsMax) * 100)}
+              color={NZ}
+            />
+          ))}
+        <NoteBox>NZ gross profit ({fmtNZD(data.nzGrossProfit)}) funds all shared business overheads. NZ operates as a self-contained P&amp;L.</NoteBox>
+        {nzActiveWorkers !== '—' && (
+          <div style={{ marginTop: 8, fontSize: 11, color: MUTED }}>
+            Active labour hire workers: <span style={{ color: TEXT, fontWeight: 500 }}>{nzActiveWorkers}</span> on Xero payroll
+          </div>
+        )}
+      </Card>
+
+      {/* NZ Net Profit per Worker */}
+      {nw?.dataAvailable && (() => {
+        const accPct = Math.round(nw.accLevyRate * 100 * 100) / 100;
+        return (
+          <Card accent={NZ}>
+            <div style={{ fontSize: 13, fontWeight: 500, color: TEXT, marginBottom: '1rem' }}>
+              Net profit per NZ worker per week
+              <span style={{ fontSize: 11, color: MUTED, fontWeight: 400, marginLeft: 8 }}>
+                avg across {nw.matchedWorkers} worker{nw.matchedWorkers !== 1 ? 's' : ''}
+              </span>
+            </div>
+            {[
+              { label: 'Bill rate (avg)', value: nw.avgBillRate, sub: `Xero invoice rate / hr · avg ${nw.avgHoursPerWorker}h/week`, color: NZ, prefix: '' },
+              { label: 'Pay rate (avg)', value: -nw.avgPayRate, sub: 'Xero payslip · ordinary time', color: RD, prefix: '−' },
+              { label: 'Gross margin / hr', value: nw.grossMarginPerHour, sub: 'Bill rate − pay rate', color: nw.grossMarginPerHour >= 0 ? NZ : RD, prefix: '', divider: true },
+              { label: 'Casual loading (8%)', value: -nw.casualLoadingPerHour, sub: 'Pay rate × 8%', color: RD, prefix: '−' },
+              { label: `ACC levy (${accPct}%)`, value: -nw.accLevyPerHour, sub: `Pay rate × ${accPct}% (labour hire)`, color: RD, prefix: '−' },
+              { label: 'Net margin / hr', value: nw.netMarginPerHour, sub: null, color: nw.netMarginPerHour >= 0 ? NZ : RD, prefix: '', divider: true },
+              { label: `× avg hours/week`, value: nw.netProfitPerWorkerPerWeek, sub: `${nw.netMarginPerHour.toFixed(2)} × ${nw.avgHoursPerWorker}h`, color: nw.netProfitPerWorkerPerWeek >= 0 ? NZ : RD, prefix: '', divider: true },
+              { label: 'Overhead / worker / week', value: -nw.overheadPerWorkerPerWeek, sub: `Shared opex × 10% ÷ ${nw.workerCount} workers ÷ 4.33 wks`, color: RD, prefix: '−' },
+            ].map(({ label, value, sub, color, prefix, divider }) => (
+              <div key={label}>
+                {divider && <div style={{ height: .5, background: BORDER, margin: '.5rem 0' }} />}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '4px 0' }}>
+                  <div>
+                    <span style={{ fontSize: 12, color: MUTED }}>{label}</span>
+                    {sub && <div style={{ fontSize: 10, color: 'rgba(163,163,163,0.6)', marginTop: 1 }}>{sub}</div>}
+                  </div>
+                  <span style={{ fontSize: 13, fontWeight: 500, color }}>{prefix}{fmtNZD(Math.abs(value))}/hr</span>
+                </div>
+              </div>
+            ))}
+            <div style={{ height: .5, background: BORDER, margin: '.5rem 0' }} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0' }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: TEXT }}>True net / worker / week</span>
+              <span style={{ fontSize: 20, fontWeight: 600, color: nw.trueNetPerWorkerPerWeek >= 0 ? NZ : RD }}>{fmtNZD(nw.trueNetPerWorkerPerWeek)}</span>
+            </div>
+            {nw.totalWeeklyNetProfit != null && (
+              <>
+                <div style={{ height: .5, background: BORDER, margin: '.5rem 0' }} />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0' }}>
+                  <span style={{ fontSize: 12, color: MUTED }}>Total NZ weekly net profit ({nw.matchedWorkers} workers)</span>
+                  <span style={{ fontSize: 15, fontWeight: 600, color: nw.totalWeeklyNetProfit >= 0 ? NZ : RD }}>{fmtNZD(nw.totalWeeklyNetProfit)}</span>
+                </div>
+              </>
+            )}
+          </Card>
+        );
+      })()}
+    </>
+  );
+}
+
+function AUSBusinessSection({ data, fyYear, ausPlacementsCount, placements, ausCostsMax }: {
+  data: {
+    ausRevenue: number; ausTotalCogs: number; ausGrossProfit: number; ausNetProfit?: number;
+    ausTotalCosts: number; ausCosts: Array<{ label: string; value: number }>;
+  };
+  fyYear: number;
+  ausPlacementsCount: number;
+  placements: Array<{ candidate: string; client: string; status: string }> | undefined;
+  ausCostsMax: number;
+}) {
+  return (
+    <>
+      <SH color={AUS} label="Australia Business" sub="International placements & operations" />
+
+      <G4>
+        <KP accent={AUS} label="Revenue" value={fmtNZD(data.ausRevenue)}      sub="Sales - International" />
+        <KP accent={AUS} label="COGS"    value={fmtNZD(data.ausTotalCogs)}   sub="10% of NZ+AUS combined COGS" valueColor={RD} />
+        <KP accent={AUS} label="Gross"   value={fmtNZD(data.ausGrossProfit)} sub={`${Math.round(data.ausGrossProfit / data.ausRevenue * 100)}% margin`} valueColor={data.ausGrossProfit >= 0 ? NZ : RD} />
+        <KP accent={AUS} label="Net"     value={fmtNZD(data.ausNetProfit ?? data.ausGrossProfit)} sub="Net contribution" valueColor={(data.ausNetProfit ?? data.ausGrossProfit) >= 0 ? NZ : RD} />
+      </G4>
+
+      <Card accent={AUS}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 500, color: TEXT, marginBottom: '.75rem' }}>AUS operating expenses breakdown — {fmtNZD(data.ausTotalCosts)}</div>
+            {data.ausCosts.map((row, i) => (
+              <BR
+                key={row.label}
+                label={row.label}
+                value={fmtNZD(row.value)}
+                pct={Math.round((row.value / ausCostsMax) * 100)}
+                color={i === 0 ? AUS : AM}
+              />
+            ))}
+          </div>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 500, color: TEXT, marginBottom: '.75rem' }}>FY{fyYear} placements — {ausPlacementsCount} confirmed</div>
+            {placements == null ? (
+              <div>{[0,1,2,3].map(i => <div key={i} style={{ marginBottom: 8 }}><Skeleton height={28} /></div>)}</div>
+            ) : placements.length === 0 ? (
+              <div style={{ fontSize: 12, color: MUTED }}>No placements recorded for FY{fyYear}.</div>
+            ) : (
+              <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr>
+                    {['Candidate', 'Client', 'Status'].map(h => (
+                      <th key={h} style={{ fontSize: 11, fontWeight: 500, color: MUTED, textAlign: 'left', padding: '4px 6px', borderBottom: `.5px solid ${BORDER}` }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {placements.map((p, i) => (
+                    <tr key={i}>
+                      <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, color: TEXT }}>{p.candidate}</td>
+                      <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, color: TEXT }}>{p.client}</td>
+                      <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}` }}>{statusBadge(p.status)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      </Card>
+    </>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function FinanceCard() {
@@ -250,330 +644,42 @@ export function FinanceCard() {
 
   return (
     <div style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
+      <PLSummarySection totalRevenue={totalRevenue} totalGrossProfit={totalGrossProfit} netProfit={data.netProfit} lm={lm} />
 
-      {/* ── 1. P&L Summary ──────────────────────────────────────────── */}
-      <SH color={TEXT} label="P&L Summary" sub="revenue · gross profit · net profit" />
+      <CashPositionSection
+        cashKpis={cashKpis}
+        closingBalance={closingBalance}
+        combined={combined}
+        bankAccounts={data.bankAccounts}
+        cashFlowHasDetail={cashFlowHasDetail}
+        hasScheduledInvoices={hasScheduledInvoices}
+        scheduledByWeek={scheduledByWeek}
+        netFlows={netFlows}
+        ytdNets={ytdNets}
+        minBal={minBal}
+        maxBal={maxBal}
+      />
 
-      <G3>
-        <KPDelta
-          accent={NZ}
-          label="Total revenue"
-          value={fmtNZD(totalRevenue)}
-          valueColor={NZ}
-          delta={lm ? { value: totalRevenue - lm.revenue, label: 'vs last month' } : null}
-        />
-        <KPDelta
-          accent={NZ}
-          label="Gross profit"
-          value={fmtNZD(totalGrossProfit)}
-          valueColor={totalGrossProfit >= 0 ? NZ : RD}
-          delta={lm ? { value: totalGrossProfit - lm.grossProfit, label: 'vs last month' } : null}
-        />
-        <KPDelta
-          accent={PU}
-          label="Net profit (FY to date)"
-          value={fmtNZD(data.netProfit)}
-          valueColor={data.netProfit >= 0 ? NZ : RD}
-          delta={lm ? { value: data.netProfit - lm.netProfit, label: 'vs last month' } : null}
-        />
-      </G3>
+      <YTDPaceSection
+        fyYear={fyYear}
+        netProfit={data.netProfit}
+        onTrack={onTrack}
+        paceGap={paceGap}
+        pct={pct}
+        remaining={remaining}
+        placementsNeeded={placementsNeeded}
+      />
 
-      {/* ── 2. Cash Position ────────────────────────────────────────── */}
-      <SH color={MUTED} label="Cash Position"
-        sub={combined.length > 0
-          ? `4-week actuals · 4-week forecast · as at ${fmtDate(cashKpis.closingDate)}`
-          : '4-week actuals · 4-week forecast'} />
+      <NZBusinessSection data={data} nzActiveWorkers={nzActiveWorkers} nzCogsMax={nzCogsMax} />
 
-      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${2 + (cashKpis.totalInflow != null ? 1 : 0) + (cashKpis.totalOutflow != null ? 1 : 0)}, minmax(0,1fr))`, gap: 10, marginBottom: '.875rem' }}>
-        <KP accent={closingBalance >= 0 ? NZ : RD}
-            label="Current bank balance"
-            value={fmtNZD(closingBalance)}
-            sub={`Xero reconciled · ${fmtDate(cashKpis.closingDate)}`}
-            valueColor={closingBalance >= 0 ? NZ : RD} />
-        <KP accent={RD}
-            label="Avg weekly outflow"
-            value={`−${fmtNZD(cashKpis.avgWeeklyOutflow)}`}
-            sub="Negative-flow weeks avg" valueColor={RD} />
-        {cashKpis.totalInflow != null && (
-          <KP accent={NZ}
-              label="8-week total inflow"
-              value={fmtNZD(cashKpis.totalInflow)}
-              sub="Gross receipts, 8 weeks"
-              valueColor={NZ} />
-        )}
-        {cashKpis.totalOutflow != null && (
-          <KP accent={RD}
-              label="8-week total outflow"
-              value={`−${fmtNZD(cashKpis.totalOutflow)}`}
-              sub="Gross payments, 8 weeks"
-              valueColor={RD} />
-        )}
-      </div>
+      <AUSBusinessSection
+        data={data}
+        fyYear={fyYear}
+        ausPlacementsCount={ausPlacementsCount}
+        placements={placements}
+        ausCostsMax={ausCostsMax}
+      />
 
-      {/* Bank accounts (Profit First) */}
-      {data.bankAccounts && data.bankAccounts.length > 0 ? (
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: '.875rem' }}>
-          {data.bankAccounts.map(acct => (
-            <div key={acct.name} style={{ background: BG, border: `.5px solid ${BORDER}`, borderRadius: 8, padding: '.625rem .875rem', flex: '1 1 auto', minWidth: 120 }}>
-              <div style={{ fontSize: 10, color: MUTED, marginBottom: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{acct.name}</div>
-              <div style={{ fontSize: 17, fontWeight: 500, color: acct.balance >= 0 ? TEXT : RD }}>{fmtNZD(acct.balance)}</div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div style={{ background: BG, border: `.5px solid ${BORDER}`, borderRadius: 8, padding: '.625rem 1rem', marginBottom: '.875rem', fontSize: 12, color: MUTED, fontStyle: 'italic' }}>
-          Bank account breakdown not yet available
-        </div>
-      )}
-
-      {/* 4-week actuals + 4-week forecast table */}
-      {combined.length > 0 && (
-        <Card>
-          <table style={{ width: '100%', fontSize: 11, borderCollapse: 'collapse' }}>
-            <thead>
-              <tr>
-                <th style={{ fontSize: 10, fontWeight: 500, color: MUTED, textAlign: 'left', padding: '4px 6px', borderBottom: `.5px solid ${BORDER}` }}>Week</th>
-                {cashFlowHasDetail && (
-                  <th style={{ fontSize: 10, fontWeight: 500, color: MUTED, textAlign: 'right', padding: '4px 6px', borderBottom: `.5px solid ${BORDER}` }}>Inflow</th>
-                )}
-                {cashFlowHasDetail && (
-                  <th style={{ fontSize: 10, fontWeight: 500, color: MUTED, textAlign: 'right', padding: '4px 6px', borderBottom: `.5px solid ${BORDER}` }}>Outflow</th>
-                )}
-                {hasScheduledInvoices && (
-                  <th style={{ fontSize: 10, fontWeight: 500, color: MUTED, textAlign: 'right', padding: '4px 6px', borderBottom: `.5px solid ${BORDER}` }}>Scheduled*</th>
-                )}
-                <th style={{ fontSize: 10, fontWeight: 500, color: MUTED, textAlign: 'right', padding: '4px 6px', borderBottom: `.5px solid ${BORDER}` }}>Net flow</th>
-                <th style={{ fontSize: 10, fontWeight: 500, color: MUTED, textAlign: 'right', padding: '4px 6px', borderBottom: `.5px solid ${BORDER}` }}>YTD net</th>
-              </tr>
-            </thead>
-            <tbody>
-              {combined.map((d, i) => {
-                const isFirstForecast = d.isForecast && (i === 0 || !combined[i - 1].isForecast);
-                const forecastBorder = isFirstForecast ? `1px dashed rgba(255,255,255,0.15)` : undefined;
-                const ytd = ytdNets[i];
-                const scheduled = scheduledByWeek[i];
-                return (
-                  <tr key={i} style={{ background: d.balance === maxBal ? 'rgba(29,158,117,0.15)' : d.balance === minBal ? 'rgba(216,90,48,0.15)' : 'transparent' }}>
-                    <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, borderTop: forecastBorder, color: MUTED }}>
-                      {d.weekLabel}
-                      {d.isForecast && <span style={{ color: 'rgba(163,163,163,0.5)', marginLeft: 4 }}>(est.)</span>}
-                    </td>
-                    {cashFlowHasDetail && (
-                      <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, borderTop: forecastBorder, textAlign: 'right', color: NZ }}>
-                        {fmtNZD(d.inflow ?? 0)}
-                      </td>
-                    )}
-                    {cashFlowHasDetail && (
-                      <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, borderTop: forecastBorder, textAlign: 'right', color: RD }}>
-                        {`−${fmtNZD(d.outflow ?? 0)}`}
-                      </td>
-                    )}
-                    {hasScheduledInvoices && (
-                      <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, borderTop: forecastBorder, textAlign: 'right', color: scheduled > 0 ? AUS : MUTED }}>
-                        {scheduled > 0 ? `+${fmtNZD(scheduled)}` : '—'}
-                      </td>
-                    )}
-                    {(() => {
-                      const netFlow = netFlows[i];
-                      return (
-                        <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, borderTop: forecastBorder, textAlign: 'right', color: netFlow >= 0 ? NZ : RD }}>
-                          {netFlow >= 0 ? '+' : '−'}{fmtNZD(Math.abs(netFlow))}
-                        </td>
-                      );
-                    })()}
-                    <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, borderTop: forecastBorder, textAlign: 'right', color: (ytd ?? 0) >= 0 ? NZ : RD }}>
-                      {(() => { const v = ytd ?? 0; return `${v >= 0 ? '+' : '−'}${fmtNZD(Math.abs(v))}`; })()}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          {hasScheduledInvoices && (
-            <NoteBox>*Scheduled invoices raised in Airtable but not yet issued in Xero (Status = Scheduled, no InvoiceID), bucketed by Due Date. Already included in Net flow and YTD net.</NoteBox>
-          )}
-        </Card>
-      )}
-
-      {/* ── 5. YTD Pace ─────────────────────────────────────────────── */}
-      <SH color={PU} label="YTD Pace — $1M Net Profit" />
-
-      <Card accent={PU}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '.4rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ fontSize: 13, fontWeight: 500, color: TEXT }}>FY{fyYear} net profit towards $1,000,000</div>
-            <span style={{
-              fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 20,
-              background: onTrack ? 'rgba(29,158,117,0.15)' : 'rgba(216,90,48,0.15)',
-              color: onTrack ? NZ : RD,
-            }}>
-              {onTrack ? '↑ On Track' : '↓ Off Track'}
-            </span>
-            <span style={{ fontSize: 11, color: MUTED }}>
-              {fmtNZD(paceGap)} {onTrack ? 'ahead of pace' : 'behind pace'}
-            </span>
-          </div>
-          <div style={{ fontSize: 12, color: PU, fontWeight: 500 }}>{pct}% complete</div>
-        </div>
-        <div style={{ background: BORDER, borderRadius: 4, height: 8, marginBottom: 4 }}>
-          <div style={{ width: `${pct}%`, height: 8, borderRadius: 4, background: PU }} />
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: MUTED, marginBottom: '.75rem' }}>
-          <span>{fmtNZD(data.netProfit)} net profit earned</span>
-          <span>{fmtNZD(remaining)} remaining to target</span>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, margin: '.6rem 0' }}>
-          {[
-            { value: fmtNZD(data.netProfit), color: NZ, label: 'Net profit to date\nFY' + fyYear },
-            { value: fmtNZD(remaining),      color: RD, label: 'Still needed\nto hit $1M' },
-            { value: String(placementsNeeded), color: PU, label: 'AUS placements needed*\nat $11,600 net each' },
-          ].map(m => (
-            <div key={m.label} style={{ background: BG, border: `.5px solid ${BORDER}`, borderRadius: 8, padding: '.75rem', textAlign: 'center' }}>
-              <div style={{ fontSize: 20, fontWeight: 500, color: m.color }}>{m.value}</div>
-              <div style={{ fontSize: 11, color: MUTED, marginTop: 3, lineHeight: 1.4, whiteSpace: 'pre-line' }}>{m.label}</div>
-            </div>
-          ))}
-        </div>
-        <div style={{ fontSize: 10, color: MUTED }}>*Remaining ÷ $11,600 est. net per AUS placement (60% margin, ex NZ labour costs).</div>
-      </Card>
-
-      {/* ── NZ Business (detail) ────────────────────────────────────── */}
-      <SH color={NZ} label="New Zealand Business" sub="Labour hire operations" />
-
-      <G4>
-        <KP accent={NZ} label="Revenue"      value={fmtNZD(data.nzRevenue)}     sub="NZ sales income" />
-        <KP accent={NZ} label="COGS"         value={fmtNZD(data.nzTotalCogs)}   sub={`${Math.round(data.nzTotalCogs / data.nzRevenue * 100)}% of revenue`} valueColor={RD} />
-        <KP accent={NZ} label="Gross profit" value={fmtNZD(data.nzGrossProfit)} sub={`${Math.round(data.nzGrossProfit / data.nzRevenue * 100)}% GP margin`} valueColor={data.nzGrossProfit >= 0 ? NZ : RD} />
-        <KP accent={NZ} label="Net"          value={fmtNZD(data.nzNetProfit ?? data.nzGrossProfit)} sub="Net contribution" valueColor={(data.nzNetProfit ?? data.nzGrossProfit) >= 0 ? NZ : RD} />
-      </G4>
-
-      <Card accent={NZ}>
-        <div style={{ fontSize: 13, fontWeight: 500, color: TEXT, marginBottom: '.75rem' }}>NZ cost of goods sold — {fmtNZD(data.nzTotalCogs)}</div>
-        {data.nzCogs
-          .slice()
-          .sort((a, b) => b.value - a.value)
-          .map(row => (
-            <BR
-              key={row.label}
-              label={row.label}
-              value={fmtNZD(row.value)}
-              pct={Math.round((row.value / nzCogsMax) * 100)}
-              color={NZ}
-            />
-          ))}
-        <NoteBox>NZ gross profit ({fmtNZD(data.nzGrossProfit)}) funds all shared business overheads. NZ operates as a self-contained P&amp;L.</NoteBox>
-        {nzActiveWorkers !== '—' && (
-          <div style={{ marginTop: 8, fontSize: 11, color: MUTED }}>
-            Active labour hire workers: <span style={{ color: TEXT, fontWeight: 500 }}>{nzActiveWorkers}</span> on Xero payroll
-          </div>
-        )}
-      </Card>
-
-      {/* ── NZ Net Profit per Worker ────────────────────────────────── */}
-      {(() => {
-        const nw = data.nzWorkerStats;
-        if (!nw?.dataAvailable) return null;
-        const accPct = Math.round(nw.accLevyRate * 100 * 100) / 100;
-        return (
-          <Card accent={NZ}>
-            <div style={{ fontSize: 13, fontWeight: 500, color: TEXT, marginBottom: '1rem' }}>
-              Net profit per NZ worker per week
-              <span style={{ fontSize: 11, color: MUTED, fontWeight: 400, marginLeft: 8 }}>
-                avg across {nw.matchedWorkers} worker{nw.matchedWorkers !== 1 ? 's' : ''}
-              </span>
-            </div>
-            {[
-              { label: 'Bill rate (avg)', value: nw.avgBillRate, sub: `Xero invoice rate / hr · avg ${nw.avgHoursPerWorker}h/week`, color: NZ, prefix: '' },
-              { label: 'Pay rate (avg)', value: -nw.avgPayRate, sub: 'Xero payslip · ordinary time', color: RD, prefix: '−' },
-              { label: 'Gross margin / hr', value: nw.grossMarginPerHour, sub: 'Bill rate − pay rate', color: nw.grossMarginPerHour >= 0 ? NZ : RD, prefix: '', divider: true },
-              { label: 'Casual loading (8%)', value: -nw.casualLoadingPerHour, sub: 'Pay rate × 8%', color: RD, prefix: '−' },
-              { label: `ACC levy (${accPct}%)`, value: -nw.accLevyPerHour, sub: `Pay rate × ${accPct}% (labour hire)`, color: RD, prefix: '−' },
-              { label: 'Net margin / hr', value: nw.netMarginPerHour, sub: null, color: nw.netMarginPerHour >= 0 ? NZ : RD, prefix: '', divider: true },
-              { label: `× avg hours/week`, value: nw.netProfitPerWorkerPerWeek, sub: `${nw.netMarginPerHour.toFixed(2)} × ${nw.avgHoursPerWorker}h`, color: nw.netProfitPerWorkerPerWeek >= 0 ? NZ : RD, prefix: '', divider: true },
-              { label: 'Overhead / worker / week', value: -nw.overheadPerWorkerPerWeek, sub: `Shared opex × 10% ÷ ${nw.workerCount} workers ÷ 4.33 wks`, color: RD, prefix: '−' },
-            ].map(({ label, value, sub, color, prefix, divider }) => (
-              <div key={label}>
-                {divider && <div style={{ height: .5, background: BORDER, margin: '.5rem 0' }} />}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '4px 0' }}>
-                  <div>
-                    <span style={{ fontSize: 12, color: MUTED }}>{label}</span>
-                    {sub && <div style={{ fontSize: 10, color: 'rgba(163,163,163,0.6)', marginTop: 1 }}>{sub}</div>}
-                  </div>
-                  <span style={{ fontSize: 13, fontWeight: 500, color }}>{prefix}{fmtNZD(Math.abs(value))}/hr</span>
-                </div>
-              </div>
-            ))}
-            <div style={{ height: .5, background: BORDER, margin: '.5rem 0' }} />
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0' }}>
-              <span style={{ fontSize: 13, fontWeight: 600, color: TEXT }}>True net / worker / week</span>
-              <span style={{ fontSize: 20, fontWeight: 600, color: nw.trueNetPerWorkerPerWeek >= 0 ? NZ : RD }}>{fmtNZD(nw.trueNetPerWorkerPerWeek)}</span>
-            </div>
-            {nw.totalWeeklyNetProfit != null && (
-              <>
-                <div style={{ height: .5, background: BORDER, margin: '.5rem 0' }} />
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0' }}>
-                  <span style={{ fontSize: 12, color: MUTED }}>Total NZ weekly net profit ({nw.matchedWorkers} workers)</span>
-                  <span style={{ fontSize: 15, fontWeight: 600, color: nw.totalWeeklyNetProfit >= 0 ? NZ : RD }}>{fmtNZD(nw.totalWeeklyNetProfit)}</span>
-                </div>
-              </>
-            )}
-          </Card>
-        );
-      })()}
-
-      {/* ── AUS Business (detail) ───────────────────────────────────── */}
-      <SH color={AUS} label="Australia Business" sub="International placements & operations" />
-
-      <G4>
-        <KP accent={AUS} label="Revenue" value={fmtNZD(data.ausRevenue)}      sub="Sales - International" />
-        <KP accent={AUS} label="COGS"    value={fmtNZD(data.ausTotalCogs)}   sub="10% of NZ+AUS combined COGS" valueColor={RD} />
-        <KP accent={AUS} label="Gross"   value={fmtNZD(data.ausGrossProfit)} sub={`${Math.round(data.ausGrossProfit / data.ausRevenue * 100)}% margin`} valueColor={data.ausGrossProfit >= 0 ? NZ : RD} />
-        <KP accent={AUS} label="Net"     value={fmtNZD(data.ausNetProfit ?? data.ausGrossProfit)} sub="Net contribution" valueColor={(data.ausNetProfit ?? data.ausGrossProfit) >= 0 ? NZ : RD} />
-      </G4>
-
-      <Card accent={AUS}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 500, color: TEXT, marginBottom: '.75rem' }}>AUS operating expenses breakdown — {fmtNZD(data.ausTotalCosts)}</div>
-            {data.ausCosts.map((row, i) => (
-              <BR
-                key={row.label}
-                label={row.label}
-                value={fmtNZD(row.value)}
-                pct={Math.round((row.value / ausCostsMax) * 100)}
-                color={i === 0 ? AUS : AM}
-              />
-            ))}
-          </div>
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 500, color: TEXT, marginBottom: '.75rem' }}>FY{fyYear} placements — {ausPlacementsCount} confirmed</div>
-            {placements == null ? (
-              <div>{[0,1,2,3].map(i => <div key={i} style={{ marginBottom: 8 }}><Skeleton height={28} /></div>)}</div>
-            ) : placements.length === 0 ? (
-              <div style={{ fontSize: 12, color: MUTED }}>No placements recorded for FY{fyYear}.</div>
-            ) : (
-              <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr>
-                    {['Candidate', 'Client', 'Status'].map(h => (
-                      <th key={h} style={{ fontSize: 11, fontWeight: 500, color: MUTED, textAlign: 'left', padding: '4px 6px', borderBottom: `.5px solid ${BORDER}` }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {placements.map((p, i) => (
-                    <tr key={i}>
-                      <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, color: TEXT }}>{p.candidate}</td>
-                      <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, color: TEXT }}>{p.client}</td>
-                      <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}` }}>{statusBadge(p.status)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </div>
-      </Card>
       {error && (
         <p style={{ color: RD, fontSize: 12, margin: '8px 0 0' }}>⚠ Xero connection error — {error?.message}</p>
       )}
