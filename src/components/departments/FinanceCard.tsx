@@ -47,7 +47,7 @@ function KP({ label, value, sub, accent, valueColor }: {
   );
 }
 
-// KP card with an optional delta sub-line (vs last month)
+// KP card with an optional delta sub-line (added this month)
 function KPDelta({ label, value, valueColor, accent, delta }: {
   label: string; value: string; valueColor?: string; accent?: string;
   delta?: { value: number; label: string } | null;
@@ -60,10 +60,10 @@ function KPDelta({ label, value, valueColor, accent, delta }: {
       <div style={{ fontSize: 21, fontWeight: 500, color: valueColor ?? TEXT, lineHeight: 1.1 }}>{value}</div>
       {delta != null ? (
         <div style={{ fontSize: 11, color: deltaColor, marginTop: 3 }}>
-          {deltaSign}{fmtNZD(Math.abs(delta.value))} vs last month
+          {deltaSign}{fmtNZD(Math.abs(delta.value))} {delta.label}
         </div>
       ) : (
-        <div style={{ fontSize: 11, color: MUTED, marginTop: 3 }}>vs last month —</div>
+        <div style={{ fontSize: 11, color: MUTED, marginTop: 3 }}>added this month —</div>
       )}
     </div>
   );
@@ -184,21 +184,21 @@ function PLSummarySection({ totalRevenue, totalGrossProfit, netProfit, lm }: {
           label="Total revenue"
           value={fmtNZD(totalRevenue)}
           valueColor={NZ}
-          delta={lm ? { value: totalRevenue - lm.revenue, label: 'vs last month' } : null}
+          delta={lm ? { value: totalRevenue - lm.revenue, label: 'added this month' } : null}
         />
         <KPDelta
           accent={NZ}
           label="Gross profit"
           value={fmtNZD(totalGrossProfit)}
           valueColor={totalGrossProfit >= 0 ? NZ : RD}
-          delta={lm ? { value: totalGrossProfit - lm.grossProfit, label: 'vs last month' } : null}
+          delta={lm ? { value: totalGrossProfit - lm.grossProfit, label: 'added this month' } : null}
         />
         <KPDelta
           accent={PU}
           label="Net profit (FY to date)"
           value={fmtNZD(netProfit)}
           valueColor={netProfit >= 0 ? NZ : RD}
-          delta={lm ? { value: netProfit - lm.netProfit, label: 'vs last month' } : null}
+          delta={lm ? { value: netProfit - lm.netProfit, label: 'added this month' } : null}
         />
       </G3>
     </>
