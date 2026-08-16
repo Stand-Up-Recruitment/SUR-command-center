@@ -159,7 +159,6 @@ export interface CashWeek {
   balance: number;
   inflow?: number;
   outflow?: number;
-  ytdNet?: number;
 }
 
 export interface AusPlacement {
@@ -237,9 +236,6 @@ export interface XeroFinanceData {
     avgWeeklyOutflow: number;
     openingDate: string;
     closingDate: string;
-    totalInflow?: number;
-    totalOutflow?: number;
-    fyOpeningBalance?: number;
   };
 }
 
