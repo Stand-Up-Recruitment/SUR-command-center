@@ -6,7 +6,7 @@ import { StatusBadge } from '../shared/StatusBadge';
 import { WoWBadge } from '../shared/WoWBadge';
 import { TimeFramePicker } from '../shared/TimeFramePicker';
 import { Skeleton } from '../shared/Skeleton';
-import { useRecruiterKPIs } from '../../hooks/queries';
+import { useRecruiterKPIs, useOpenJobs } from '../../hooks/queries';
 import { COLORS, CARD_STYLE } from '../../styles/tokens';
 import type { DepartmentStatus, TimeFrame } from '../../types';
 
@@ -52,6 +52,7 @@ function RecruiterSkeleton() {
 export function RecruiterCard() {
   const [frame, setFrame] = useState<TimeFrame>('week');
   const { data, error, isLoading, isFetching } = useRecruiterKPIs(frame);
+  const { data: openJobsData } = useOpenJobs();
 
   if (isLoading) return <RecruiterSkeleton />;
   if (!data) return null;
@@ -65,6 +66,16 @@ export function RecruiterCard() {
     frame === 'week'  ? 'This week vs last week' :
     frame === 'month' ? 'Month to date vs prior period' :
                         'Year to date vs prior period';
+
+  // Open jobs is a live snapshot, not tied to the selected period — include recruiters
+  // who have open jobs even if they had no interviews/placements this period.
+  const displayRecruiters = [...data.byRecruiter];
+  for (const name of Object.keys(openJobsData ?? {})) {
+    if (!displayRecruiters.some(r => r.name === name)) {
+      displayRecruiters.push({ name, phoneInterviews: 0, internalInterviews: 0, clientInterviews: 0, placements: 0 });
+    }
+  }
+  displayRecruiters.sort((a, b) => a.name.localeCompare(b.name));
 
   const statCard = (label: string, value: string | number, current: number, prev: number, noWoW?: boolean) => (
     <div style={{ background: COLORS.bgSubtle, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: '14px 16px' }}>
@@ -111,7 +122,7 @@ export function RecruiterCard() {
         </div>
       </div>
 
-      {data.byRecruiter.length > 0 && (
+      {displayRecruiters.length > 0 && (
         <>
           <div style={{ ...CARD_STYLE, padding: 0, overflow: 'hidden' }}>
             <div style={{ padding: '14px 20px', borderBottom: `1px solid ${COLORS.border}` }}>
@@ -122,19 +133,20 @@ export function RecruiterCard() {
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ background: COLORS.bgSubtle }}>
-                  {['Recruiter', 'Phone', 'Internal', 'Client', 'Placements'].map(h => (
+                  {['Recruiter', 'Phone', 'Internal', 'Client', 'Placements', 'Open Jobs'].map(h => (
                     <th key={h} style={{ padding: '8px 16px', fontSize: 10, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em', textAlign: h === 'Recruiter' ? 'left' : 'center' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {data.byRecruiter.map((r, i) => (
+                {displayRecruiters.map((r, i) => (
                   <tr key={r.name} style={{ borderTop: `1px solid ${COLORS.border}`, background: i % 2 === 1 ? COLORS.bgSubtle : 'transparent' }}>
                     <td style={{ padding: '10px 16px', fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{r.name}</td>
                     <td style={{ padding: '10px 16px', fontSize: 13, color: COLORS.textPrimary, textAlign: 'center' }}>{r.phoneInterviews}</td>
                     <td style={{ padding: '10px 16px', fontSize: 13, color: COLORS.textPrimary, textAlign: 'center' }}>{r.internalInterviews}</td>
                     <td style={{ padding: '10px 16px', fontSize: 13, color: COLORS.textPrimary, textAlign: 'center' }}>{r.clientInterviews}</td>
                     <td style={{ padding: '10px 16px', fontSize: 13, fontWeight: 700, color: r.placements > 0 ? COLORS.accent : COLORS.textPrimary, textAlign: 'center' }}>{r.placements}</td>
+                    <td style={{ padding: '10px 16px', fontSize: 13, color: COLORS.textPrimary, textAlign: 'center' }}>{openJobsData?.[r.name] ?? 0}</td>
                   </tr>
                 ))}
               </tbody>
@@ -148,7 +160,7 @@ export function RecruiterCard() {
             </div>
             <ResponsiveContainer width="100%" height={200}>
               <BarChart
-                data={data.byRecruiter.map(r => ({
+                data={displayRecruiters.map(r => ({
                   name: r.name.split(' ')[0],
                   'Phone': r.phoneInterviews,
                   'Internal': r.internalInterviews,

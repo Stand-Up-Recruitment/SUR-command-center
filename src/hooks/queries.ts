@@ -10,6 +10,7 @@ import {
   fetchLTGPKPIs,
 } from '../services/airtable';
 import { fetchXeroFinanceData, hasXeroCredentials } from '../services/xero';
+import { fetchOpenJobsByRecruiter, hasOpenJobsCredentials } from '../services/jobAdder';
 import { fetchMetaSpendByFrame } from '../services/metaAds';
 import type { TimeFrame, LTGPFrame } from '../types';
 
@@ -47,6 +48,14 @@ export function useRecruiterKPIs(frame: TimeFrame = 'month') {
     queryFn: () => fetchRecruiterKPIs(frame),
     enabled: hasRecruitCredentials,
     placeholderData: keepPreviousData,
+  });
+}
+
+export function useOpenJobs() {
+  return useQuery({
+    queryKey: ['open-jobs'],
+    queryFn: fetchOpenJobsByRecruiter,
+    enabled: hasOpenJobsCredentials,
   });
 }
 

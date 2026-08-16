@@ -157,13 +157,6 @@ function FinanceSkeleton() {
       <div style={{ background: BG2, border: `.5px solid ${BORDER}`, borderRadius: 12, padding: '1.25rem', marginBottom: '.875rem' }}>
         <Skeleton height={220} />
       </div>
-      <SH color={PU} label="YTD Pace — $1M Net Profit" />
-      <div style={{ background: BG2, border: `.5px solid ${BORDER}`, borderRadius: 12, borderTop: `3px solid ${PU}`, padding: '1.25rem', marginBottom: '.875rem' }}>
-        <Skeleton height={8} radius={4} style={{ marginBottom: 6 }} />
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, margin: '.6rem 0' }}>
-          {[0,1,2].map(i => <div key={i} style={{ background: BG, borderRadius: 8, padding: '.75rem', textAlign: 'center' as const }}><Skeleton height={22} width={80} style={{ margin: '0 auto 8px' }} /><Skeleton height={10} width={60} style={{ margin: '0 auto' }} /></div>)}
-        </div>
-      </div>
     </div>
   );
 }
@@ -205,30 +198,96 @@ function PLSummarySection({ totalRevenue, totalGrossProfit, netProfit, lm }: {
   );
 }
 
+type MonthCashRow = { weekLabel: string; isForecast: boolean; inflow?: number; outflow?: number; scheduled: number };
+
+function MonthCashCard({ title, monthLabel, rows, cashFlowHasDetail, hasScheduledInvoices }: {
+  title: string; monthLabel: string; rows: MonthCashRow[];
+  cashFlowHasDetail: boolean; hasScheduledInvoices: boolean;
+}) {
+  return (
+    <Card>
+      <div style={{ fontSize: 13, fontWeight: 500, color: TEXT }}>{title}</div>
+      <div style={{ fontSize: 11, color: MUTED, marginBottom: '.75rem' }}>{monthLabel}</div>
+      {rows.length === 0 ? (
+        <div style={{ fontSize: 11, color: MUTED, fontStyle: 'italic' }}>No weeks in range</div>
+      ) : (
+        <table style={{ width: '100%', fontSize: 11, borderCollapse: 'collapse' }}>
+          <thead>
+            <tr>
+              <th style={{ fontSize: 10, fontWeight: 700, color: MUTED, textAlign: 'left', padding: '4px 6px', borderBottom: `.5px solid ${BORDER}` }}>Week</th>
+              {cashFlowHasDetail && (
+                <th style={{ fontSize: 10, fontWeight: 700, color: MUTED, textAlign: 'right', padding: '4px 6px', borderBottom: `.5px solid ${BORDER}` }}>Inflow</th>
+              )}
+              {cashFlowHasDetail && (
+                <th style={{ fontSize: 10, fontWeight: 700, color: MUTED, textAlign: 'right', padding: '4px 6px', borderBottom: `.5px solid ${BORDER}` }}>Outflow</th>
+              )}
+              {hasScheduledInvoices && (
+                <th style={{ fontSize: 10, fontWeight: 700, color: MUTED, textAlign: 'right', padding: '4px 6px', borderBottom: `.5px solid ${BORDER}` }}>Scheduled*</th>
+              )}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((d, i) => (
+              <tr key={i}>
+                <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, color: MUTED }}>
+                  {d.weekLabel}
+                  {d.isForecast && <span style={{ color: 'rgba(163,163,163,0.5)', marginLeft: 4 }}>(est.)</span>}
+                </td>
+                {cashFlowHasDetail && (
+                  <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, textAlign: 'right', color: NZ }}>
+                    {fmtNZD(d.inflow ?? 0)}
+                  </td>
+                )}
+                {cashFlowHasDetail && (
+                  <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, textAlign: 'right', color: RD, whiteSpace: 'nowrap' }}>
+                    {`−${fmtNZD(d.outflow ?? 0)}`}
+                  </td>
+                )}
+                {hasScheduledInvoices && (
+                  <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, textAlign: 'right', color: d.scheduled > 0 ? AUS : MUTED }}>
+                    {d.scheduled > 0 ? `+${fmtNZD(d.scheduled)}` : '—'}
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {rows.length > 0 && (() => {
+        const netProfit = rows.reduce((sum, r) => sum + (r.inflow ?? 0) - (r.outflow ?? 0) + r.scheduled, 0);
+        return (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, paddingTop: 8, borderTop: `.5px solid ${BORDER}` }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: MUTED }}>Net profit</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: netProfit >= 0 ? NZ : RD, whiteSpace: 'nowrap' }}>
+              {netProfit >= 0 ? '+' : '−'}{fmtNZD(Math.abs(netProfit))}
+            </span>
+          </div>
+        );
+      })()}
+    </Card>
+  );
+}
+
 function CashPositionSection({
-  cashKpis, closingBalance, combined, bankAccounts, cashFlowHasDetail, hasScheduledInvoices,
-  scheduledByWeek, netFlows, ytdNets, minBal, maxBal,
+  cashKpis, closingBalance, bankAccounts, cashFlowHasDetail, hasScheduledInvoices,
+  monthBuckets, hasCombined,
 }: {
-  cashKpis: { closingDate: string; avgWeeklyOutflow: number; totalInflow?: number; totalOutflow?: number };
+  cashKpis: { closingDate: string; avgWeeklyOutflow: number };
   closingBalance: number;
-  combined: Array<{ weekLabel: string; isForecast: boolean; inflow?: number; outflow?: number; balance: number }>;
   bankAccounts: Array<{ name: string; balance: number }> | undefined;
   cashFlowHasDetail: boolean;
   hasScheduledInvoices: boolean;
-  scheduledByWeek: number[];
-  netFlows: number[];
-  ytdNets: (number | null)[];
-  minBal: number;
-  maxBal: number;
+  monthBuckets: { previous: { label: string; rows: MonthCashRow[] }; current: { label: string; rows: MonthCashRow[] }; next: { label: string; rows: MonthCashRow[] } };
+  hasCombined: boolean;
 }) {
   return (
     <>
       <SH color={MUTED} label="Cash Position"
-        sub={combined.length > 0
-          ? `4-week actuals · 4-week forecast · as at ${fmtDate(cashKpis.closingDate)}`
-          : '4-week actuals · 4-week forecast'} />
+        sub={hasCombined
+          ? `Actuals · forecast · as at ${fmtDate(cashKpis.closingDate)}`
+          : 'Actuals · forecast'} />
 
-      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${2 + (cashKpis.totalInflow != null ? 1 : 0) + (cashKpis.totalOutflow != null ? 1 : 0)}, minmax(0,1fr))`, gap: 10, marginBottom: '.875rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 10, marginBottom: '.875rem' }}>
         <KP accent={closingBalance >= 0 ? NZ : RD}
             label="Current bank balance"
             value={fmtNZD(closingBalance)}
@@ -238,20 +297,6 @@ function CashPositionSection({
             label="Avg weekly outflow"
             value={`−${fmtNZD(cashKpis.avgWeeklyOutflow)}`}
             sub="Negative-flow weeks avg" valueColor={RD} />
-        {cashKpis.totalInflow != null && (
-          <KP accent={NZ}
-              label="8-week total inflow"
-              value={fmtNZD(cashKpis.totalInflow)}
-              sub="Gross receipts, 8 weeks"
-              valueColor={NZ} />
-        )}
-        {cashKpis.totalOutflow != null && (
-          <KP accent={RD}
-              label="8-week total outflow"
-              value={`−${fmtNZD(cashKpis.totalOutflow)}`}
-              sub="Gross payments, 8 weeks"
-              valueColor={RD} />
-        )}
       </div>
 
       {/* Bank accounts (Profit First) */}
@@ -270,124 +315,19 @@ function CashPositionSection({
         </div>
       )}
 
-      {/* 4-week actuals + 4-week forecast table */}
-      {combined.length > 0 && (
-        <Card>
-          <table style={{ width: '100%', fontSize: 11, borderCollapse: 'collapse' }}>
-            <thead>
-              <tr>
-                <th style={{ fontSize: 10, fontWeight: 500, color: MUTED, textAlign: 'left', padding: '4px 6px', borderBottom: `.5px solid ${BORDER}` }}>Week</th>
-                {cashFlowHasDetail && (
-                  <th style={{ fontSize: 10, fontWeight: 500, color: MUTED, textAlign: 'right', padding: '4px 6px', borderBottom: `.5px solid ${BORDER}` }}>Inflow</th>
-                )}
-                {cashFlowHasDetail && (
-                  <th style={{ fontSize: 10, fontWeight: 500, color: MUTED, textAlign: 'right', padding: '4px 6px', borderBottom: `.5px solid ${BORDER}` }}>Outflow</th>
-                )}
-                {hasScheduledInvoices && (
-                  <th style={{ fontSize: 10, fontWeight: 500, color: MUTED, textAlign: 'right', padding: '4px 6px', borderBottom: `.5px solid ${BORDER}` }}>Scheduled*</th>
-                )}
-                <th style={{ fontSize: 10, fontWeight: 500, color: MUTED, textAlign: 'right', padding: '4px 6px', borderBottom: `.5px solid ${BORDER}` }}>Net flow</th>
-                <th style={{ fontSize: 10, fontWeight: 500, color: MUTED, textAlign: 'right', padding: '4px 6px', borderBottom: `.5px solid ${BORDER}` }}>YTD net</th>
-              </tr>
-            </thead>
-            <tbody>
-              {combined.map((d, i) => {
-                const isFirstForecast = d.isForecast && (i === 0 || !combined[i - 1].isForecast);
-                const forecastBorder = isFirstForecast ? `1px dashed rgba(255,255,255,0.15)` : undefined;
-                const ytd = ytdNets[i];
-                const scheduled = scheduledByWeek[i];
-                return (
-                  <tr key={i} style={{ background: d.balance === maxBal ? 'rgba(29,158,117,0.15)' : d.balance === minBal ? 'rgba(216,90,48,0.15)' : 'transparent' }}>
-                    <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, borderTop: forecastBorder, color: MUTED }}>
-                      {d.weekLabel}
-                      {d.isForecast && <span style={{ color: 'rgba(163,163,163,0.5)', marginLeft: 4 }}>(est.)</span>}
-                    </td>
-                    {cashFlowHasDetail && (
-                      <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, borderTop: forecastBorder, textAlign: 'right', color: NZ }}>
-                        {fmtNZD(d.inflow ?? 0)}
-                      </td>
-                    )}
-                    {cashFlowHasDetail && (
-                      <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, borderTop: forecastBorder, textAlign: 'right', color: RD }}>
-                        {`−${fmtNZD(d.outflow ?? 0)}`}
-                      </td>
-                    )}
-                    {hasScheduledInvoices && (
-                      <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, borderTop: forecastBorder, textAlign: 'right', color: scheduled > 0 ? AUS : MUTED }}>
-                        {scheduled > 0 ? `+${fmtNZD(scheduled)}` : '—'}
-                      </td>
-                    )}
-                    {(() => {
-                      const netFlow = netFlows[i];
-                      return (
-                        <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, borderTop: forecastBorder, textAlign: 'right', color: netFlow >= 0 ? NZ : RD }}>
-                          {netFlow >= 0 ? '+' : '−'}{fmtNZD(Math.abs(netFlow))}
-                        </td>
-                      );
-                    })()}
-                    <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, borderTop: forecastBorder, textAlign: 'right', color: (ytd ?? 0) >= 0 ? NZ : RD }}>
-                      {(() => { const v = ytd ?? 0; return `${v >= 0 ? '+' : '−'}${fmtNZD(Math.abs(v))}`; })()}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          {hasScheduledInvoices && (
-            <NoteBox>*Scheduled invoices raised in Airtable but not yet issued in Xero (Status = Scheduled, no InvoiceID), bucketed by Due Date. Already included in Net flow and YTD net.</NoteBox>
-          )}
-        </Card>
-      )}
-    </>
-  );
-}
-
-function YTDPaceSection({ fyYear, netProfit, onTrack, paceGap, pct, remaining, placementsNeeded }: {
-  fyYear: number; netProfit: number; onTrack: boolean; paceGap: number; pct: number;
-  remaining: number; placementsNeeded: number;
-}) {
-  return (
-    <>
-      <SH color={PU} label="YTD Pace — $1M Net Profit" />
-
-      <Card accent={PU}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '.4rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ fontSize: 13, fontWeight: 500, color: TEXT }}>FY{fyYear} net profit towards $1,000,000</div>
-            <span style={{
-              fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 20,
-              background: onTrack ? 'rgba(29,158,117,0.15)' : 'rgba(216,90,48,0.15)',
-              color: onTrack ? NZ : RD,
-            }}>
-              {onTrack ? '↑ On Track' : '↓ Off Track'}
-            </span>
-            <span style={{ fontSize: 11, color: MUTED }}>
-              {fmtNZD(paceGap)} {onTrack ? 'ahead of pace' : 'behind pace'}
-            </span>
+      {/* Previous / current / next month cash outlook, side by side */}
+      {hasCombined && (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 10 }}>
+            <MonthCashCard title="Previous month" monthLabel={monthBuckets.previous.label} rows={monthBuckets.previous.rows} cashFlowHasDetail={cashFlowHasDetail} hasScheduledInvoices={hasScheduledInvoices} />
+            <MonthCashCard title="Current month" monthLabel={monthBuckets.current.label} rows={monthBuckets.current.rows} cashFlowHasDetail={cashFlowHasDetail} hasScheduledInvoices={hasScheduledInvoices} />
+            <MonthCashCard title="Next month" monthLabel={monthBuckets.next.label} rows={monthBuckets.next.rows} cashFlowHasDetail={cashFlowHasDetail} hasScheduledInvoices={hasScheduledInvoices} />
           </div>
-          <div style={{ fontSize: 12, color: PU, fontWeight: 500 }}>{pct}% complete</div>
-        </div>
-        <div style={{ background: BORDER, borderRadius: 4, height: 8, marginBottom: 4 }}>
-          <div style={{ width: `${pct}%`, height: 8, borderRadius: 4, background: PU }} />
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: MUTED, marginBottom: '.75rem' }}>
-          <span>{fmtNZD(netProfit)} net profit earned</span>
-          <span>{fmtNZD(remaining)} remaining to target</span>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, margin: '.6rem 0' }}>
-          {[
-            { value: fmtNZD(netProfit), color: NZ, label: 'Net profit to date\nFY' + fyYear },
-            { value: fmtNZD(remaining),      color: RD, label: 'Still needed\nto hit $1M' },
-            { value: String(placementsNeeded), color: PU, label: 'AUS placements needed*\nat $11,600 net each' },
-          ].map(m => (
-            <div key={m.label} style={{ background: BG, border: `.5px solid ${BORDER}`, borderRadius: 8, padding: '.75rem', textAlign: 'center' }}>
-              <div style={{ fontSize: 20, fontWeight: 500, color: m.color }}>{m.value}</div>
-              <div style={{ fontSize: 11, color: MUTED, marginTop: 3, lineHeight: 1.4, whiteSpace: 'pre-line' }}>{m.label}</div>
-            </div>
-          ))}
-        </div>
-        <div style={{ fontSize: 10, color: MUTED }}>*Remaining ÷ $11,600 est. net per AUS placement (60% margin, ex NZ labour costs).</div>
-      </Card>
+          {hasScheduledInvoices && (
+            <NoteBox>*Scheduled invoices raised in Airtable but not yet issued in Xero (Status = Scheduled, no InvoiceID), bucketed by Due Date.</NoteBox>
+          )}
+        </>
+      )}
     </>
   );
 }
@@ -583,20 +523,19 @@ export function FinanceCard() {
   const cashFlow    = data.cashFlow ?? [];
   const cashOutlook = data.cashOutlook ?? [];
   const closingBalance = cashKpis.closingBalanceActual ?? cashKpis.closingBalance;
-  const last4Actuals = cashFlow.slice(-4);
-  const next4Outlook = (cashOutlook).slice(0, 4);
+  const actualWeeks = cashFlow;
+  const forecastWeeks = cashOutlook;
   const combined = [
-    ...last4Actuals.map(r => ({ ...r, isForecast: false })),
-    ...next4Outlook.map(r => ({ ...r, isForecast: true })),
+    ...actualWeeks.map(r => ({ ...r, isForecast: false })),
+    ...forecastWeeks.map(r => ({ ...r, isForecast: true })),
   ];
 
-  const opsAccount = data.bankAccounts?.find(a => /business ops account/i.test(a.name));
-  const opsAccountBalance = opsAccount?.balance ?? closingBalance;
   const currentIdx = combined.reduce((last, r, i) => (r.isForecast ? last : i), -1);
 
   // Scheduled-but-unbilled Airtable invoices (Status = Scheduled, InvoiceID blank), bucketed into
   // forecast weeks by anchoring on cashKpis.closingDate and stepping 7 days per week. This
   // approximates the n8n-computed week boundaries since CashWeek only carries a label, not dates.
+  const AUD_TO_NZD = 1 / 0.90; // mirrors NZD_TO_AUD in hooks/queries.ts
   const closing = new Date(cashKpis.closingDate).getTime();
   const scheduledByWeek = combined.map((_, i) => {
     if (i <= currentIdx) return 0;
@@ -607,36 +546,33 @@ export function FinanceCard() {
         const t = new Date(s.dueDate).getTime();
         return t >= weekStart && t < weekEnd;
       })
-      .reduce((sum, s) => sum + s.amount, 0);
+      .reduce((sum, s) => sum + s.amount * AUD_TO_NZD, 0);
   });
 
-  const netFlows = combined.map((r, i) => (r.inflow ?? 0) + scheduledByWeek[i] - (r.outflow ?? 0));
-  const ytdNets = combined.map(() => null as number | null);
-  if (currentIdx >= 0) {
-    ytdNets[currentIdx] = Math.round(opsAccountBalance);
-    for (let i = currentIdx + 1; i < combined.length; i++) {
-      ytdNets[i] = Math.round((ytdNets[i - 1] ?? 0) + netFlows[i]);
-    }
-    for (let i = currentIdx - 1; i >= 0; i--) {
-      ytdNets[i] = Math.round((ytdNets[i + 1] ?? 0) - netFlows[i + 1]);
-    }
-  }
-
-  const cashFlowHasDetail = last4Actuals.some(d => d.inflow != null || d.outflow != null);
+  const cashFlowHasDetail = actualWeeks.some(d => d.inflow != null || d.outflow != null);
   const hasScheduledInvoices = scheduledByWeek.some(v => v > 0);
 
+  // Bucket each of the 8 weeks into previous/current/next calendar month, anchored on the
+  // same closing-date + 7-days-per-week approximation used for scheduledByWeek above.
+  const monthKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}`;
+  const closingDateObj = new Date(cashKpis.closingDate);
+  const prevMonthDate = new Date(closingDateObj); prevMonthDate.setMonth(prevMonthDate.getMonth() - 1);
+  const nextMonthDate = new Date(closingDateObj); nextMonthDate.setMonth(nextMonthDate.getMonth() + 1);
+  const monthName = (d: Date) => d.toLocaleDateString('en-NZ', { month: 'long', year: 'numeric' });
 
-  const minBal = combined.length > 0 ? Math.min(...combined.map(d => d.balance)) : 0;
-  const maxBal = combined.length > 0 ? Math.max(...combined.map(d => d.balance)) : 0;
-  const MILESTONE = 1_000_000;
-  const NET_PER_PLACEMENT = 11_600;
-  const pct = Math.min(Math.round((data.netProfit / MILESTONE) * 100 * 10) / 10, 100);
-  const remaining = MILESTONE - data.netProfit;
-  const placementsNeeded = Math.round(remaining / NET_PER_PLACEMENT);
-  const daysSinceFYStart = Math.max(0, (Date.now() - new Date(data.fyStart).getTime()) / 86_400_000);
-  const elapsedPct = Math.min(daysSinceFYStart / 365, 1);
-  const onTrack = (data.netProfit / MILESTONE) >= elapsedPct;
-  const paceGap = Math.abs(data.netProfit - elapsedPct * MILESTONE);
+  const monthBuckets = {
+    previous: { label: monthName(prevMonthDate), rows: [] as MonthCashRow[] },
+    current:  { label: monthName(closingDateObj), rows: [] as MonthCashRow[] },
+    next:     { label: monthName(nextMonthDate), rows: [] as MonthCashRow[] },
+  };
+  combined.forEach((d, i) => {
+    const weekDate = new Date(closing + (i - currentIdx) * 7 * 86_400_000);
+    const row: MonthCashRow = { weekLabel: d.weekLabel, isForecast: d.isForecast, inflow: d.inflow, outflow: d.outflow, scheduled: scheduledByWeek[i] };
+    const key = monthKey(weekDate);
+    if (key === monthKey(prevMonthDate)) monthBuckets.previous.rows.push(row);
+    else if (key === monthKey(closingDateObj)) monthBuckets.current.rows.push(row);
+    else if (key === monthKey(nextMonthDate)) monthBuckets.next.rows.push(row);
+  });
 
   const nzCogsMax  = Math.max(...data.nzCogs.map(r => r.value), 1);
   const ausCostsMax = Math.max(...data.ausCosts.map(r => r.value), 1);
@@ -649,25 +585,11 @@ export function FinanceCard() {
       <CashPositionSection
         cashKpis={cashKpis}
         closingBalance={closingBalance}
-        combined={combined}
         bankAccounts={data.bankAccounts}
         cashFlowHasDetail={cashFlowHasDetail}
         hasScheduledInvoices={hasScheduledInvoices}
-        scheduledByWeek={scheduledByWeek}
-        netFlows={netFlows}
-        ytdNets={ytdNets}
-        minBal={minBal}
-        maxBal={maxBal}
-      />
-
-      <YTDPaceSection
-        fyYear={fyYear}
-        netProfit={data.netProfit}
-        onTrack={onTrack}
-        paceGap={paceGap}
-        pct={pct}
-        remaining={remaining}
-        placementsNeeded={placementsNeeded}
+        monthBuckets={monthBuckets}
+        hasCombined={combined.length > 0}
       />
 
       <NZBusinessSection data={data} nzActiveWorkers={nzActiveWorkers} nzCogsMax={nzCogsMax} />
