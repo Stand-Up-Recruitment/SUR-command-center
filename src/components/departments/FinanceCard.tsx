@@ -513,6 +513,9 @@ export function FinanceCard() {
 
   const fyYear = new Date(data.fyStart).getFullYear() + 1;
   const ausPlacementsCount = placements?.length ?? 0;
+  const visibleAusPlacements = placements
+    ?.filter(p => p.status === 'Pending' || p.status === 'Live')
+    .slice(0, 5);
 
   // ── Computed values ─────────────────────────────────────────────────────────
   const totalRevenue    = data.nzRevenue + data.ausRevenue;
@@ -598,7 +601,7 @@ export function FinanceCard() {
         data={data}
         fyYear={fyYear}
         ausPlacementsCount={ausPlacementsCount}
-        placements={placements}
+        placements={visibleAusPlacements}
         ausCostsMax={ausCostsMax}
       />
 
