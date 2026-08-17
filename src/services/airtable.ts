@@ -503,8 +503,10 @@ export async function fetchAusPlacements(): Promise<AusPlacement[]> {
   });
 
   return records.map(f => {
-    // Status field has a BOM character prefix — locate it by substring match
-    const statusKey = Object.keys(f).find(k => k.includes('Status')) ?? '';
+    // Status field name is exactly "Status", but the raw record key can carry a leading
+    // BOM character — strip it before comparing so this matches the "Status" column only,
+    // not any of the table's other *Status fields (Relocation Status, Testimonial Status, etc).
+    const statusKey = Object.keys(f).find(k => k.replace(/^\uFEFF/, '') === 'Status') ?? '';
     const rawStatus = (f[statusKey] as string | undefined) ?? '';
     const companyName = f['Company Name'];
     return {
@@ -558,9 +560,10 @@ export async function fetchRetentionKPIs(): Promise<RetentionKPIs> {
     {}
   );
 
-  // Resolve BOM-prefixed Status field name
+  // Resolve the "Status" field name (raw record key can carry a leading BOM character);
+  // exact match only — this table also has Relocation Status, Testimonial Status, etc.
   const statusKey = records.length > 0
-    ? (Object.keys(records[0]).find(k => k.includes('Status')) ?? '')
+    ? (Object.keys(records[0]).find(k => k.replace(/^\uFEFF/, '') === 'Status') ?? '')
     : '';
 
   const getStatus = (f: RetentionPlacementFields): string =>
