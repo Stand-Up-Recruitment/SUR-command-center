@@ -541,7 +541,13 @@ export function FinanceCard() {
   const AUD_TO_NZD = 1 / 0.90; // mirrors NZD_TO_AUD in hooks/queries.ts
   const closing = new Date(cashKpis.closingDate).getTime();
   const scheduledByWeek = combined.map((_, i) => {
-    if (i <= currentIdx) return 0;
+    if (i < currentIdx) return 0;
+    if (i === currentIdx) {
+      // Current week: capture invoices due this week plus anything overdue (due before now).
+      return (scheduledInvoices ?? [])
+        .filter(s => new Date(s.dueDate).getTime() < closing)
+        .reduce((sum, s) => sum + s.amount * AUD_TO_NZD, 0);
+    }
     const weekStart = closing + (i - currentIdx - 1) * 7 * 86_400_000;
     const weekEnd = weekStart + 7 * 86_400_000;
     return (scheduledInvoices ?? [])
@@ -570,7 +576,9 @@ export function FinanceCard() {
   };
   combined.forEach((d, i) => {
     const weekDate = new Date(closing + (i - currentIdx) * 7 * 86_400_000);
-    const row: MonthCashRow = { weekLabel: d.weekLabel, isForecast: d.isForecast, inflow: d.inflow, outflow: d.outflow, scheduled: scheduledByWeek[i] };
+    // Current week isn't finished yet, so its actuals are partial — use next week's forecast as a fuller estimate.
+    const source = (i === currentIdx && combined[i + 1]) ? combined[i + 1] : d;
+    const row: MonthCashRow = { weekLabel: d.weekLabel, isForecast: d.isForecast, inflow: source.inflow, outflow: source.outflow, scheduled: scheduledByWeek[i] };
     const key = monthKey(weekDate);
     if (key === monthKey(prevMonthDate)) monthBuckets.previous.rows.push(row);
     else if (key === monthKey(closingDateObj)) monthBuckets.current.rows.push(row);
