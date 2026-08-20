@@ -692,11 +692,12 @@ type LTGPInstalmentFields = {
 export async function fetchLTGPKPIs(frame: LTGPFrame): Promise<LTGPKPIs> {
   if (!CLIENTS_BASE_ID) throw new Error('LTGP credentials not configured');
 
-  const [allPlacements, allInstalments, allMainClients, allClientLeads, metaResult] = await Promise.all([
+  const [allPlacements, allInstalments, allMainClients, allClientLeads, allCandidateLeads, metaResult] = await Promise.all([
     fetchAllFromBase<LTGPPlacementFields>(CLIENTS_BASE_ID, PLACEMENTS_TABLE_ID),
     fetchAllFromBase<LTGPInstalmentFields>(CLIENTS_BASE_ID, INSTALMENTS_TABLE_ID),
     fetchAllFromBase<{ 'Signed Date'?: string }>(CLIENTS_BASE_ID, MAIN_CLIENT_TABLE_ID),
-    fetchAllFromBase<{ 'Call Booked'?: string }>(CLIENTS_BASE_ID, CLIENTS_TABLE_ID),
+    fetchAllFromBase<ClientLeadFields & { 'Call Booked'?: string }>(CLIENTS_BASE_ID, CLIENTS_TABLE_ID),
+    fetchAllFromBase<CandidateLeadFields>(CANDIDATES_BASE_ID, CANDIDATES_TABLE_ID),
     fetchMetaSpendByFrame(frame).catch(() => ({ candidateSpend: 0, clientSpend: 0, isEstimated: true })),
   ]);
 
@@ -728,6 +729,12 @@ export async function fetchLTGPKPIs(frame: LTGPFrame): Promise<LTGPKPIs> {
   const ownerCallsCompleted = allClientLeads.filter(
     f => f['Call Booked'] != null && f['Call Booked'] !== '' && isInPeriod(f['Call Booked'], start, now)
   ).length;
+  const qualifiedCandidates = allCandidateLeads.filter(
+    f => isInPeriod(f.Created, start, now) && isCandidateQualified(f)
+  ).length;
+  const qualifiedClients = allClientLeads.filter(
+    f => isClientQualified(f) && isInPeriod(f['Last Updated Date'], start, now)
+  ).length;
 
   // ── Cost calculations ──────────────────────────────────────────────────────
   const monthlyRecruiterCostAud =
@@ -745,6 +752,8 @@ export async function fetchLTGPKPIs(frame: LTGPFrame): Promise<LTGPKPIs> {
   const clientCac = clientsWon > 0
     ? (clientMetaSpend + ownerAcquisitionCost) / clientsWon
     : 0;
+  const qualifiedCandidateCac = qualifiedCandidates > 0 ? candidateMetaSpend / qualifiedCandidates : 0;
+  const qualifiedClientCac = qualifiedClients > 0 ? clientMetaSpend / qualifiedClients : 0;
 
   // ── LTGP ──────────────────────────────────────────────────────────────────
   const recruiterCostPerPlacement = candidatesPlaced > 0 ? monthlyRecruiterCostAud / candidatesPlaced : 0;
@@ -788,18 +797,18 @@ export async function fetchLTGPKPIs(frame: LTGPFrame): Promise<LTGPKPIs> {
       suggestion: 'First payment does not cover acquisition cost. Review client CAC and payment terms.',
     },
     {
-      label: 'Candidate cost per lead > NZD $150',
+      label: 'Candidate CAC (NZD) > $150',
       triggered: candidateCplNzd > 150,
       severity: 'amber',
-      formula: 'Candidate Meta spend ÷ candidates placed > $150 NZD',
+      formula: 'Candidate Meta spend ÷ candidates placed, in NZD, > $150',
       actual: `NZD $${Math.round(candidateCplNzd).toLocaleString()}`,
       suggestion: 'Meta candidate spend is inefficient. Review creative and audience targeting.',
     },
     {
-      label: 'Client cost per lead > NZD $200',
+      label: 'Client CAC (NZD) > $200',
       triggered: clientCplNzd > 200,
       severity: 'amber',
-      formula: 'Client Meta spend ÷ clients won > $200 NZD',
+      formula: 'Client Meta spend ÷ clients won, in NZD, > $200',
       actual: `NZD $${Math.round(clientCplNzd).toLocaleString()}`,
       suggestion: 'Client Meta spend is inefficient. Check creative and owner close rate.',
     },
@@ -838,6 +847,8 @@ export async function fetchLTGPKPIs(frame: LTGPFrame): Promise<LTGPKPIs> {
     ownerAcquisitionCost,
     candidatesPlaced,
     clientsWon,
+    qualifiedCandidates,
+    qualifiedClients,
     avgPlacementValueAud,
     monthlyRecruiterCostAud,
     recruiterCostPerPlacement,
@@ -845,6 +856,8 @@ export async function fetchLTGPKPIs(frame: LTGPFrame): Promise<LTGPKPIs> {
     avgPlacementsPerClient,
     candidateCac,
     clientCac,
+    qualifiedCandidateCac,
+    qualifiedClientCac,
     ltgpPerClient,
     ltgpCacRatio,
     paybackPeriodDays,

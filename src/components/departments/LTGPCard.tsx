@@ -167,8 +167,8 @@ function LTGPContent({ data, frame }: { data: LTGPKPIs; frame: LTGPFrame }) {
         </div>
       </div>
 
-      {/* Three KPI tiles */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+      {/* Five KPI tiles */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
         <KpiTile
           label="LTGP per Client"
           value={data.ltgpPerClient > 0 ? fmtAud(data.ltgpPerClient) : '—'}
@@ -182,6 +182,11 @@ function LTGPContent({ data, frame }: { data: LTGPKPIs; frame: LTGPFrame }) {
           sub="Cost to acquire one client"
         />
         <KpiTile
+          label="Qualified Client CAC"
+          value={data.qualifiedClientCac > 0 ? fmtAud(data.qualifiedClientCac) : '—'}
+          sub="Meta spend per qualified lead (pre-conversion)"
+        />
+        <KpiTile
           label="Candidate CAC"
           value={data.candidateCac > 0 ? fmtAud(data.candidateCac) : '—'}
           ratio={data.candidateCac > 0 && data.grossProfitPerPlacement > 0
@@ -193,6 +198,11 @@ function LTGPContent({ data, frame }: { data: LTGPKPIs; frame: LTGPFrame }) {
             return r >= 3 ? COLORS.success : r >= 1.5 ? COLORS.warning : COLORS.danger;
           })()}
           sub="Meta spend per placement"
+        />
+        <KpiTile
+          label="Qualified Candidate CAC"
+          value={data.qualifiedCandidateCac > 0 ? fmtAud(data.qualifiedCandidateCac) : '—'}
+          sub="Meta spend per qualified lead (pre-conversion)"
         />
       </div>
 

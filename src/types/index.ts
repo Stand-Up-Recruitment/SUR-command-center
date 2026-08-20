@@ -261,6 +261,8 @@ export interface LTGPKPIs {
   ownerAcquisitionCost: number;
   candidatesPlaced: number;
   clientsWon: number;
+  qualifiedCandidates: number;
+  qualifiedClients: number;
   // LTGP inputs
   avgPlacementValueAud: number;
   monthlyRecruiterCostAud: number;
@@ -270,6 +272,8 @@ export interface LTGPKPIs {
   // Outputs
   candidateCac: number;
   clientCac: number;
+  qualifiedCandidateCac: number;
+  qualifiedClientCac: number;
   ltgpPerClient: number;
   ltgpCacRatio: number;
   paybackPeriodDays: number;
