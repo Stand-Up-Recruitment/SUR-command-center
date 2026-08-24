@@ -35,6 +35,7 @@ export interface RecruiterStat {
   internalInterviews: number;
   clientInterviews: number;
   placements: number;
+  prevPlacements: number;
 }
 
 export interface RecruiterKPIs {

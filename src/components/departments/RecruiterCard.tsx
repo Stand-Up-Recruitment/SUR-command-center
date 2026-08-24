@@ -50,7 +50,7 @@ function RecruiterSkeleton() {
 }
 
 export function RecruiterCard() {
-  const [frame, setFrame] = useState<TimeFrame>('week');
+  const [frame, setFrame] = useState<TimeFrame>('month');
   const { data, error, isLoading, isFetching } = useRecruiterKPIs(frame);
   const { data: openJobsData } = useOpenJobs();
 
@@ -69,13 +69,21 @@ export function RecruiterCard() {
 
   // Open jobs is a live snapshot, not tied to the selected period — include recruiters
   // who have open jobs even if they had no interviews/placements this period.
+  // Match by first name since Airtable stores first-name-only while JobAdder returns full names.
+  const firstName = (n: string) => n.trim().split(' ')[0].toLowerCase();
   const displayRecruiters = [...data.byRecruiter];
   for (const name of Object.keys(openJobsData ?? {})) {
-    if (!displayRecruiters.some(r => r.name === name)) {
-      displayRecruiters.push({ name, phoneInterviews: 0, internalInterviews: 0, clientInterviews: 0, placements: 0 });
+    if (!displayRecruiters.some(r => firstName(r.name) === firstName(name))) {
+      displayRecruiters.push({ name, phoneInterviews: 0, internalInterviews: 0, clientInterviews: 0, placements: 0, prevPlacements: 0 });
     }
   }
   displayRecruiters.sort((a, b) => a.name.localeCompare(b.name));
+
+  const openJobsFor = (name: string) => {
+    if (!openJobsData) return 0;
+    const key = Object.keys(openJobsData).find(k => firstName(k) === firstName(name));
+    return key ? openJobsData[key] : 0;
+  };
 
   const statCard = (label: string, value: string | number, current: number, prev: number, noWoW?: boolean) => (
     <div style={{ background: COLORS.bgSubtle, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: '14px 16px' }}>
@@ -108,7 +116,7 @@ export function RecruiterCard() {
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
       <div style={{ ...CARD_STYLE, padding: 24 }}>
-        <div style={{ fontSize: 11, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Placements</div>
+        <div style={{ fontSize: 11, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Contract Signed</div>
         <div style={{ display: 'flex', alignItems: 'baseline', marginBottom: 20 }}>
           <span style={{ fontSize: 44, fontWeight: 900, color: COLORS.textPrimary, letterSpacing: '-2px', lineHeight: 1 }}>{data.placements}</span>
           <WoWBadge current={data.placements} prev={data.prevPlacements} />
@@ -133,7 +141,7 @@ export function RecruiterCard() {
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ background: COLORS.bgSubtle }}>
-                  {['Recruiter', 'Phone', 'Internal', 'Client', 'Placements', 'Open Jobs'].map(h => (
+                  {['Recruiter', 'Phone', 'Internal', 'Client', 'Open Jobs'].map(h => (
                     <th key={h} style={{ padding: '8px 16px', fontSize: 10, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em', textAlign: h === 'Recruiter' ? 'left' : 'center' }}>{h}</th>
                   ))}
                 </tr>
@@ -145,8 +153,36 @@ export function RecruiterCard() {
                     <td style={{ padding: '10px 16px', fontSize: 13, color: COLORS.textPrimary, textAlign: 'center' }}>{r.phoneInterviews}</td>
                     <td style={{ padding: '10px 16px', fontSize: 13, color: COLORS.textPrimary, textAlign: 'center' }}>{r.internalInterviews}</td>
                     <td style={{ padding: '10px 16px', fontSize: 13, color: COLORS.textPrimary, textAlign: 'center' }}>{r.clientInterviews}</td>
+                    <td style={{ padding: '10px 16px', fontSize: 13, color: COLORS.textPrimary, textAlign: 'center' }}>{openJobsFor(r.name)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div style={{ ...CARD_STYLE, padding: 0, overflow: 'hidden' }}>
+            <div style={{ padding: '14px 20px', borderBottom: `1px solid ${COLORS.border}` }}>
+              <span style={{ fontSize: 11, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+                Contract Signed · By Recruiter
+              </span>
+            </div>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ background: COLORS.bgSubtle }}>
+                  {['Recruiter', 'Contract Signed', 'Previous Month', 'vs Last Period'].map(h => (
+                    <th key={h} style={{ padding: '8px 16px', fontSize: 10, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em', textAlign: h === 'Recruiter' ? 'left' : 'center' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {displayRecruiters.map((r, i) => (
+                  <tr key={r.name} style={{ borderTop: `1px solid ${COLORS.border}`, background: i % 2 === 1 ? COLORS.bgSubtle : 'transparent' }}>
+                    <td style={{ padding: '10px 16px', fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{r.name}</td>
                     <td style={{ padding: '10px 16px', fontSize: 13, fontWeight: 700, color: r.placements > 0 ? COLORS.accent : COLORS.textPrimary, textAlign: 'center' }}>{r.placements}</td>
-                    <td style={{ padding: '10px 16px', fontSize: 13, color: COLORS.textPrimary, textAlign: 'center' }}>{openJobsData?.[r.name] ?? 0}</td>
+                    <td style={{ padding: '10px 16px', fontSize: 13, color: COLORS.textPrimary, textAlign: 'center' }}>{r.prevPlacements}</td>
+                    <td style={{ padding: '10px 16px', textAlign: 'center' }}>
+                      <WoWBadge current={r.placements} prev={r.prevPlacements} />
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -165,7 +201,7 @@ export function RecruiterCard() {
                   'Phone': r.phoneInterviews,
                   'Internal': r.internalInterviews,
                   'Client': r.clientInterviews,
-                  'Placements': r.placements,
+                  'Contract Signed': r.placements,
                 }))}
                 margin={{ top: 4, right: 4, left: -20, bottom: 0 }}
                 barGap={2}
@@ -180,7 +216,7 @@ export function RecruiterCard() {
                 <Bar dataKey="Phone"     fill="#60a5fa" radius={[3,3,0,0]} maxBarSize={28} />
                 <Bar dataKey="Internal"  fill="#a78bfa" radius={[3,3,0,0]} maxBarSize={28} />
                 <Bar dataKey="Client"    fill="#34d399" radius={[3,3,0,0]} maxBarSize={28} />
-                <Bar dataKey="Placements" fill={COLORS.accent} radius={[3,3,0,0]} maxBarSize={28} />
+                <Bar dataKey="Contract Signed" fill={COLORS.accent} radius={[3,3,0,0]} maxBarSize={28} />
               </BarChart>
             </ResponsiveContainer>
           </div>

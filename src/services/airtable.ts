@@ -152,7 +152,7 @@ export async function fetchRecruiterKPIs(frame: TimeFrame = 'month'): Promise<Re
   const recruiterMap = new Map<string, RecruiterStat>();
   const getOrCreate = (name: string) => {
     if (!recruiterMap.has(name)) {
-      recruiterMap.set(name, { name, phoneInterviews: 0, internalInterviews: 0, clientInterviews: 0, placements: 0 });
+      recruiterMap.set(name, { name, phoneInterviews: 0, internalInterviews: 0, clientInterviews: 0, placements: 0, prevPlacements: 0 });
     }
     return recruiterMap.get(name)!;
   };
@@ -170,6 +170,12 @@ export async function fetchRecruiterKPIs(frame: TimeFrame = 'month'): Promise<Re
     const name = f.Recruiter?.trim();
     if (!name) continue;
     getOrCreate(name).placements++;
+  }
+
+  for (const f of placements.filter(f => isInPeriod(f['Created Date'], b.prevStart, b.prevEnd))) {
+    const name = f.Recruiter?.trim();
+    if (!name) continue;
+    getOrCreate(name).prevPlacements++;
   }
 
   const byRecruiter = Array.from(recruiterMap.values()).sort((a, b) => a.name.localeCompare(b.name));
