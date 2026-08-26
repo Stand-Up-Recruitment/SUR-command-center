@@ -241,7 +241,7 @@ export interface XeroFinanceData {
 }
 
 // ─── LTGP:CAC ─────────────────────────────────────────────────────────────────
-export type LTGPFrame = '30d' | '90d' | '12m' | 'all';
+export type LTGPFrame = '7d' | '30d' | '90d' | '12m' | 'all';
 
 export interface LTGPFlag {
   label: string;
@@ -275,6 +275,10 @@ export interface LTGPKPIs {
   clientCac: number;
   qualifiedCandidateCac: number;
   qualifiedClientCac: number;
+  // Previous-period comparison
+  hasPrevPeriod: boolean;
+  prevCandidateCac: number;
+  prevClientCac: number;
   ltgpPerClient: number;
   ltgpCacRatio: number;
   paybackPeriodDays: number;

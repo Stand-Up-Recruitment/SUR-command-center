@@ -115,25 +115,45 @@ export async function fetchMetaCprByGroup(): Promise<{
   };
 }
 
-export async function fetchMetaSpendByFrame(frame: LTGPFrame): Promise<{
+const FRAME_DAYS: Record<Exclude<LTGPFrame, 'all'>, number> = {
+  '7d': 7,
+  '30d': 30,
+  '90d': 90,
+  '12m': 365,
+};
+
+function currentDateParam(frame: LTGPFrame): string {
+  if (frame === '7d') return 'date_preset=last_7d';
+  if (frame === '30d') return 'date_preset=last_30d';
+  if (frame === '90d') return 'date_preset=last_90d';
+  if (frame === '12m') return 'date_preset=last_year';
+  const timeRange = JSON.stringify({ since: '2020-01-01', until: new Date().toISOString().slice(0, 10) });
+  return `time_range=${encodeURIComponent(timeRange)}`;
+}
+
+/** Time range for the equal-length window immediately preceding the current one. `null` for 'all' (no prior period). */
+function prevDateParam(frame: LTGPFrame): string | null {
+  if (frame === 'all') return null;
+  const days = FRAME_DAYS[frame];
+  const now = new Date();
+  const currentStart = new Date(now);
+  currentStart.setDate(now.getDate() - days);
+  const prevStart = new Date(currentStart);
+  prevStart.setDate(currentStart.getDate() - days);
+  const timeRange = JSON.stringify({
+    since: prevStart.toISOString().slice(0, 10),
+    until: currentStart.toISOString().slice(0, 10),
+  });
+  return `time_range=${encodeURIComponent(timeRange)}`;
+}
+
+async function fetchAndGroupCampaigns(dateParam: string): Promise<{
   candidateSpend: number;
   clientSpend: number;
   isEstimated: boolean;
 }> {
   const token = import.meta.env.VITE_META_TOKEN as string;
   if (!token) return { candidateSpend: 0, clientSpend: 0, isEstimated: true };
-
-  let dateParam: string;
-  if (frame === '30d') {
-    dateParam = 'date_preset=last_30d';
-  } else if (frame === '90d') {
-    dateParam = 'date_preset=last_90d';
-  } else if (frame === '12m') {
-    dateParam = 'date_preset=last_year';
-  } else {
-    const timeRange = JSON.stringify({ since: '2020-01-01', until: new Date().toISOString().slice(0, 10) });
-    dateParam = `time_range=${encodeURIComponent(timeRange)}`;
-  }
 
   const campaigns: Array<{ campaign_name: string; spend: string }> = [];
   let nextUrl: string | null =
@@ -148,21 +168,45 @@ export async function fetchMetaSpendByFrame(frame: LTGPFrame): Promise<{
 
   let candidateSpend = 0;
   let clientSpend = 0;
-  let matched = false;
+  let unmatchedSpend = 0;
+  let anyMatched = false;
 
   for (const c of campaigns) {
     const name = (c.campaign_name ?? '').toLowerCase();
     const spend = parseFloat(c.spend ?? '0');
-    if (name.includes('candidate')) { candidateSpend += spend; matched = true; }
-    else if (name.includes('client')) { clientSpend += spend; matched = true; }
+    if (name.includes('candidate')) { candidateSpend += spend; anyMatched = true; }
+    else if (name.includes('client')) { clientSpend += spend; anyMatched = true; }
+    else { unmatchedSpend += spend; }
   }
 
-  if (!matched) {
-    const total = campaigns.reduce((s, c) => s + parseFloat(c.spend ?? '0'), 0);
-    candidateSpend = total * 0.6;
-    clientSpend = total * 0.4;
+  if (!anyMatched) {
+    return { candidateSpend: unmatchedSpend * 0.6, clientSpend: unmatchedSpend * 0.4, isEstimated: true };
+  }
+
+  if (unmatchedSpend > 0) {
+    candidateSpend += unmatchedSpend * 0.6;
+    clientSpend += unmatchedSpend * 0.4;
     return { candidateSpend, clientSpend, isEstimated: true };
   }
 
   return { candidateSpend, clientSpend, isEstimated: false };
+}
+
+export async function fetchMetaSpendByFrame(frame: LTGPFrame): Promise<{
+  candidateSpend: number;
+  clientSpend: number;
+  isEstimated: boolean;
+}> {
+  return fetchAndGroupCampaigns(currentDateParam(frame));
+}
+
+/** Same candidate/client split for the equal-length period immediately before `frame`. `null` when `frame` is 'all'. */
+export async function fetchMetaSpendPrevPeriod(frame: LTGPFrame): Promise<{
+  candidateSpend: number;
+  clientSpend: number;
+  isEstimated: boolean;
+} | null> {
+  const dateParam = prevDateParam(frame);
+  if (!dateParam) return null;
+  return fetchAndGroupCampaigns(dateParam);
 }

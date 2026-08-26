@@ -15,7 +15,7 @@ import type {
   LTGPKPIs,
   LTGPFlag,
 } from '../types';
-import { fetchMetaSpend, fetchMetaSpendByFrame, fetchMetaCprByGroup } from './metaAds';
+import { fetchMetaSpend, fetchMetaSpendByFrame, fetchMetaSpendPrevPeriod, fetchMetaCprByGroup } from './metaAds';
 
 const API_KEY = import.meta.env.VITE_AIRTABLE_API_KEY as string;
 const CLIENTS_BASE_ID = import.meta.env.VITE_AIRTABLE_CLIENTS_BASE_ID as string;
@@ -678,10 +678,26 @@ const AVG_PLACEMENT_CYCLE_DAYS = 45;
 
 function ltgpBoundaries(frame: LTGPFrame): { start: number; now: number } {
   const now = Date.now();
+  if (frame === '7d')   return { start: now - 7   * 86_400_000, now };
   if (frame === '30d')  return { start: now - 30  * 86_400_000, now };
   if (frame === '90d')  return { start: now - 90  * 86_400_000, now };
   if (frame === '12m')  return { start: now - 365 * 86_400_000, now };
   return { start: 0, now }; // 'all'
+}
+
+const LTGP_FRAME_DAYS: Record<Exclude<LTGPFrame, 'all'>, number> = {
+  '7d': 7,
+  '30d': 30,
+  '90d': 90,
+  '12m': 365,
+};
+
+/** Equal-length window immediately preceding the current `frame` window. `null` for 'all' (no prior period). */
+function ltgpPrevBoundaries(frame: LTGPFrame): { start: number; end: number } | null {
+  if (frame === 'all') return null;
+  const days = LTGP_FRAME_DAYS[frame];
+  const end = Date.now() - days * 86_400_000;
+  return { start: end - days * 86_400_000, end };
 }
 
 type LTGPPlacementFields = {
@@ -698,13 +714,14 @@ type LTGPInstalmentFields = {
 export async function fetchLTGPKPIs(frame: LTGPFrame): Promise<LTGPKPIs> {
   if (!CLIENTS_BASE_ID) throw new Error('LTGP credentials not configured');
 
-  const [allPlacements, allInstalments, allMainClients, allClientLeads, allCandidateLeads, metaResult] = await Promise.all([
+  const [allPlacements, allInstalments, allMainClients, allClientLeads, allCandidateLeads, metaResult, prevMetaResult] = await Promise.all([
     fetchAllFromBase<LTGPPlacementFields>(CLIENTS_BASE_ID, PLACEMENTS_TABLE_ID),
     fetchAllFromBase<LTGPInstalmentFields>(CLIENTS_BASE_ID, INSTALMENTS_TABLE_ID),
     fetchAllFromBase<{ 'Signed Date'?: string }>(CLIENTS_BASE_ID, MAIN_CLIENT_TABLE_ID),
     fetchAllFromBase<ClientLeadFields & { 'Call Booked'?: string }>(CLIENTS_BASE_ID, CLIENTS_TABLE_ID),
     fetchAllFromBase<CandidateLeadFields>(CANDIDATES_BASE_ID, CANDIDATES_TABLE_ID),
     fetchMetaSpendByFrame(frame).catch(() => ({ candidateSpend: 0, clientSpend: 0, isEstimated: true })),
+    fetchMetaSpendPrevPeriod(frame).catch(() => null),
   ]);
 
   // ── avg_placements_per_client (all-time, lifetime metric) ──────────────────
@@ -760,6 +777,28 @@ export async function fetchLTGPKPIs(frame: LTGPFrame): Promise<LTGPKPIs> {
     : 0;
   const qualifiedCandidateCac = qualifiedCandidates > 0 ? candidateMetaSpend / qualifiedCandidates : 0;
   const qualifiedClientCac = qualifiedClients > 0 ? clientMetaSpend / qualifiedClients : 0;
+
+  // ── Previous-period CAC (for trend comparison) ──────────────────────────────
+  const prevBoundaries = ltgpPrevBoundaries(frame);
+  const hasPrevPeriod = prevBoundaries !== null && prevMetaResult !== null;
+  let prevCandidateCac = 0;
+  let prevClientCac = 0;
+  if (prevBoundaries && prevMetaResult) {
+    const prevCandidatesPlaced = allPlacements.filter(
+      p => isInPeriod(p['Created Date'], prevBoundaries.start, prevBoundaries.end)
+    ).length;
+    const prevClientsWon = allMainClients.filter(
+      c => isInPeriod(c['Signed Date'], prevBoundaries.start, prevBoundaries.end)
+    ).length;
+    const prevOwnerCallsCompleted = allClientLeads.filter(
+      f => f['Call Booked'] != null && f['Call Booked'] !== '' && isInPeriod(f['Call Booked'], prevBoundaries.start, prevBoundaries.end)
+    ).length;
+    const prevOwnerAcquisitionCost = prevOwnerCallsCompleted * ownerCostPerCall;
+    const prevCandidateMetaSpend = prevMetaResult.candidateSpend * NZD_TO_AUD;
+    const prevClientMetaSpend = prevMetaResult.clientSpend * NZD_TO_AUD;
+    prevCandidateCac = prevCandidatesPlaced > 0 ? prevCandidateMetaSpend / prevCandidatesPlaced : 0;
+    prevClientCac = prevClientsWon > 0 ? (prevClientMetaSpend + prevOwnerAcquisitionCost) / prevClientsWon : 0;
+  }
 
   // ── LTGP ──────────────────────────────────────────────────────────────────
   const recruiterCostPerPlacement = candidatesPlaced > 0 ? monthlyRecruiterCostAud / candidatesPlaced : 0;
@@ -864,6 +903,9 @@ export async function fetchLTGPKPIs(frame: LTGPFrame): Promise<LTGPKPIs> {
     clientCac,
     qualifiedCandidateCac,
     qualifiedClientCac,
+    hasPrevPeriod,
+    prevCandidateCac,
+    prevClientCac,
     ltgpPerClient,
     ltgpCacRatio,
     paybackPeriodDays,

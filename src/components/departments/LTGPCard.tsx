@@ -5,6 +5,7 @@ import { Skeleton } from '../shared/Skeleton';
 import type { LTGPFrame, LTGPKPIs } from '../../types';
 
 const FRAMES: { label: string; value: LTGPFrame }[] = [
+  { label: '7d', value: '7d' },
   { label: '30d', value: '30d' },
   { label: '90d', value: '90d' },
   { label: '12m', value: '12m' },
@@ -108,11 +109,39 @@ function KpiTile({ label, value, sub, ratio, ratioColor: rc }: {
   );
 }
 
+function CacTrendTile({ label, current, previous }: { label: string; current: number; previous: number }) {
+  const pctChange = previous > 0 ? ((current - previous) / previous) * 100 : null;
+  const improved = pctChange !== null && pctChange < 0;
+  const worsened = pctChange !== null && pctChange > 0;
+  const deltaColor = improved ? COLORS.success : worsened ? COLORS.danger : COLORS.textMuted;
+
+  return (
+    <div style={{ background: COLORS.bgSubtle, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: '14px 16px' }}>
+      <div style={{ fontSize: 10, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+        {label}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+        <span style={{ fontSize: 20, fontWeight: 800, color: COLORS.textPrimary }}>
+          {current > 0 ? fmtAud(current) : '—'}
+        </span>
+        {pctChange !== null && (
+          <span style={{ fontSize: 12, fontWeight: 700, color: deltaColor }}>
+            {improved ? '▼' : worsened ? '▲' : '–'} {Math.abs(pctChange).toFixed(0)}%
+          </span>
+        )}
+      </div>
+      <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 4 }}>
+        Previous period: {previous > 0 ? fmtAud(previous) : '—'}
+      </div>
+    </div>
+  );
+}
+
 function LTGPContent({ data, frame }: { data: LTGPKPIs; frame: LTGPFrame }) {
   const ratio = data.ltgpCacRatio;
   const triggeredFlags = data.flags.filter(f => f.triggered);
 
-  const periodLabel = frame === '30d' ? 'Last 30 days' : frame === '90d' ? 'Last 90 days' : frame === '12m' ? 'Last 12 months' : 'All time';
+  const periodLabel = frame === '7d' ? 'Last 7 days' : frame === '30d' ? 'Last 30 days' : frame === '90d' ? 'Last 90 days' : frame === '12m' ? 'Last 12 months' : 'All time';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -153,6 +182,11 @@ function LTGPContent({ data, frame }: { data: LTGPKPIs; frame: LTGPFrame }) {
           <div style={{ fontSize: 12, color: ratioColor(ratio), marginTop: 6, fontWeight: 600 }}>
             {ratio > 0 ? ratioLabel(ratio) : 'Insufficient data for this period'}
           </div>
+          {ratio > 0 && (
+            <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 6, fontFamily: 'monospace' }}>
+              LTGP per Client ÷ Client CAC = {fmtAudFull(data.ltgpPerClient)} ÷ {fmtAudFull(data.clientCac)} = {ratio.toFixed(1)}×
+            </div>
+          )}
         </div>
         <div style={{ textAlign: 'right' }}>
           <div style={{ fontSize: 10, color: COLORS.textMuted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Hormozi Benchmark</div>
@@ -205,6 +239,19 @@ function LTGPContent({ data, frame }: { data: LTGPKPIs; frame: LTGPFrame }) {
           sub="Meta spend per qualified lead (pre-conversion)"
         />
       </div>
+
+      {/* CAC trend vs previous period */}
+      {data.hasPrevPeriod && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+            CAC Trend — {periodLabel} vs previous period
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+            <CacTrendTile label="Client CAC" current={data.clientCac} previous={data.prevClientCac} />
+            <CacTrendTile label="Candidate CAC" current={data.candidateCac} previous={data.prevCandidateCac} />
+          </div>
+        </div>
+      )}
 
       {/* Payback period + client-financed check */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
@@ -345,6 +392,7 @@ export function LTGPCard() {
   const { data, error, isLoading, isFetching } = useLTGPKPIs(frame);
 
   const periodLabel =
+    frame === '7d' ? 'Last 7 days' :
     frame === '30d' ? 'Last 30 days' :
     frame === '90d' ? 'Last 90 days' :
     frame === '12m' ? 'Last 12 months' : 'All time';
