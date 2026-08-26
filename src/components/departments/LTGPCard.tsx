@@ -90,9 +90,28 @@ function LTGPSkeleton() {
 }
 
 
-function KpiTile({ label, value, sub, ratio, ratioColor: rc }: {
+function KpiTile({ label, value, sub, ratio, ratioColor: rc, trend }: {
   label: string; value: string; sub?: string; ratio?: string; ratioColor?: string;
+  trend?: { current: number; previous: number; higherIsBetter?: boolean };
 }) {
+  let trendNode: JSX.Element | null = null;
+  if (trend) {
+    const { current, previous, higherIsBetter = false } = trend;
+    const pctChange = previous > 0 ? ((current - previous) / previous) * 100 : null;
+    const increased = pctChange !== null && pctChange > 0;
+    const decreased = pctChange !== null && pctChange < 0;
+    const improved = higherIsBetter ? increased : decreased;
+    const worsened = higherIsBetter ? decreased : increased;
+    const deltaColor = improved ? COLORS.success : worsened ? COLORS.danger : COLORS.textMuted;
+    trendNode = (
+      <div style={{ fontSize: 11, fontWeight: 700, color: deltaColor, marginTop: 6 }}>
+        {pctChange !== null
+          ? `${increased ? '▲' : decreased ? '▼' : '–'} ${Math.abs(pctChange).toFixed(0)}% vs prev`
+          : 'vs prev —'}
+      </div>
+    );
+  }
+
   return (
     <div style={{ background: COLORS.bgSubtle, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: '14px 16px' }}>
       <div style={{ fontSize: 10, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
@@ -105,41 +124,13 @@ function KpiTile({ label, value, sub, ratio, ratioColor: rc }: {
         </div>
       )}
       {sub && <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 4 }}>{sub}</div>}
-    </div>
-  );
-}
-
-function CacTrendTile({ label, current, previous }: { label: string; current: number; previous: number }) {
-  const pctChange = previous > 0 ? ((current - previous) / previous) * 100 : null;
-  const improved = pctChange !== null && pctChange < 0;
-  const worsened = pctChange !== null && pctChange > 0;
-  const deltaColor = improved ? COLORS.success : worsened ? COLORS.danger : COLORS.textMuted;
-
-  return (
-    <div style={{ background: COLORS.bgSubtle, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: '14px 16px' }}>
-      <div style={{ fontSize: 10, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
-        {label}
-      </div>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-        <span style={{ fontSize: 20, fontWeight: 800, color: COLORS.textPrimary }}>
-          {current > 0 ? fmtAud(current) : '—'}
-        </span>
-        {pctChange !== null && (
-          <span style={{ fontSize: 12, fontWeight: 700, color: deltaColor }}>
-            {improved ? '▼' : worsened ? '▲' : '–'} {Math.abs(pctChange).toFixed(0)}%
-          </span>
-        )}
-      </div>
-      <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 4 }}>
-        Previous period: {previous > 0 ? fmtAud(previous) : '—'}
-      </div>
+      {trendNode}
     </div>
   );
 }
 
 function LTGPContent({ data, frame }: { data: LTGPKPIs; frame: LTGPFrame }) {
   const ratio = data.ltgpCacRatio;
-  const triggeredFlags = data.flags.filter(f => f.triggered);
 
   const periodLabel = frame === '7d' ? 'Last 7 days' : frame === '30d' ? 'Last 30 days' : frame === '90d' ? 'Last 90 days' : frame === '12m' ? 'Last 12 months' : 'All time';
 
@@ -207,6 +198,7 @@ function LTGPContent({ data, frame }: { data: LTGPKPIs; frame: LTGPFrame }) {
           label="LTGP per Client"
           value={data.ltgpPerClient > 0 ? fmtAud(data.ltgpPerClient) : '—'}
           sub="Lifetime Gross Profit"
+          trend={data.hasPrevPeriod ? { current: data.ltgpPerClient, previous: data.prevLtgpPerClient, higherIsBetter: true } : undefined}
         />
         <KpiTile
           label="Client CAC"
@@ -214,11 +206,13 @@ function LTGPContent({ data, frame }: { data: LTGPKPIs; frame: LTGPFrame }) {
           ratio={ratio > 0 ? `${ratio.toFixed(1)}:1 LTGP ratio` : undefined}
           ratioColor={ratio > 0 ? ratioColor(ratio) : undefined}
           sub="Cost to acquire one client"
+          trend={data.hasPrevPeriod ? { current: data.clientCac, previous: data.prevClientCac } : undefined}
         />
         <KpiTile
           label="Qualified Client CAC"
           value={data.qualifiedClientCac > 0 ? fmtAud(data.qualifiedClientCac) : '—'}
           sub="Meta spend per qualified lead (pre-conversion)"
+          trend={data.hasPrevPeriod ? { current: data.qualifiedClientCac, previous: data.prevQualifiedClientCac } : undefined}
         />
         <KpiTile
           label="Candidate CAC"
@@ -232,26 +226,15 @@ function LTGPContent({ data, frame }: { data: LTGPKPIs; frame: LTGPFrame }) {
             return r >= 3 ? COLORS.success : r >= 1.5 ? COLORS.warning : COLORS.danger;
           })()}
           sub="Meta spend per placement"
+          trend={data.hasPrevPeriod ? { current: data.candidateCac, previous: data.prevCandidateCac } : undefined}
         />
         <KpiTile
           label="Qualified Candidate CAC"
           value={data.qualifiedCandidateCac > 0 ? fmtAud(data.qualifiedCandidateCac) : '—'}
           sub="Meta spend per qualified lead (pre-conversion)"
+          trend={data.hasPrevPeriod ? { current: data.qualifiedCandidateCac, previous: data.prevQualifiedCandidateCac } : undefined}
         />
       </div>
-
-      {/* CAC trend vs previous period */}
-      {data.hasPrevPeriod && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
-            CAC Trend — {periodLabel} vs previous period
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
-            <CacTrendTile label="Client CAC" current={data.clientCac} previous={data.prevClientCac} />
-            <CacTrendTile label="Candidate CAC" current={data.candidateCac} previous={data.prevCandidateCac} />
-          </div>
-        </div>
-      )}
 
       {/* Payback period + client-financed check */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
@@ -338,51 +321,6 @@ function LTGPContent({ data, frame }: { data: LTGPKPIs; frame: LTGPFrame }) {
         </div>
       </div>
 
-      {/* Automated flags */}
-      {triggeredFlags.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
-            Automated Flags
-          </div>
-          {triggeredFlags.map((flag) => (
-            <div
-              key={flag.label}
-              style={{
-                background: flag.severity === 'red' ? COLORS.accentBg : COLORS.warningBg,
-                border: `1px solid ${flag.severity === 'red' ? COLORS.accentBorder : COLORS.warning}`,
-                borderRadius: 8,
-                padding: '12px 16px',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                <span style={{
-                  fontSize: 10,
-                  fontWeight: 800,
-                  padding: '2px 8px',
-                  borderRadius: 4,
-                  background: flag.severity === 'red' ? COLORS.danger : COLORS.warning,
-                  color: '#000',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em',
-                }}>
-                  {flag.severity}
-                </span>
-                <span style={{ fontSize: 13, fontWeight: 700, color: COLORS.textPrimary }}>{flag.label}</span>
-              </div>
-              <div style={{ fontSize: 11, color: COLORS.textMuted, fontFamily: 'monospace', marginBottom: 4 }}>
-                {flag.formula} → {flag.actual}
-              </div>
-              <div style={{ fontSize: 11, color: COLORS.textSecondary }}>{flag.suggestion}</div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {triggeredFlags.length === 0 && ratio > 0 && (
-        <div style={{ fontSize: 12, color: COLORS.success, padding: '10px 14px', background: COLORS.successBg, borderRadius: 8, border: `1px solid #166534` }}>
-          ✓ No flags triggered — all metrics within Hormozi benchmarks for this period.
-        </div>
-      )}
     </div>
   );
 }

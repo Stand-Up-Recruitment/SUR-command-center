@@ -279,6 +279,9 @@ export interface LTGPKPIs {
   hasPrevPeriod: boolean;
   prevCandidateCac: number;
   prevClientCac: number;
+  prevQualifiedCandidateCac: number;
+  prevQualifiedClientCac: number;
+  prevLtgpPerClient: number;
   ltgpPerClient: number;
   ltgpCacRatio: number;
   paybackPeriodDays: number;

@@ -783,6 +783,9 @@ export async function fetchLTGPKPIs(frame: LTGPFrame): Promise<LTGPKPIs> {
   const hasPrevPeriod = prevBoundaries !== null && prevMetaResult !== null;
   let prevCandidateCac = 0;
   let prevClientCac = 0;
+  let prevQualifiedCandidateCac = 0;
+  let prevQualifiedClientCac = 0;
+  let prevLtgpPerClient = 0;
   if (prevBoundaries && prevMetaResult) {
     const prevCandidatesPlaced = allPlacements.filter(
       p => isInPeriod(p['Created Date'], prevBoundaries.start, prevBoundaries.end)
@@ -793,11 +796,23 @@ export async function fetchLTGPKPIs(frame: LTGPFrame): Promise<LTGPKPIs> {
     const prevOwnerCallsCompleted = allClientLeads.filter(
       f => f['Call Booked'] != null && f['Call Booked'] !== '' && isInPeriod(f['Call Booked'], prevBoundaries.start, prevBoundaries.end)
     ).length;
+    const prevQualifiedCandidates = allCandidateLeads.filter(
+      f => isInPeriod(f.Created, prevBoundaries.start, prevBoundaries.end) && isCandidateQualified(f)
+    ).length;
+    const prevQualifiedClients = allClientLeads.filter(
+      f => isClientQualified(f) && isInPeriod(f['Last Updated Date'], prevBoundaries.start, prevBoundaries.end)
+    ).length;
     const prevOwnerAcquisitionCost = prevOwnerCallsCompleted * ownerCostPerCall;
     const prevCandidateMetaSpend = prevMetaResult.candidateSpend * NZD_TO_AUD;
     const prevClientMetaSpend = prevMetaResult.clientSpend * NZD_TO_AUD;
     prevCandidateCac = prevCandidatesPlaced > 0 ? prevCandidateMetaSpend / prevCandidatesPlaced : 0;
     prevClientCac = prevClientsWon > 0 ? (prevClientMetaSpend + prevOwnerAcquisitionCost) / prevClientsWon : 0;
+    prevQualifiedCandidateCac = prevQualifiedCandidates > 0 ? prevCandidateMetaSpend / prevQualifiedCandidates : 0;
+    prevQualifiedClientCac = prevQualifiedClients > 0 ? prevClientMetaSpend / prevQualifiedClients : 0;
+
+    const prevRecruiterCostPerPlacement = prevCandidatesPlaced > 0 ? monthlyRecruiterCostAud / prevCandidatesPlaced : 0;
+    const prevGrossProfitPerPlacement = avgPlacementValueAud - prevRecruiterCostPerPlacement;
+    prevLtgpPerClient = prevGrossProfitPerPlacement * avgPlacementsPerClient;
   }
 
   // ── LTGP ──────────────────────────────────────────────────────────────────
@@ -906,6 +921,9 @@ export async function fetchLTGPKPIs(frame: LTGPFrame): Promise<LTGPKPIs> {
     hasPrevPeriod,
     prevCandidateCac,
     prevClientCac,
+    prevQualifiedCandidateCac,
+    prevQualifiedClientCac,
+    prevLtgpPerClient,
     ltgpPerClient,
     ltgpCacRatio,
     paybackPeriodDays,
