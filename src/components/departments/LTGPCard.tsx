@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useLTGPKPIs } from '../../hooks/queries';
 import { COLORS, CARD_STYLE } from '../../styles/tokens';
 import { Skeleton } from '../shared/Skeleton';
@@ -94,7 +94,7 @@ function KpiTile({ label, value, sub, ratio, ratioColor: rc, trend }: {
   label: string; value: string; sub?: string; ratio?: string; ratioColor?: string;
   trend?: { current: number; previous: number; higherIsBetter?: boolean };
 }) {
-  let trendNode: JSX.Element | null = null;
+  let trendNode: ReactNode = null;
   if (trend) {
     const { current, previous, higherIsBetter = false } = trend;
     const pctChange = previous > 0 ? ((current - previous) / previous) * 100 : null;
