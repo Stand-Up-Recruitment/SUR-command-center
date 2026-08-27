@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { COLORS } from '../../styles/tokens';
 import logoUrl from '../../assets/logo.png';
+import { useAuthRole } from '../auth/AuthContext';
 
 const TABS = [
   { label: 'Overview',    to: '/',            end: true  },
@@ -14,12 +15,16 @@ const TABS = [
   { label: 'LTGP:CAC',   to: '/ltgp'                       },
 ] as const;
 
+const MARKETING_TABS = new Set(['/marketing', '/ltgp']);
+
 interface HeaderProps {
   onRefresh: () => void;
   isDemo: boolean;
 }
 
 export function Header({ onRefresh, isDemo }: HeaderProps) {
+  const role = useAuthRole();
+  const tabs = role === 'marketing' ? TABS.filter(t => MARKETING_TABS.has(t.to)) : TABS;
   const [now, setNow] = useState(new Date());
 
   useEffect(() => {
@@ -59,7 +64,7 @@ export function Header({ onRefresh, isDemo }: HeaderProps) {
 
       {/* Tabs */}
       <nav style={{ display: 'flex', alignItems: 'stretch', flex: 1, gap: 2 }}>
-        {TABS.map((tab) =>
+        {tabs.map((tab) =>
           'comingSoon' in tab && tab.comingSoon ? (
             <span
               key={tab.to}

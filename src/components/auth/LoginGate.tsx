@@ -1,37 +1,55 @@
 import { useState, type FormEvent } from 'react';
 import logoUrl from '../../assets/logo.png';
+import { AuthContext, type AuthRole } from './AuthContext';
 
 const ENV_USER = import.meta.env.VITE_AUTH_USERNAME as string | undefined;
 const ENV_PASS = import.meta.env.VITE_AUTH_PASSWORD as string | undefined;
+const MARKETING_USER = import.meta.env.VITE_AUTH_MARKETING_USERNAME as string | undefined;
+const MARKETING_PASS = import.meta.env.VITE_AUTH_MARKETING_PASSWORD as string | undefined;
 const AUTH_ENABLED = Boolean(ENV_USER && ENV_PASS);
 const SESSION_KEY = 'sur_auth';
+const SESSION_ROLE_KEY = 'sur_auth_role';
+
+function getRole(): AuthRole {
+  if (!AUTH_ENABLED) return 'admin';
+  return sessionStorage.getItem(SESSION_ROLE_KEY) === 'marketing' ? 'marketing' : 'admin';
+}
 
 function isAuthenticated(): boolean {
   if (!AUTH_ENABLED) return true;
   return sessionStorage.getItem(SESSION_KEY) === 'ok';
 }
 
-function authenticate(username: string, password: string): boolean {
+function authenticate(username: string, password: string): AuthRole | null {
   if (username === ENV_USER && password === ENV_PASS) {
     sessionStorage.setItem(SESSION_KEY, 'ok');
-    return true;
+    sessionStorage.setItem(SESSION_ROLE_KEY, 'admin');
+    return 'admin';
   }
-  return false;
+  if (MARKETING_USER && MARKETING_PASS && username === MARKETING_USER && password === MARKETING_PASS) {
+    sessionStorage.setItem(SESSION_KEY, 'ok');
+    sessionStorage.setItem(SESSION_ROLE_KEY, 'marketing');
+    return 'marketing';
+  }
+  return null;
 }
 
 export function LoginGate({ children }: { children: React.ReactNode }) {
   const [authed, setAuthed] = useState(isAuthenticated);
+  const [role, setRole] = useState<AuthRole>(getRole);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState(false);
   const [showPass, setShowPass] = useState(false);
 
-  if (authed) return <>{children}</>;
+  if (authed) return <AuthContext.Provider value={role}>{children}</AuthContext.Provider>;
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    if (authenticate(username, password)) {
+    const matchedRole = authenticate(username, password);
+    if (matchedRole) {
       setError(false);
+      setRole(matchedRole);
       setAuthed(true);
     } else {
       setError(true);
