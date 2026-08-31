@@ -160,6 +160,8 @@ export interface CashWeek {
   balance: number;
   inflow?: number;
   outflow?: number;
+  weekStart?: string; // ISO date, e.g. '2026-09-07'
+  weekEnd?: string;   // ISO date, e.g. '2026-09-13'
 }
 
 export interface AusPlacement {

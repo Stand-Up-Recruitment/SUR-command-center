@@ -536,11 +536,11 @@ export function FinanceCard() {
   const currentIdx = combined.reduce((last, r, i) => (r.isForecast ? last : i), -1);
 
   // Scheduled-but-unbilled Airtable invoices (Status = Scheduled, InvoiceID blank), bucketed into
-  // forecast weeks by anchoring on cashKpis.closingDate and stepping 7 days per week. This
-  // approximates the n8n-computed week boundaries since CashWeek only carries a label, not dates.
+  // forecast weeks using each week's real weekStart/weekEnd from the API, falling back to
+  // anchoring on cashKpis.closingDate and stepping 7 days per week if a row lacks real dates.
   const AUD_TO_NZD = 1 / 0.90; // mirrors NZD_TO_AUD in hooks/queries.ts
   const closing = new Date(cashKpis.closingDate).getTime();
-  const scheduledByWeek = combined.map((_, i) => {
+  const scheduledByWeek = combined.map((r, i) => {
     if (i < currentIdx) return 0;
     if (i === currentIdx) {
       // Current week: capture invoices due this week plus anything overdue (due before now).
@@ -548,8 +548,9 @@ export function FinanceCard() {
         .filter(s => new Date(s.dueDate).getTime() < closing)
         .reduce((sum, s) => sum + s.amount * AUD_TO_NZD, 0);
     }
-    const weekStart = closing + (i - currentIdx - 1) * 7 * 86_400_000;
-    const weekEnd = weekStart + 7 * 86_400_000;
+    const [weekStart, weekEnd] = r.weekStart && r.weekEnd
+      ? [new Date(r.weekStart).getTime(), new Date(r.weekEnd).getTime()]
+      : [closing + (i - currentIdx - 1) * 7 * 86_400_000, closing + (i - currentIdx) * 7 * 86_400_000];
     return (scheduledInvoices ?? [])
       .filter(s => {
         const t = new Date(s.dueDate).getTime();
@@ -561,27 +562,29 @@ export function FinanceCard() {
   const cashFlowHasDetail = actualWeeks.some(d => d.inflow != null || d.outflow != null);
   const hasScheduledInvoices = scheduledByWeek.some(v => v > 0);
 
-  // Bucket each of the 8 weeks into previous/current/next calendar month, anchored on the
-  // same closing-date + 7-days-per-week approximation used for scheduledByWeek above.
+  // Bucket each week into previous/current/next calendar month, anchored on today's real date
+  // so "current month" always matches the calendar rather than the (often lagging) Xero closing date.
+  // Uses each week's real weekStart from the API when available, falling back to the
+  // closing-date + 7-days-per-week approximation used for scheduledByWeek above.
   const monthKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}`;
-  const closingDateObj = new Date(cashKpis.closingDate);
-  const prevMonthDate = new Date(closingDateObj); prevMonthDate.setMonth(prevMonthDate.getMonth() - 1);
-  const nextMonthDate = new Date(closingDateObj); nextMonthDate.setMonth(nextMonthDate.getMonth() + 1);
+  const today = new Date();
+  const prevMonthDate = new Date(today); prevMonthDate.setMonth(prevMonthDate.getMonth() - 1);
+  const nextMonthDate = new Date(today); nextMonthDate.setMonth(nextMonthDate.getMonth() + 1);
   const monthName = (d: Date) => d.toLocaleDateString('en-NZ', { month: 'long', year: 'numeric' });
 
   const monthBuckets = {
     previous: { label: monthName(prevMonthDate), rows: [] as MonthCashRow[] },
-    current:  { label: monthName(closingDateObj), rows: [] as MonthCashRow[] },
+    current:  { label: monthName(today), rows: [] as MonthCashRow[] },
     next:     { label: monthName(nextMonthDate), rows: [] as MonthCashRow[] },
   };
   combined.forEach((d, i) => {
-    const weekDate = new Date(closing + (i - currentIdx) * 7 * 86_400_000);
+    const weekDate = d.weekStart ? new Date(d.weekStart) : new Date(closing + (i - currentIdx) * 7 * 86_400_000);
     // Current week isn't finished yet, so its actuals are partial — use next week's forecast as a fuller estimate.
     const source = (i === currentIdx && combined[i + 1]) ? combined[i + 1] : d;
     const row: MonthCashRow = { weekLabel: d.weekLabel, isForecast: d.isForecast, inflow: source.inflow, outflow: source.outflow, scheduled: scheduledByWeek[i] };
     const key = monthKey(weekDate);
     if (key === monthKey(prevMonthDate)) monthBuckets.previous.rows.push(row);
-    else if (key === monthKey(closingDateObj)) monthBuckets.current.rows.push(row);
+    else if (key === monthKey(today)) monthBuckets.current.rows.push(row);
     else if (key === monthKey(nextMonthDate)) monthBuckets.next.rows.push(row);
   });
 
