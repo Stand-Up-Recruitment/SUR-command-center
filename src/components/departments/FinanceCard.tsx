@@ -48,11 +48,12 @@ function KP({ label, value, sub, accent, valueColor }: {
 }
 
 // KP card with an optional delta sub-line (added this month)
-function KPDelta({ label, value, valueColor, accent, delta }: {
+function KPDelta({ label, value, valueColor, accent, delta, invert }: {
   label: string; value: string; valueColor?: string; accent?: string;
-  delta?: { value: number; label: string } | null;
+  delta?: { value: number; label: string } | null; invert?: boolean;
 }) {
-  const deltaColor = delta ? (delta.value >= 0 ? NZ : RD) : MUTED;
+  const isGood = delta ? (invert ? delta.value <= 0 : delta.value >= 0) : true;
+  const deltaColor = delta ? (isGood ? NZ : RD) : MUTED;
   const deltaSign  = delta ? (delta.value >= 0 ? '↑ +' : '↓ ') : '';
   return (
     <div style={{ background: BG, border: `.5px solid ${BORDER}`, borderRadius: 8, borderTop: accent ? `3px solid ${accent}` : undefined, padding: '.875rem 1rem' }}>
@@ -145,7 +146,7 @@ function FinanceSkeleton() {
   return (
     <div>
       <SH color={TEXT} label="P&L Summary" />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 10, marginBottom: '.875rem' }}>{[0,1,2].map(kpCard)}</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 10, marginBottom: '.875rem' }}>{[0,1,2,3].map(kpCard)}</div>
       <SH color={MUTED} label="Cash Position" />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 10, marginBottom: '.875rem' }}>{[0,1,2].map(kpCard)}</div>
       <SH color={AM} label="Variance Commentary" />
@@ -163,15 +164,15 @@ function FinanceSkeleton() {
 
 // ─── Section components ───────────────────────────────────────────────────────
 
-function PLSummarySection({ totalRevenue, totalGrossProfit, netProfit, lm }: {
-  totalRevenue: number; totalGrossProfit: number; netProfit: number;
-  lm: { revenue: number; grossProfit: number; netProfit: number } | undefined;
+function PLSummarySection({ totalRevenue, totalGrossProfit, totalOpex, netProfit, lm }: {
+  totalRevenue: number; totalGrossProfit: number; totalOpex: number; netProfit: number;
+  lm: { revenue: number; grossProfit: number; netProfit: number; opex?: number } | undefined;
 }) {
   return (
     <>
-      <SH color={TEXT} label="P&L Summary" sub="revenue · gross profit · net profit" />
+      <SH color={TEXT} label="P&L Summary" sub="revenue · gross profit · opex · net profit" />
 
-      <G3>
+      <G4>
         <KPDelta
           accent={NZ}
           label="Total revenue"
@@ -187,13 +188,21 @@ function PLSummarySection({ totalRevenue, totalGrossProfit, netProfit, lm }: {
           delta={lm ? { value: totalGrossProfit - lm.grossProfit, label: 'added this month' } : null}
         />
         <KPDelta
+          accent={AM}
+          label="Total operating expenses"
+          value={fmtNZD(totalOpex)}
+          valueColor={AM}
+          invert
+          delta={lm?.opex != null ? { value: totalOpex - lm.opex, label: 'added this month' } : null}
+        />
+        <KPDelta
           accent={PU}
           label="Net profit (FY to date)"
           value={fmtNZD(netProfit)}
           valueColor={netProfit >= 0 ? NZ : RD}
           delta={lm ? { value: netProfit - lm.netProfit, label: 'added this month' } : null}
         />
-      </G3>
+      </G4>
     </>
   );
 }
@@ -361,18 +370,22 @@ function NZBusinessSection({ data, nzActiveWorkers, nzCogsMax }: {
 
       <Card accent={NZ}>
         <div style={{ fontSize: 13, fontWeight: 500, color: TEXT, marginBottom: '.75rem' }}>NZ cost of goods sold — {fmtNZD(data.nzTotalCogs)}</div>
-        {data.nzCogs
-          .slice()
-          .sort((a, b) => b.value - a.value)
-          .map(row => (
-            <BR
-              key={row.label}
-              label={row.label}
-              value={fmtNZD(row.value)}
-              pct={Math.round((row.value / nzCogsMax) * 100)}
-              color={NZ}
-            />
-          ))}
+        {data.nzCogs.length > 0 ? (
+          data.nzCogs
+            .slice()
+            .sort((a, b) => b.value - a.value)
+            .map(row => (
+              <BR
+                key={row.label}
+                label={row.label}
+                value={fmtNZD(row.value)}
+                pct={Math.round((row.value / nzCogsMax) * 100)}
+                color={NZ}
+              />
+            ))
+        ) : (
+          <div style={{ fontSize: 12, color: MUTED, fontStyle: 'italic' }}>No direct Cost of Sales attributed to NZ — all Cost of Sales, including recruiter bonuses, is now attributed to the AUS business.</div>
+        )}
         <NoteBox>NZ gross profit ({fmtNZD(data.nzGrossProfit)}) funds all shared business overheads. NZ operates as a self-contained P&amp;L.</NoteBox>
         {nzActiveWorkers !== '—' && (
           <div style={{ marginTop: 8, fontSize: 11, color: MUTED }}>
@@ -450,7 +463,7 @@ function AUSBusinessSection({ data, fyYear, ausPlacementsCount, placements, ausC
 
       <G4>
         <KP accent={AUS} label="Revenue" value={fmtNZD(data.ausRevenue)}      sub="Sales - International" />
-        <KP accent={AUS} label="COGS"    value={fmtNZD(data.ausTotalCogs)}   sub="10% of NZ+AUS combined COGS" valueColor={RD} />
+        <KP accent={AUS} label="COGS"    value={fmtNZD(data.ausTotalCogs)}   sub={`100% of Cost of Sales${data.ausRecruiterBonuses ? ` + ${fmtNZD(data.ausRecruiterBonuses)} bonuses` : ''}`} valueColor={RD} />
         <KP accent={AUS} label="Gross"   value={fmtNZD(data.ausGrossProfit)} sub={`${Math.round(data.ausGrossProfit / data.ausRevenue * 100)}% margin`} valueColor={data.ausGrossProfit >= 0 ? NZ : RD} />
         <KP accent={AUS} label="Net"     value={fmtNZD(data.ausNetProfit ?? data.ausGrossProfit)} sub="Net contribution" valueColor={(data.ausNetProfit ?? data.ausGrossProfit) >= 0 ? NZ : RD} />
       </G4>
@@ -468,6 +481,7 @@ function AUSBusinessSection({ data, fyYear, ausPlacementsCount, placements, ausC
                 color={i === 0 ? AUS : AM}
               />
             ))}
+            <NoteBox>AUS now carries 100% of Cost of Sales{data.ausRecruiterBonuses ? `, plus ${fmtNZD(data.ausRecruiterBonuses)} in recruiter/staff commissions (Xero "Salaries - Commissions")` : ''} reclassified as a direct cost rather than overhead.</NoteBox>
           </div>
           <div>
             <div style={{ fontSize: 13, fontWeight: 500, color: TEXT, marginBottom: '.75rem' }}>FY{fyYear} placements — {ausPlacementsCount} confirmed</div>
@@ -520,6 +534,7 @@ export function FinanceCard() {
   // ── Computed values ─────────────────────────────────────────────────────────
   const totalRevenue    = data.nzRevenue + data.ausRevenue;
   const totalGrossProfit = data.nzGrossProfit + data.ausGrossProfit;
+  const totalOpex = (data.nzTotalOpex ?? 0) + data.ausTotalCosts;
   const lm = data.plLastMonth;
 
   const cashKpis    = data.cashKpis ?? { openingBalance: 0, closingBalance: 0, closingBalanceActual: 0, avgWeeklyOutflow: 0, openingDate: data.asOf, closingDate: data.asOf };
@@ -594,7 +609,7 @@ export function FinanceCard() {
 
   return (
     <div style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
-      <PLSummarySection totalRevenue={totalRevenue} totalGrossProfit={totalGrossProfit} netProfit={data.netProfit} lm={lm} />
+      <PLSummarySection totalRevenue={totalRevenue} totalGrossProfit={totalGrossProfit} totalOpex={totalOpex} netProfit={data.netProfit} lm={lm} />
 
       <CashPositionSection
         cashKpis={cashKpis}

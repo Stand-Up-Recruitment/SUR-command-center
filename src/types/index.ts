@@ -217,16 +217,18 @@ export interface XeroFinanceData {
   ausTotalCogs: number;
   ausTotalCosts: number;
   ausGrossProfit: number;
+  ausRecruiterBonuses?: number; // "Salaries - Commissions" from Xero, reclassified as AUS COGS
   advertising: number;
   ausAdvertising?: number;
   nzAdvertising?: number;
   subscriptions?: number;
   travelInternational: number;
   nzActiveWorkers?: number;
+  nzTotalOpex?: number;
   nzNetProfit?: number;
   ausNetProfit?: number;
   bankAccounts?: { name: string; balance: number }[];
-  plLastMonth?: { revenue: number; grossProfit: number; netProfit: number };
+  plLastMonth?: { revenue: number; grossProfit: number; netProfit: number; opex?: number };
   varianceCommentary?: string | null;
   recommendation?: string | null;
   audNzdRate?: number;
