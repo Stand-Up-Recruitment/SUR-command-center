@@ -44,8 +44,8 @@ function SalesSkeleton() {
             </div>
           ))}
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
-          {[0, 1, 2, 3, 4].map(statBlock)}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 10 }}>
+          {[0, 1, 2, 3, 4, 5].map(statBlock)}
         </div>
       </div>
     </div>
@@ -149,12 +149,13 @@ export function SalesCard() {
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 10 }}>
           {statCard('Booked Calls',       data.bookedCalls,         data.bookedCalls,         data.prevBookedCalls)}
           {statCard('New Clients Closed', data.closedClients,       data.closedClients,       data.prevClosedClients)}
           {statCard('Lead to Close',      `${data.leadToCloseRate}%`, data.leadToCloseRate,   data.prevLeadToCloseRate)}
           {statCard('Open Pipeline',      data.openPipeline,        data.newPipelineThisWeek, data.newPipelinePrevWeek, { neutral: true })}
           {statCard('Hot Pipeline',       data.hotPipeline,         0,                        0,                        { noWoW: true })}
+          {statCard('T.O.B.s Signed',     data.tobSignedThisMonth,  data.tobSignedThisMonth, data.tobSignedLastMonth)}
         </div>
 
         {/* Current vs Previous bar chart */}

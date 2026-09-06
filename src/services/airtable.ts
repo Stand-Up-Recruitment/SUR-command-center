@@ -103,6 +103,12 @@ export async function fetchSalesKPIs(frame: TimeFrame = 'month'): Promise<SalesK
   const leadsThis = allClients.filter(f => isInPeriod(f.Created, b.start, b.now)).length;
   const leadsPrev = allClients.filter(f => isInPeriod(f.Created, b.prevStart, b.prevEnd)).length;
 
+  const d = new Date();
+  const thisMonthStart = new Date(d.getFullYear(), d.getMonth(), 1).getTime();
+  const lastMonthStart = new Date(d.getFullYear(), d.getMonth() - 1, 1).getTime();
+  const tobSignedThisMonth = allMainClient.filter(f => isInPeriod(f['Signed Date'], thisMonthStart, Date.now())).length;
+  const tobSignedLastMonth = allMainClient.filter(f => isInPeriod(f['Signed Date'], lastMonthStart, thisMonthStart)).length;
+
   return {
     bookedCalls,
     prevBookedCalls,
@@ -118,6 +124,8 @@ export async function fetchSalesKPIs(frame: TimeFrame = 'month'): Promise<SalesK
     leadsThisWeek: leadsThis,
     leadsPrevWeek: leadsPrev,
     hotPipeline: allCRM.filter(f => Boolean(f['TOB Status'])).length,
+    tobSignedThisMonth,
+    tobSignedLastMonth,
   };
 }
 

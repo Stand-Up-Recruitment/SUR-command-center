@@ -26,6 +26,8 @@ export interface SalesKPIs {
   leadsThisWeek: number;
   leadsPrevWeek: number;
   hotPipeline: number;           // CRM records with TOB Status set (snapshot)
+  tobSignedThisMonth: number;    // T.O.B.s signed, real calendar month-to-date
+  tobSignedLastMonth: number;    // T.O.B.s signed, full previous calendar month
 }
 
 // ─── Recruiter ────────────────────────────────────────────────────────────────
