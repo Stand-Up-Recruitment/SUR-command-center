@@ -78,9 +78,9 @@ function G4({ children }: { children: React.ReactNode }) {
   );
 }
 
-function G3({ children }: { children: React.ReactNode }) {
+function G5({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 10, marginBottom: '.875rem' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0,1fr))', gap: 10, marginBottom: '.875rem' }}>
       {children}
     </div>
   );
@@ -344,6 +344,7 @@ function CashPositionSection({
 function NZBusinessSection({ data, nzActiveWorkers, nzCogsMax }: {
   data: {
     nzRevenue: number; nzTotalCogs: number; nzGrossProfit: number; nzNetProfit?: number;
+    nzTotalOpex?: number;
     nzCogs: Array<{ label: string; value: number }>;
     nzWorkerStats?: {
       dataAvailable: boolean; matchedWorkers: number; avgBillRate: number; avgHoursPerWorker: number;
@@ -361,12 +362,13 @@ function NZBusinessSection({ data, nzActiveWorkers, nzCogsMax }: {
     <>
       <SH color={NZ} label="New Zealand Business" sub="Labour hire operations" />
 
-      <G4>
+      <G5>
         <KP accent={NZ} label="Revenue"      value={fmtNZD(data.nzRevenue)}     sub="NZ sales income" />
         <KP accent={NZ} label="COGS"         value={fmtNZD(data.nzTotalCogs)}   sub={`${Math.round(data.nzTotalCogs / data.nzRevenue * 100)}% of revenue`} valueColor={RD} />
         <KP accent={NZ} label="Gross profit" value={fmtNZD(data.nzGrossProfit)} sub={`${Math.round(data.nzGrossProfit / data.nzRevenue * 100)}% GP margin`} valueColor={data.nzGrossProfit >= 0 ? NZ : RD} />
+        <KP accent={NZ} label="Opex"         value={fmtNZD(data.nzTotalOpex ?? 0)} sub={`${Math.round((data.nzTotalOpex ?? 0) / data.nzRevenue * 100)}% of revenue`} valueColor={RD} />
         <KP accent={NZ} label="Net"          value={fmtNZD(data.nzNetProfit ?? data.nzGrossProfit)} sub="Net contribution" valueColor={(data.nzNetProfit ?? data.nzGrossProfit) >= 0 ? NZ : RD} />
-      </G4>
+      </G5>
 
       <Card accent={NZ}>
         <div style={{ fontSize: 13, fontWeight: 500, color: TEXT, marginBottom: '.75rem' }}>NZ cost of goods sold — {fmtNZD(data.nzTotalCogs)}</div>
@@ -451,6 +453,7 @@ function AUSBusinessSection({ data, fyYear, ausPlacementsCount, placements, ausC
   data: {
     ausRevenue: number; ausTotalCogs: number; ausGrossProfit: number; ausNetProfit?: number;
     ausTotalCosts: number; ausCosts: Array<{ label: string; value: number }>;
+    ausRecruiterBonuses?: number;
   };
   fyYear: number;
   ausPlacementsCount: number;
@@ -461,12 +464,13 @@ function AUSBusinessSection({ data, fyYear, ausPlacementsCount, placements, ausC
     <>
       <SH color={AUS} label="Australia Business" sub="International placements & operations" />
 
-      <G4>
+      <G5>
         <KP accent={AUS} label="Revenue" value={fmtNZD(data.ausRevenue)}      sub="Sales - International" />
         <KP accent={AUS} label="COGS"    value={fmtNZD(data.ausTotalCogs)}   sub={`100% of Cost of Sales${data.ausRecruiterBonuses ? ` + ${fmtNZD(data.ausRecruiterBonuses)} bonuses` : ''}`} valueColor={RD} />
         <KP accent={AUS} label="Gross"   value={fmtNZD(data.ausGrossProfit)} sub={`${Math.round(data.ausGrossProfit / data.ausRevenue * 100)}% margin`} valueColor={data.ausGrossProfit >= 0 ? NZ : RD} />
+        <KP accent={AUS} label="Opex"    value={fmtNZD(data.ausTotalCosts)}  sub="90% of shared Opex" valueColor={RD} />
         <KP accent={AUS} label="Net"     value={fmtNZD(data.ausNetProfit ?? data.ausGrossProfit)} sub="Net contribution" valueColor={(data.ausNetProfit ?? data.ausGrossProfit) >= 0 ? NZ : RD} />
-      </G4>
+      </G5>
 
       <Card accent={AUS}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
