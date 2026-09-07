@@ -11,13 +11,15 @@ const OPTIONS: { value: TimeFrame; label: string }[] = [
 export function TimeFramePicker({
   value,
   onChange,
+  options = OPTIONS,
 }: {
   value: TimeFrame;
   onChange: (f: TimeFrame) => void;
+  options?: { value: TimeFrame; label: string }[];
 }) {
   return (
     <div style={{ display: 'flex', gap: 2, background: COLORS.bgSubtle, border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: 3 }}>
-      {OPTIONS.map(o => (
+      {options.map(o => (
         <button
           key={o.value}
           onClick={() => onChange(o.value)}

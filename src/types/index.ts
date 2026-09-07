@@ -35,7 +35,9 @@ export interface RecruiterStat {
   name: string;
   phoneInterviews: number;
   internalInterviews: number;
+  prevInternalInterviews: number;
   clientInterviews: number;
+  prevClientInterviews: number;
   placements: number;
   prevPlacements: number;
 }
@@ -217,7 +219,7 @@ export interface XeroFinanceData {
   ausTotalCogs: number;
   ausTotalCosts: number;
   ausGrossProfit: number;
-  ausRecruiterBonuses?: number; // "Salaries - Commissions" from Xero, part of AUS Opex (ausTotalCosts), attributed 100% to AUS
+  ausRecruiterBonuses?: number; // "Salaries - Commissions" from Xero, reclassified as AUS COGS
   advertising: number;
   ausAdvertising?: number;
   nzAdvertising?: number;

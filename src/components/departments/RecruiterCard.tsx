@@ -1,7 +1,4 @@
 import { useState } from 'react';
-import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
-} from 'recharts';
 import { StatusBadge } from '../shared/StatusBadge';
 import { WoWBadge } from '../shared/WoWBadge';
 import { TimeFramePicker } from '../shared/TimeFramePicker';
@@ -62,10 +59,7 @@ export function RecruiterCard() {
     data.placements >= 1 ? 'at-risk'  : 'off-track';
 
   const subtitleText =
-    frame === 'day'   ? 'Today vs yesterday' :
-    frame === 'week'  ? 'This week vs last week' :
-    frame === 'month' ? 'Month to date vs prior period' :
-                        'Year to date vs prior period';
+    frame === 'week' ? 'This week vs last week' : 'Month to date vs prior period';
 
   // Open jobs is a live snapshot, not tied to the selected period — include recruiters
   // who have open jobs even if they had no interviews/placements this period.
@@ -74,7 +68,7 @@ export function RecruiterCard() {
   const displayRecruiters = [...data.byRecruiter];
   for (const name of Object.keys(openJobsData ?? {})) {
     if (!displayRecruiters.some(r => firstName(r.name) === firstName(name))) {
-      displayRecruiters.push({ name, phoneInterviews: 0, internalInterviews: 0, clientInterviews: 0, placements: 0, prevPlacements: 0 });
+      displayRecruiters.push({ name, phoneInterviews: 0, internalInterviews: 0, prevInternalInterviews: 0, clientInterviews: 0, prevClientInterviews: 0, placements: 0, prevPlacements: 0 });
     }
   }
   displayRecruiters.sort((a, b) => a.name.localeCompare(b.name));
@@ -90,6 +84,13 @@ export function RecruiterCard() {
       <div style={{ fontSize: 10, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>{label}</div>
       <div style={{ fontSize: 20, fontWeight: 800, color: COLORS.textPrimary }}>{value}</div>
       {!noWoW && <WoWBadge current={current} prev={prev} />}
+    </div>
+  );
+
+  const metricCell = (current: number, prev: number) => (
+    <div>
+      <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{current}</div>
+      <div style={{ fontSize: 10, color: COLORS.textMuted }}>prev {prev}</div>
     </div>
   );
 
@@ -109,7 +110,11 @@ export function RecruiterCard() {
               animation: 'spin 0.7s linear infinite',
             }} />
           )}
-          <TimeFramePicker value={frame} onChange={setFrame} />
+          <TimeFramePicker
+            value={frame}
+            onChange={setFrame}
+            options={[{ value: 'week', label: 'Weekly' }, { value: 'month', label: 'Monthly' }]}
+          />
           <StatusBadge status={error ? 'no-data' : status} />
         </div>
       </div>
@@ -121,8 +126,7 @@ export function RecruiterCard() {
           <span style={{ fontSize: 44, fontWeight: 900, color: COLORS.textPrimary, letterSpacing: '-2px', lineHeight: 1 }}>{data.placements}</span>
           <WoWBadge current={data.placements} prev={data.prevPlacements} />
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
-          {statCard('Phone Interviews',   data.phoneInterviews,   data.phoneInterviews,   data.prevPhoneInterviews)}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
           {statCard('Internal Interviews',data.internalInterviews,data.internalInterviews,data.prevInternalInterviews)}
           {statCard('Client Interviews',  data.clientInterviews,  data.clientInterviews,  data.prevClientInterviews)}
           {statCard('Conversion Rate',    `${data.conversionRate}%`, data.conversionRate, data.prevConversionRate)}
@@ -131,7 +135,6 @@ export function RecruiterCard() {
       </div>
 
       {displayRecruiters.length > 0 && (
-        <>
           <div style={{ ...CARD_STYLE, padding: 0, overflow: 'hidden' }}>
             <div style={{ padding: '14px 20px', borderBottom: `1px solid ${COLORS.border}` }}>
               <span style={{ fontSize: 11, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
@@ -141,7 +144,7 @@ export function RecruiterCard() {
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ background: COLORS.bgSubtle }}>
-                  {['Recruiter', 'Phone', 'Internal', 'Client', 'Open Jobs'].map(h => (
+                  {['Recruiter', 'Internal', 'Client', 'Contract Signed', 'Open Jobs'].map(h => (
                     <th key={h} style={{ padding: '8px 16px', fontSize: 10, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em', textAlign: h === 'Recruiter' ? 'left' : 'center' }}>{h}</th>
                   ))}
                 </tr>
@@ -150,77 +153,18 @@ export function RecruiterCard() {
                 {displayRecruiters.map((r, i) => (
                   <tr key={r.name} style={{ borderTop: `1px solid ${COLORS.border}`, background: i % 2 === 1 ? COLORS.bgSubtle : 'transparent' }}>
                     <td style={{ padding: '10px 16px', fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{r.name}</td>
-                    <td style={{ padding: '10px 16px', fontSize: 13, color: COLORS.textPrimary, textAlign: 'center' }}>{r.phoneInterviews}</td>
-                    <td style={{ padding: '10px 16px', fontSize: 13, color: COLORS.textPrimary, textAlign: 'center' }}>{r.internalInterviews}</td>
-                    <td style={{ padding: '10px 16px', fontSize: 13, color: COLORS.textPrimary, textAlign: 'center' }}>{r.clientInterviews}</td>
+                    <td style={{ padding: '10px 16px', textAlign: 'center' }}>{metricCell(r.internalInterviews, r.prevInternalInterviews)}</td>
+                    <td style={{ padding: '10px 16px', textAlign: 'center' }}>{metricCell(r.clientInterviews, r.prevClientInterviews)}</td>
+                    <td style={{ padding: '10px 16px', textAlign: 'center' }}>
+                      {metricCell(r.placements, r.prevPlacements)}
+                      <WoWBadge current={r.placements} prev={r.prevPlacements} />
+                    </td>
                     <td style={{ padding: '10px 16px', fontSize: 13, color: COLORS.textPrimary, textAlign: 'center' }}>{openJobsFor(r.name)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-
-          <div style={{ ...CARD_STYLE, padding: 0, overflow: 'hidden' }}>
-            <div style={{ padding: '14px 20px', borderBottom: `1px solid ${COLORS.border}` }}>
-              <span style={{ fontSize: 11, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
-                Contract Signed · By Recruiter
-              </span>
-            </div>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ background: COLORS.bgSubtle }}>
-                  {['Recruiter', 'Contract Signed', 'Previous Month', 'vs Last Period'].map(h => (
-                    <th key={h} style={{ padding: '8px 16px', fontSize: 10, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em', textAlign: h === 'Recruiter' ? 'left' : 'center' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {displayRecruiters.map((r, i) => (
-                  <tr key={r.name} style={{ borderTop: `1px solid ${COLORS.border}`, background: i % 2 === 1 ? COLORS.bgSubtle : 'transparent' }}>
-                    <td style={{ padding: '10px 16px', fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{r.name}</td>
-                    <td style={{ padding: '10px 16px', fontSize: 13, fontWeight: 700, color: r.placements > 0 ? COLORS.accent : COLORS.textPrimary, textAlign: 'center' }}>{r.placements}</td>
-                    <td style={{ padding: '10px 16px', fontSize: 13, color: COLORS.textPrimary, textAlign: 'center' }}>{r.prevPlacements}</td>
-                    <td style={{ padding: '10px 16px', textAlign: 'center' }}>
-                      <WoWBadge current={r.placements} prev={r.prevPlacements} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Per-recruiter pipeline bar chart */}
-          <div style={{ ...CARD_STYLE, padding: 20 }}>
-            <div style={{ fontSize: 10, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 14 }}>
-              Recruiter Pipeline Breakdown
-            </div>
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart
-                data={displayRecruiters.map(r => ({
-                  name: r.name.split(' ')[0],
-                  'Phone': r.phoneInterviews,
-                  'Internal': r.internalInterviews,
-                  'Client': r.clientInterviews,
-                  'Contract Signed': r.placements,
-                }))}
-                margin={{ top: 4, right: 4, left: -20, bottom: 0 }}
-                barGap={2}
-              >
-                <XAxis dataKey="name" tick={{ fontSize: 12, fill: COLORS.textMuted }} axisLine={false} tickLine={false} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: COLORS.textMuted }} axisLine={false} tickLine={false} />
-                <Tooltip
-                  contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${COLORS.border}`, background: '#1a1a1a' }}
-                  cursor={{ fill: 'rgba(255,255,255,0.04)' }}
-                />
-                <Legend iconType="square" iconSize={8} wrapperStyle={{ fontSize: 11, color: COLORS.textMuted, paddingTop: 8 }} />
-                <Bar dataKey="Phone"     fill="#60a5fa" radius={[3,3,0,0]} maxBarSize={28} />
-                <Bar dataKey="Internal"  fill="#a78bfa" radius={[3,3,0,0]} maxBarSize={28} />
-                <Bar dataKey="Client"    fill="#34d399" radius={[3,3,0,0]} maxBarSize={28} />
-                <Bar dataKey="Contract Signed" fill={COLORS.accent} radius={[3,3,0,0]} maxBarSize={28} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </>
       )}
 
       {error && (

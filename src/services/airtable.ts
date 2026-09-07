@@ -160,7 +160,7 @@ export async function fetchRecruiterKPIs(frame: TimeFrame = 'month'): Promise<Re
   const recruiterMap = new Map<string, RecruiterStat>();
   const getOrCreate = (name: string) => {
     if (!recruiterMap.has(name)) {
-      recruiterMap.set(name, { name, phoneInterviews: 0, internalInterviews: 0, clientInterviews: 0, placements: 0, prevPlacements: 0 });
+      recruiterMap.set(name, { name, phoneInterviews: 0, internalInterviews: 0, prevInternalInterviews: 0, clientInterviews: 0, prevClientInterviews: 0, placements: 0, prevPlacements: 0 });
     }
     return recruiterMap.get(name)!;
   };
@@ -172,6 +172,14 @@ export async function fetchRecruiterKPIs(frame: TimeFrame = 'month'): Promise<Re
     if (f.Status === 'Phone Interview')                  stat.phoneInterviews++;
     else if (f.Status === 'Internal Interview')          stat.internalInterviews++;
     else if (f.Status === 'Client-Candidate Interview')  stat.clientInterviews++;
+  }
+
+  for (const f of pipeline.filter(f => isInPeriod(f.Created, b.prevStart, b.prevEnd))) {
+    const name = f.Name?.trim();
+    if (!name) continue;
+    const stat = getOrCreate(name);
+    if (f.Status === 'Internal Interview')               stat.prevInternalInterviews++;
+    else if (f.Status === 'Client-Candidate Interview')  stat.prevClientInterviews++;
   }
 
   for (const f of placements.filter(f => isInPeriod(f['Created Date'], b.start, b.now))) {
