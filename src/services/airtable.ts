@@ -252,9 +252,8 @@ function timeBoundaries(frame: TimeFrame) {
     prevStart = monMidnight - 7 * 86_400_000;
   } else if (frame === 'month') {
     start = new Date(d.getFullYear(), d.getMonth(), 1).getTime();
-    const elapsed = now - start;
-    prevEnd  = start;
-    prevStart = start - elapsed;
+    prevEnd   = start;
+    prevStart = new Date(d.getFullYear(), d.getMonth() - 1, 1).getTime();
   } else { // 'year'
     start = new Date(d.getFullYear(), 0, 1).getTime();
     const elapsed = now - start;
