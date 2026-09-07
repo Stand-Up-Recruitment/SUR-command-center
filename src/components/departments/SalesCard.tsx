@@ -10,6 +10,11 @@ import { useSalesKPIs } from '../../hooks/queries';
 import { COLORS, CARD_STYLE } from '../../styles/tokens';
 import type { DepartmentStatus, TimeFrame } from '../../types';
 
+const TIMEFRAME_OPTIONS: { value: TimeFrame; label: string }[] = [
+  { value: 'week',  label: 'Weekly' },
+  { value: 'month', label: 'Monthly' },
+];
+
 function funnelConversion(numerator: number, denominator: number): string {
   if (denominator === 0) return '—';
   return `${Math.round((numerator / denominator) * 100)}%`;
@@ -44,8 +49,8 @@ function SalesSkeleton() {
             </div>
           ))}
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 10 }}>
-          {[0, 1, 2, 3, 4, 5].map(statBlock)}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+          {[0, 1, 2, 3].map(statBlock)}
         </div>
       </div>
     </div>
@@ -64,10 +69,7 @@ export function SalesCard() {
     data.callsToCloseRate >= 20 ? 'at-risk'  : 'off-track';
 
   const subtitleText =
-    frame === 'day'   ? 'Today vs yesterday' :
-    frame === 'week'  ? 'This week vs last week' :
-    frame === 'month' ? 'Month to date vs prior period' :
-                        'Year to date vs prior period';
+    frame === 'week' ? 'This week vs last week' : 'Month to date vs prior period';
 
   const statCard = (
     label: string,
@@ -101,7 +103,7 @@ export function SalesCard() {
               animation: 'spin 0.7s linear infinite',
             }} />
           )}
-          <TimeFramePicker value={frame} onChange={setFrame} />
+          <TimeFramePicker value={frame} onChange={setFrame} options={TIMEFRAME_OPTIONS} />
           <StatusBadge status={error ? 'no-data' : status} />
         </div>
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
@@ -149,12 +151,10 @@ export function SalesCard() {
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
           {statCard('Booked Calls',       data.bookedCalls,         data.bookedCalls,         data.prevBookedCalls)}
           {statCard('New Clients Closed', data.closedClients,       data.closedClients,       data.prevClosedClients)}
           {statCard('Lead to Close',      `${data.leadToCloseRate}%`, data.leadToCloseRate,   data.prevLeadToCloseRate)}
-          {statCard('Open Pipeline',      data.openPipeline,        data.newPipelineThisWeek, data.newPipelinePrevWeek, { neutral: true })}
-          {statCard('Hot Pipeline',       data.hotPipeline,         0,                        0,                        { noWoW: true })}
           {statCard('T.O.B.s Signed',     data.tobSignedThisMonth,  data.tobSignedThisMonth, data.tobSignedLastMonth)}
         </div>
 
