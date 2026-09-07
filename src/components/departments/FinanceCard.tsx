@@ -386,7 +386,7 @@ function NZBusinessSection({ data, nzActiveWorkers, nzCogsMax }: {
               />
             ))
         ) : (
-          <div style={{ fontSize: 12, color: MUTED, fontStyle: 'italic' }}>No direct Cost of Sales attributed to NZ — all Cost of Sales, including recruiter bonuses, is now attributed to the AUS business.</div>
+          <div style={{ fontSize: 12, color: MUTED, fontStyle: 'italic' }}>No direct Cost of Sales attributed to NZ — all Cost of Sales is now attributed to the AUS business.</div>
         )}
         <NoteBox>NZ gross profit ({fmtNZD(data.nzGrossProfit)}) funds all shared business overheads. NZ operates as a self-contained P&amp;L.</NoteBox>
         {nzActiveWorkers !== '—' && (
@@ -466,9 +466,9 @@ function AUSBusinessSection({ data, fyYear, ausPlacementsCount, placements, ausC
 
       <G5>
         <KP accent={AUS} label="Revenue" value={fmtNZD(data.ausRevenue)}      sub="Sales - International" />
-        <KP accent={AUS} label="COGS"    value={fmtNZD(data.ausTotalCogs)}   sub={`100% of Cost of Sales${data.ausRecruiterBonuses ? ` + ${fmtNZD(data.ausRecruiterBonuses)} bonuses` : ''}`} valueColor={RD} />
+        <KP accent={AUS} label="COGS"    value={fmtNZD(data.ausTotalCogs)}   sub="100% of Cost of Sales" valueColor={RD} />
         <KP accent={AUS} label="Gross"   value={fmtNZD(data.ausGrossProfit)} sub={`${Math.round(data.ausGrossProfit / data.ausRevenue * 100)}% margin`} valueColor={data.ausGrossProfit >= 0 ? NZ : RD} />
-        <KP accent={AUS} label="Opex"    value={fmtNZD(data.ausTotalCosts)}  sub="90% of shared Opex" valueColor={RD} />
+        <KP accent={AUS} label="Opex"    value={fmtNZD(data.ausTotalCosts)}  sub={`90% of shared Opex${data.ausRecruiterBonuses ? ` + ${fmtNZD(data.ausRecruiterBonuses)} bonuses` : ''}`} valueColor={RD} />
         <KP accent={AUS} label="Net"     value={fmtNZD(data.ausNetProfit ?? data.ausGrossProfit)} sub="Net contribution" valueColor={(data.ausNetProfit ?? data.ausGrossProfit) >= 0 ? NZ : RD} />
       </G5>
 
@@ -485,7 +485,7 @@ function AUSBusinessSection({ data, fyYear, ausPlacementsCount, placements, ausC
                 color={i === 0 ? AUS : AM}
               />
             ))}
-            <NoteBox>AUS now carries 100% of Cost of Sales{data.ausRecruiterBonuses ? `, plus ${fmtNZD(data.ausRecruiterBonuses)} in recruiter/staff commissions (Xero "Salaries - Commissions")` : ''} reclassified as a direct cost rather than overhead.</NoteBox>
+            <NoteBox>AUS now carries 100% of Cost of Sales, plus 100% of recruiter/staff commissions (Xero "Salaries - Commissions"){data.ausRecruiterBonuses ? ` (${fmtNZD(data.ausRecruiterBonuses)})` : ''} — commissions remain part of Opex, not Cost of Sales.</NoteBox>
           </div>
           <div>
             <div style={{ fontSize: 13, fontWeight: 500, color: TEXT, marginBottom: '.75rem' }}>FY{fyYear} placements — {ausPlacementsCount} confirmed</div>
