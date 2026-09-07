@@ -141,7 +141,7 @@ export async function fetchRecruiterKPIs(frame: TimeFrame = 'month'): Promise<Re
     fetchAllFromBase<{ Status?: string; Created?: string; Name?: string }>(
       CANDIDATES_BASE_ID, PIPELINE_TABLE_ID, {}
     ),
-    fetchAllFromBase<{ 'Created Date'?: string; Recruiter?: string }>(
+    fetchAllFromBase<{ 'Created Date'?: string; Recruiter?: string; Status?: string }>(
       CLIENTS_BASE_ID, PLACEMENTS_TABLE_ID, {}
     ),
   ]);
@@ -153,8 +153,8 @@ export async function fetchRecruiterKPIs(frame: TimeFrame = 'month'): Promise<Re
   const clientThis   = pipeline.filter(f => f.Status === 'Client-Candidate Interview'  && isInPeriod(f.Created, b.start, b.now)).length;
   const clientPrev   = pipeline.filter(f => f.Status === 'Client-Candidate Interview'  && isInPeriod(f.Created, b.prevStart, b.prevEnd)).length;
 
-  const placementsThis = placements.filter(f => isInPeriod(f['Created Date'], b.start, b.now)).length;
-  const placementsPrev = placements.filter(f => isInPeriod(f['Created Date'], b.prevStart, b.prevEnd)).length;
+  const placementsThis = placements.filter(f => f.Status !== 'End' && isInPeriod(f['Created Date'], b.start, b.now)).length;
+  const placementsPrev = placements.filter(f => f.Status !== 'End' && isInPeriod(f['Created Date'], b.prevStart, b.prevEnd)).length;
 
   // Group by recruiter (current period only)
   const recruiterMap = new Map<string, RecruiterStat>();
@@ -182,13 +182,13 @@ export async function fetchRecruiterKPIs(frame: TimeFrame = 'month'): Promise<Re
     else if (f.Status === 'Client-Candidate Interview')  stat.prevClientInterviews++;
   }
 
-  for (const f of placements.filter(f => isInPeriod(f['Created Date'], b.start, b.now))) {
+  for (const f of placements.filter(f => f.Status !== 'End' && isInPeriod(f['Created Date'], b.start, b.now))) {
     const name = f.Recruiter?.trim();
     if (!name) continue;
     getOrCreate(name).placements++;
   }
 
-  for (const f of placements.filter(f => isInPeriod(f['Created Date'], b.prevStart, b.prevEnd))) {
+  for (const f of placements.filter(f => f.Status !== 'End' && isInPeriod(f['Created Date'], b.prevStart, b.prevEnd))) {
     const name = f.Recruiter?.trim();
     if (!name) continue;
     getOrCreate(name).prevPlacements++;
