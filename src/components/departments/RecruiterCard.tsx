@@ -79,6 +79,8 @@ export function RecruiterCard() {
     return key ? openJobsData[key] : 0;
   };
 
+  const totalOpenJobs = Object.values(openJobsData ?? {}).reduce((sum, n) => sum + n, 0);
+
   const statCard = (label: string, value: string | number, current: number, prev: number, noWoW?: boolean) => (
     <div style={{ background: COLORS.bgSubtle, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: '14px 16px' }}>
       <div style={{ fontSize: 10, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>{label}</div>
@@ -119,11 +121,10 @@ export function RecruiterCard() {
           <span style={{ fontSize: 44, fontWeight: 900, color: COLORS.textPrimary, letterSpacing: '-2px', lineHeight: 1 }}>{data.placements}</span>
           <WoWBadge current={data.placements} prev={data.prevPlacements} />
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
           {statCard('Internal Interviews',data.internalInterviews,data.internalInterviews,data.prevInternalInterviews)}
           {statCard('Client Interviews',  data.clientInterviews,  data.clientInterviews,  data.prevClientInterviews)}
-          {statCard('Conversion Rate',    `${data.conversionRate}%`, data.conversionRate, data.prevConversionRate)}
-          {statCard('Active Pipeline',    data.activePipeline,    0,                      0,                       true)}
+          {statCard('Total Open Jobs',    totalOpenJobs,           0,                      0,                       true)}
         </div>
       </div>
 
