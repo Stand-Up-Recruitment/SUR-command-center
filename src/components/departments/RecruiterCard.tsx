@@ -139,7 +139,7 @@ export function RecruiterCard() {
               <thead>
                 <tr style={{ background: COLORS.bgSubtle }}>
                   <th rowSpan={2} style={{ padding: '8px 16px', fontSize: 10, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em', textAlign: 'left', verticalAlign: 'bottom' }}>Recruiter</th>
-                  {['Internal', 'Client', 'Contract Signed'].map(h => (
+                  {['Internal Interview', 'Client Interview', 'Contract Signed'].map(h => (
                     <th key={h} colSpan={2} style={{ padding: '8px 16px', fontSize: 10, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em', textAlign: 'center', borderLeft: `1px solid ${COLORS.border}` }}>{h}</th>
                   ))}
                   <th rowSpan={2} style={{ padding: '8px 16px', fontSize: 10, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em', textAlign: 'center', verticalAlign: 'bottom', borderLeft: `1px solid ${COLORS.border}` }}>Open Jobs</th>
