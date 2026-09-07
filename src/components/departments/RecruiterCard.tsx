@@ -87,13 +87,6 @@ export function RecruiterCard() {
     </div>
   );
 
-  const metricCell = (current: number, prev: number) => (
-    <div>
-      <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{current}</div>
-      <div style={{ fontSize: 10, color: COLORS.textMuted }}>prev {prev}</div>
-    </div>
-  );
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
@@ -144,22 +137,33 @@ export function RecruiterCard() {
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ background: COLORS.bgSubtle }}>
-                  {['Recruiter', 'Internal', 'Client', 'Contract Signed', 'Open Jobs'].map(h => (
-                    <th key={h} style={{ padding: '8px 16px', fontSize: 10, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em', textAlign: h === 'Recruiter' ? 'left' : 'center' }}>{h}</th>
+                  <th rowSpan={2} style={{ padding: '8px 16px', fontSize: 10, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em', textAlign: 'left', verticalAlign: 'bottom' }}>Recruiter</th>
+                  {['Internal', 'Client', 'Contract Signed'].map(h => (
+                    <th key={h} colSpan={2} style={{ padding: '8px 16px', fontSize: 10, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em', textAlign: 'center', borderLeft: `1px solid ${COLORS.border}` }}>{h}</th>
                   ))}
+                  <th rowSpan={2} style={{ padding: '8px 16px', fontSize: 10, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em', textAlign: 'center', verticalAlign: 'bottom', borderLeft: `1px solid ${COLORS.border}` }}>Open Jobs</th>
+                </tr>
+                <tr style={{ background: COLORS.bgSubtle }}>
+                  {['Internal Interview', 'Client Interview', 'Contract Signed'].flatMap(h => ([
+                    <th key={`${h}-current`} style={{ padding: '4px 12px 8px', fontSize: 9, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em', textAlign: 'center', borderLeft: `1px solid ${COLORS.border}` }}>Current</th>,
+                    <th key={`${h}-prev`} style={{ padding: '4px 12px 8px', fontSize: 9, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em', textAlign: 'center' }}>Prev</th>,
+                  ]))}
                 </tr>
               </thead>
               <tbody>
                 {displayRecruiters.map((r, i) => (
                   <tr key={r.name} style={{ borderTop: `1px solid ${COLORS.border}`, background: i % 2 === 1 ? COLORS.bgSubtle : 'transparent' }}>
                     <td style={{ padding: '10px 16px', fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{r.name}</td>
-                    <td style={{ padding: '10px 16px', textAlign: 'center' }}>{metricCell(r.internalInterviews, r.prevInternalInterviews)}</td>
-                    <td style={{ padding: '10px 16px', textAlign: 'center' }}>{metricCell(r.clientInterviews, r.prevClientInterviews)}</td>
-                    <td style={{ padding: '10px 16px', textAlign: 'center' }}>
-                      {metricCell(r.placements, r.prevPlacements)}
+                    <td style={{ padding: '10px 12px', fontSize: 13, fontWeight: 600, color: COLORS.textPrimary, textAlign: 'center', borderLeft: `1px solid ${COLORS.border}` }}>{r.internalInterviews}</td>
+                    <td style={{ padding: '10px 12px', fontSize: 13, color: COLORS.textMuted, textAlign: 'center' }}>{r.prevInternalInterviews}</td>
+                    <td style={{ padding: '10px 12px', fontSize: 13, fontWeight: 600, color: COLORS.textPrimary, textAlign: 'center', borderLeft: `1px solid ${COLORS.border}` }}>{r.clientInterviews}</td>
+                    <td style={{ padding: '10px 12px', fontSize: 13, color: COLORS.textMuted, textAlign: 'center' }}>{r.prevClientInterviews}</td>
+                    <td style={{ padding: '10px 12px', fontSize: 13, fontWeight: 700, color: r.placements > 0 ? COLORS.accent : COLORS.textPrimary, textAlign: 'center', borderLeft: `1px solid ${COLORS.border}` }}>{r.placements}</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                      <span style={{ fontSize: 13, color: COLORS.textMuted }}>{r.prevPlacements}</span>
                       <WoWBadge current={r.placements} prev={r.prevPlacements} />
                     </td>
-                    <td style={{ padding: '10px 16px', fontSize: 13, color: COLORS.textPrimary, textAlign: 'center' }}>{openJobsFor(r.name)}</td>
+                    <td style={{ padding: '10px 16px', fontSize: 13, color: COLORS.textPrimary, textAlign: 'center', borderLeft: `1px solid ${COLORS.border}` }}>{openJobsFor(r.name)}</td>
                   </tr>
                 ))}
               </tbody>
