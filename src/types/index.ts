@@ -40,6 +40,8 @@ export interface RecruiterStat {
   prevClientInterviews: number;
   placements: number;
   prevPlacements: number;
+  fallThroughRate: number;     // % of contracts signed this period later terminated (Status='End' + Cancellation Date)
+  prevFallThroughRate: number;
 }
 
 export interface RecruiterKPIs {
@@ -53,8 +55,27 @@ export interface RecruiterKPIs {
   prevPlacements: number;
   conversionRate: number;      // placements ÷ client interviews × 100
   prevConversionRate: number;
+  fallThroughRate: number;     // terminations within probation ÷ contracts signed, same period × 100
+  prevFallThroughRate: number;
   activePipeline: number;      // total candidates in any stage (snapshot)
   byRecruiter: RecruiterStat[];
+}
+
+// ─── Job aging ──────────────────────────────────────────────────────────────
+export interface JobAgingStat {
+  name: string;
+  totalOpenJobs: number;
+  fresh: number;   // open ≤ 21 days
+  ageing: number;  // open 22–35 days
+  stale: number;   // open 36+ days
+}
+
+export interface JobAgingKPIs {
+  totalOpenJobs: number;
+  fresh: number;
+  ageing: number;
+  stale: number;
+  byRecruiter: JobAgingStat[];
 }
 
 // ─── Marketing ────────────────────────────────────────────────────────────────

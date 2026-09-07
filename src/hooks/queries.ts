@@ -3,6 +3,7 @@ import {
   fetchSalesKPIs,
   fetchMarketingKPIs,
   fetchRecruiterKPIs,
+  fetchJobAging,
   fetchRevenueKPIs,
   fetchRetentionKPIs,
   fetchAusPlacements,
@@ -10,7 +11,6 @@ import {
   fetchLTGPKPIs,
 } from '../services/airtable';
 import { fetchXeroFinanceData, hasXeroCredentials } from '../services/xero';
-import { fetchOpenJobsByRecruiter, hasOpenJobsCredentials } from '../services/jobAdder';
 import { fetchMetaSpendByFrame } from '../services/metaAds';
 import type { TimeFrame, LTGPFrame } from '../types';
 
@@ -51,11 +51,11 @@ export function useRecruiterKPIs(frame: TimeFrame = 'month') {
   });
 }
 
-export function useOpenJobs() {
+export function useJobAging() {
   return useQuery({
-    queryKey: ['open-jobs'],
-    queryFn: fetchOpenJobsByRecruiter,
-    enabled: hasOpenJobsCredentials,
+    queryKey: ['job-aging'],
+    queryFn: fetchJobAging,
+    enabled: hasAirtableKey && hasCandidatesBase,
   });
 }
 

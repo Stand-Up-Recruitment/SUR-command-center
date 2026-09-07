@@ -3,6 +3,8 @@ import type {
   SalesKPIs,
   RecruiterKPIs,
   RecruiterStat,
+  JobAgingKPIs,
+  JobAgingStat,
   MarketingKPIs,
   RevenueKPIs,
   LeadMetric,
@@ -133,6 +135,13 @@ export async function fetchSalesKPIs(frame: TimeFrame = 'month'): Promise<SalesK
 const PIPELINE_TABLE_ID    = 'tblpHoIL0R3MTQOXF';
 const PLACEMENTS_TABLE_ID  = 'tblvttoRo4DuZAIeW';
 const INSTALMENTS_TABLE_ID = 'tblzsNY9hiQunnopk';
+const OPEN_ROLES_TABLE_ID  = 'tblCZFrD3UQ1M0vsl';
+
+// A placement is a "fall-through" when it was later terminated (Status='End' with a
+// Cancellation Date) — same predicate the Retention card uses. Attributed to the period
+// the contract was signed ('Created Date'), not the period it terminated, per spec.
+const isFallThrough = (f: { Status?: string; 'Cancellation Date'?: string }) =>
+  f.Status === 'End' && Boolean(f['Cancellation Date']);
 
 export async function fetchRecruiterKPIs(frame: TimeFrame = 'month'): Promise<RecruiterKPIs> {
   const b = timeBoundaries(frame);
@@ -141,7 +150,7 @@ export async function fetchRecruiterKPIs(frame: TimeFrame = 'month'): Promise<Re
     fetchAllFromBase<{ Status?: string; Created?: string; Name?: string }>(
       CANDIDATES_BASE_ID, PIPELINE_TABLE_ID, {}
     ),
-    fetchAllFromBase<{ 'Created Date'?: string; Recruiter?: string; Status?: string }>(
+    fetchAllFromBase<{ 'Created Date'?: string; Recruiter?: string; Status?: string; 'Cancellation Date'?: string }>(
       CLIENTS_BASE_ID, PLACEMENTS_TABLE_ID, {}
     ),
   ]);
@@ -156,14 +165,27 @@ export async function fetchRecruiterKPIs(frame: TimeFrame = 'month'): Promise<Re
   const placementsThis = placements.filter(f => f.Status !== 'End' && isInPeriod(f['Created Date'], b.start, b.now)).length;
   const placementsPrev = placements.filter(f => f.Status !== 'End' && isInPeriod(f['Created Date'], b.prevStart, b.prevEnd)).length;
 
+  // Fall-through rate uses ALL contracts signed in the period (including ones that later
+  // ended) as the denominator, unlike placementsThis/Prev above which excludes ended ones.
+  const signedThis = placements.filter(f => isInPeriod(f['Created Date'], b.start, b.now));
+  const signedPrev = placements.filter(f => isInPeriod(f['Created Date'], b.prevStart, b.prevEnd));
+  const fallThroughsThis = signedThis.filter(isFallThrough).length;
+  const fallThroughsPrev = signedPrev.filter(isFallThrough).length;
+  const fallThroughRate     = signedThis.length > 0 ? Math.round(fallThroughsThis / signedThis.length * 100) : 0;
+  const prevFallThroughRate = signedPrev.length > 0 ? Math.round(fallThroughsPrev / signedPrev.length * 100) : 0;
+
   // Group by recruiter (current period only)
   const recruiterMap = new Map<string, RecruiterStat>();
   const getOrCreate = (name: string) => {
     if (!recruiterMap.has(name)) {
-      recruiterMap.set(name, { name, phoneInterviews: 0, internalInterviews: 0, prevInternalInterviews: 0, clientInterviews: 0, prevClientInterviews: 0, placements: 0, prevPlacements: 0 });
+      recruiterMap.set(name, { name, phoneInterviews: 0, internalInterviews: 0, prevInternalInterviews: 0, clientInterviews: 0, prevClientInterviews: 0, placements: 0, prevPlacements: 0, fallThroughRate: 0, prevFallThroughRate: 0 });
     }
     return recruiterMap.get(name)!;
   };
+  const signedCountByRecruiter = new Map<string, number>();
+  const fallThroughCountByRecruiter = new Map<string, number>();
+  const prevSignedCountByRecruiter = new Map<string, number>();
+  const prevFallThroughCountByRecruiter = new Map<string, number>();
 
   for (const f of pipeline.filter(f => isInPeriod(f.Created, b.start, b.now))) {
     const name = f.Name?.trim();
@@ -194,6 +216,29 @@ export async function fetchRecruiterKPIs(frame: TimeFrame = 'month'): Promise<Re
     getOrCreate(name).prevPlacements++;
   }
 
+  for (const f of signedThis) {
+    const name = f.Recruiter?.trim();
+    if (!name) continue;
+    getOrCreate(name); // ensure recruiter exists even if all their signings later ended
+    signedCountByRecruiter.set(name, (signedCountByRecruiter.get(name) ?? 0) + 1);
+    if (isFallThrough(f)) fallThroughCountByRecruiter.set(name, (fallThroughCountByRecruiter.get(name) ?? 0) + 1);
+  }
+
+  for (const f of signedPrev) {
+    const name = f.Recruiter?.trim();
+    if (!name) continue;
+    getOrCreate(name);
+    prevSignedCountByRecruiter.set(name, (prevSignedCountByRecruiter.get(name) ?? 0) + 1);
+    if (isFallThrough(f)) prevFallThroughCountByRecruiter.set(name, (prevFallThroughCountByRecruiter.get(name) ?? 0) + 1);
+  }
+
+  for (const [name, stat] of recruiterMap) {
+    const signed = signedCountByRecruiter.get(name) ?? 0;
+    const prevSigned = prevSignedCountByRecruiter.get(name) ?? 0;
+    stat.fallThroughRate     = signed > 0 ? Math.round((fallThroughCountByRecruiter.get(name) ?? 0) / signed * 100) : 0;
+    stat.prevFallThroughRate = prevSigned > 0 ? Math.round((prevFallThroughCountByRecruiter.get(name) ?? 0) / prevSigned * 100) : 0;
+  }
+
   const byRecruiter = Array.from(recruiterMap.values()).sort((a, b) => a.name.localeCompare(b.name));
 
   return {
@@ -207,8 +252,51 @@ export async function fetchRecruiterKPIs(frame: TimeFrame = 'month'): Promise<Re
     prevPlacements: placementsPrev,
     conversionRate:     clientThis > 0 ? Math.round(placementsThis / clientThis * 100) : 0,
     prevConversionRate: clientPrev > 0 ? Math.round(placementsPrev / clientPrev * 100) : 0,
+    fallThroughRate,
+    prevFallThroughRate,
     activePipeline: pipeline.length,
     byRecruiter,
+  };
+}
+
+// ─── Job aging ────────────────────────────────────────────────────────────────
+export async function fetchJobAging(): Promise<JobAgingKPIs> {
+  const roles = await fetchAllFromBase<{ Status?: string; Owner?: string; Created?: string }>(
+    CANDIDATES_BASE_ID, OPEN_ROLES_TABLE_ID, {}
+  );
+
+  const now = Date.now();
+  const bandFor = (days: number): 'fresh' | 'ageing' | 'stale' =>
+    days <= 21 ? 'fresh' : days <= 35 ? 'ageing' : 'stale';
+
+  const byRecruiter = new Map<string, JobAgingStat>();
+  const getOrCreate = (name: string) => {
+    if (!byRecruiter.has(name)) {
+      byRecruiter.set(name, { name, totalOpenJobs: 0, fresh: 0, ageing: 0, stale: 0 });
+    }
+    return byRecruiter.get(name)!;
+  };
+
+  let fresh = 0, ageing = 0, stale = 0, totalOpenJobs = 0;
+  for (const f of roles) {
+    if (f.Status !== 'Open' || !f.Created) continue;
+    totalOpenJobs++;
+    const days = Math.floor((now - new Date(f.Created).getTime()) / 86_400_000);
+    const band = bandFor(days);
+    if (band === 'fresh') fresh++;
+    else if (band === 'ageing') ageing++;
+    else stale++;
+
+    const name = f.Owner?.trim();
+    if (!name) continue;
+    const stat = getOrCreate(name);
+    stat.totalOpenJobs++;
+    stat[band]++;
+  }
+
+  return {
+    totalOpenJobs, fresh, ageing, stale,
+    byRecruiter: Array.from(byRecruiter.values()).sort((a, b) => a.name.localeCompare(b.name)),
   };
 }
 
