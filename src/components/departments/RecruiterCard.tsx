@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { TimeFramePicker } from '../shared/TimeFramePicker';
 import { Skeleton } from '../shared/Skeleton';
-import { useRecruiterKPIs, useJobAging } from '../../hooks/queries';
+import { useRecruiterKPIs, useJobAging, useAutoCallKPIs, useJobAdderStageKPIs } from '../../hooks/queries';
 import { COLORS, CARD_STYLE } from '../../styles/tokens';
 import type { DepartmentStatus, TimeFrame } from '../../types';
 
@@ -12,8 +12,35 @@ const RECRUITER_WEEKLY_SALARY = 1442;  // NZD/week, ~$75k/year baseline
 const AVG_FEE_PER_PLACEMENT = 20000;   // NZD, blended flat-fee/% average
 const WEEKS_PER_MONTH = 4.33;
 
+// Draft KPI targets from Les's "Recruiter KPI Standards" doc — status: draft, not locked,
+// not a mandate. Shown as light reference text only (no RAG/pass-fail coloring) until
+// reviewed with Ian and Ayn and cross-checked against real throughput data.
+const DRAFT_TARGETS_WEEKLY = {
+  manualCalls: [7, 14] as [number, number],       // ~1-2/day
+  internalInterviews: 7,                          // ~7/week
+  clientInterviews: 2,                            // ~2/week
+  leadsContactedByBot: [42, 49] as [number, number], // ~6-7/day
+  internalInterviewsBotBooked: 7,                 // ~1/day
+  internalInterviewsManualBooked: 2,              // ~2/week
+  referenceChecks: 2,                             // ~2/week
+  candidatesPitched: 2,                           // ~2/week
+};
+const DRAFT_TARGET_CONTRACTS_MONTHLY = 2;    // ~2/month
+
 const pct = (numerator: number, denominator: number) =>
   denominator > 0 ? Math.round((numerator / denominator) * 100) : 0;
+
+// Scales a weekly (or monthly) draft target to the active TimeFrame and renders it as a
+// muted reference label, e.g. "target: ~7" or "target: ~7-14".
+const targetLabel = (weekly: number | [number, number], frame: TimeFrame, unit: 'week' | 'month' = 'week') => {
+  const scale = unit === 'week'
+    ? (frame === 'week' ? 1 : WEEKS_PER_MONTH)
+    : (frame === 'month' ? 1 : 1 / WEEKS_PER_MONTH);
+  const fmt = (n: number) => Math.round(n * scale);
+  return Array.isArray(weekly)
+    ? `target: ~${fmt(weekly[0])}-${fmt(weekly[1])}`
+    : `target: ~${fmt(weekly)}`;
+};
 
 // Same color language as StatusBadge (src/components/shared/StatusBadge.tsx), reused here
 // as a full-width block instead of a pill.
@@ -53,6 +80,8 @@ export function RecruiterCard() {
   const [frame, setFrame] = useState<TimeFrame>('month');
   const { data, error, isLoading, isFetching } = useRecruiterKPIs(frame);
   const { data: jobAgingData } = useJobAging();
+  const { data: autoCallData } = useAutoCallKPIs(frame);
+  const { data: jobAdderStageData } = useJobAdderStageKPIs(frame);
 
   if (isLoading) return <RecruiterSkeleton />;
   if (!data) return null;
@@ -67,13 +96,34 @@ export function RecruiterCard() {
   for (const stat of jobAgingData?.byRecruiter ?? []) {
     if (!displayRecruiters.some(r => firstName(r.name) === firstName(stat.name))) {
       displayRecruiters.push({
-        name: stat.name, phoneInterviews: 0, internalInterviews: 0, prevInternalInterviews: 0,
+        name: stat.name, phoneInterviews: 0, prevPhoneInterviews: 0, internalInterviews: 0, prevInternalInterviews: 0,
         clientInterviews: 0, prevClientInterviews: 0, placements: 0, prevPlacements: 0,
         fallThroughRate: 0, prevFallThroughRate: 0,
       });
     }
   }
   displayRecruiters.sort((a, b) => a.name.localeCompare(b.name));
+
+  // Merge in Autocalls + JobAdder pipeline-stage KPIs (separate webhooks) by first name —
+  // left as undefined (rendered as "—") when a hook hasn't loaded or has no match.
+  for (const r of displayRecruiters) {
+    const ac = autoCallData?.byRecruiter.find(s => firstName(s.name) === firstName(r.name));
+    if (ac) {
+      r.leadsContactedByBot = ac.leadsContactedByBot;
+      r.prevLeadsContactedByBot = ac.prevLeadsContactedByBot;
+    }
+    const js = jobAdderStageData?.byRecruiter.find(s => firstName(s.name) === firstName(r.name));
+    if (js) {
+      r.referenceChecks = js.referenceChecks;
+      r.prevReferenceChecks = js.prevReferenceChecks;
+      r.candidatesPitched = js.candidatesPitched;
+      r.prevCandidatesPitched = js.prevCandidatesPitched;
+      r.internalInterviewsBotBooked = js.internalInterviewsBotBooked;
+      r.prevInternalInterviewsBotBooked = js.prevInternalInterviewsBotBooked;
+      r.internalInterviewsManualBooked = js.internalInterviewsManualBooked;
+      r.prevInternalInterviewsManualBooked = js.prevInternalInterviewsManualBooked;
+    }
+  }
 
   const jobAgingFor = (name: string) => {
     const stat = jobAgingData?.byRecruiter.find(r => firstName(r.name) === firstName(name));
@@ -209,11 +259,20 @@ export function RecruiterCard() {
                   <span style={{ fontSize: 15, fontWeight: 800, color: COLORS.textPrimary }}>{r.name}</span>
                 </div>
 
-                {detailRow('Contracts signed', r.placements, r.prevPlacements, undefined, true)}
-                {detailRow('Internal interviews', r.internalInterviews, r.prevInternalInterviews)}
-                {detailRow('Client interviews', r.clientInterviews, r.prevClientInterviews)}
+                {detailRow('Contracts signed', r.placements, r.prevPlacements, targetLabel(DRAFT_TARGET_CONTRACTS_MONTHLY, frame, 'month'), true)}
+                {detailRow('Internal interviews', r.internalInterviews, r.prevInternalInterviews, targetLabel(DRAFT_TARGETS_WEEKLY.internalInterviews, frame))}
+                {detailRow('Client interviews', r.clientInterviews, r.prevClientInterviews, targetLabel(DRAFT_TARGETS_WEEKLY.clientInterviews, frame))}
+                {detailRow('Manual calls', r.phoneInterviews, r.prevPhoneInterviews, targetLabel(DRAFT_TARGETS_WEEKLY.manualCalls, frame))}
                 {detailRow('Internal → client %', `${rInternalToClient}%`, `${rPrevInternalToClient}%`)}
                 {detailRow('Client → contract %', `${rClientToContract}%`, `${rPrevClientToContract}%`)}
+
+                <div style={{ borderTop: `1px solid ${COLORS.border}`, marginTop: 8, paddingTop: 4 }}>
+                  {detailRow('Leads contacted by bot', r.leadsContactedByBot ?? '—', r.prevLeadsContactedByBot ?? '—', targetLabel(DRAFT_TARGETS_WEEKLY.leadsContactedByBot, frame))}
+                  {detailRow('Internal interviews — bot booked', r.internalInterviewsBotBooked ?? '—', r.prevInternalInterviewsBotBooked ?? '—', targetLabel(DRAFT_TARGETS_WEEKLY.internalInterviewsBotBooked, frame))}
+                  {detailRow('Internal interviews — manually booked', r.internalInterviewsManualBooked ?? '—', r.prevInternalInterviewsManualBooked ?? '—', targetLabel(DRAFT_TARGETS_WEEKLY.internalInterviewsManualBooked, frame))}
+                  {detailRow('Reference checks completed', r.referenceChecks ?? '—', r.prevReferenceChecks ?? '—', targetLabel(DRAFT_TARGETS_WEEKLY.referenceChecks, frame))}
+                  {detailRow('Candidates pitched to client', r.candidatesPitched ?? '—', r.prevCandidatesPitched ?? '—', targetLabel(DRAFT_TARGETS_WEEKLY.candidatesPitched, frame))}
+                </div>
 
                 <div style={{ marginTop: 10, marginBottom: 4 }}>
                   <div style={{ fontSize: 10, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>

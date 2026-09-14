@@ -34,6 +34,7 @@ export interface SalesKPIs {
 export interface RecruiterStat {
   name: string;
   phoneInterviews: number;
+  prevPhoneInterviews: number;
   internalInterviews: number;
   prevInternalInterviews: number;
   clientInterviews: number;
@@ -42,6 +43,46 @@ export interface RecruiterStat {
   prevPlacements: number;
   fallThroughRate: number;     // % of contracts signed this period later terminated (Status='End' + Cancellation Date)
   prevFallThroughRate: number;
+  // Optional — merged in from separate Autocalls / JobAdder webhooks; absent until that
+  // hook's data has loaded, or if the recruiter has no matching bot assistant / JobAdder owner.
+  leadsContactedByBot?: number;
+  prevLeadsContactedByBot?: number;
+  referenceChecks?: number;
+  prevReferenceChecks?: number;
+  candidatesPitched?: number;
+  prevCandidatesPitched?: number;
+  internalInterviewsBotBooked?: number;
+  prevInternalInterviewsBotBooked?: number;
+  internalInterviewsManualBooked?: number;
+  prevInternalInterviewsManualBooked?: number;
+}
+
+// ─── Autocalls (leads contacted by bot) ────────────────────────────────────────
+export interface AutoCallStat {
+  name: string;
+  leadsContactedByBot: number;
+  prevLeadsContactedByBot: number;
+}
+
+export interface AutoCallKPIs {
+  byRecruiter: AutoCallStat[];
+}
+
+// ─── JobAdder pipeline stages (reference checks, pitched, interview booking source) ──
+export interface JobAdderStageStat {
+  name: string;
+  referenceChecks: number;
+  prevReferenceChecks: number;
+  candidatesPitched: number;
+  prevCandidatesPitched: number;
+  internalInterviewsBotBooked: number;
+  prevInternalInterviewsBotBooked: number;
+  internalInterviewsManualBooked: number;
+  prevInternalInterviewsManualBooked: number;
+}
+
+export interface JobAdderStageKPIs {
+  byRecruiter: JobAdderStageStat[];
 }
 
 export interface RecruiterKPIs {

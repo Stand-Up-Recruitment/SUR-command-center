@@ -178,7 +178,7 @@ export async function fetchRecruiterKPIs(frame: TimeFrame = 'month'): Promise<Re
   const recruiterMap = new Map<string, RecruiterStat>();
   const getOrCreate = (name: string) => {
     if (!recruiterMap.has(name)) {
-      recruiterMap.set(name, { name, phoneInterviews: 0, internalInterviews: 0, prevInternalInterviews: 0, clientInterviews: 0, prevClientInterviews: 0, placements: 0, prevPlacements: 0, fallThroughRate: 0, prevFallThroughRate: 0 });
+      recruiterMap.set(name, { name, phoneInterviews: 0, prevPhoneInterviews: 0, internalInterviews: 0, prevInternalInterviews: 0, clientInterviews: 0, prevClientInterviews: 0, placements: 0, prevPlacements: 0, fallThroughRate: 0, prevFallThroughRate: 0 });
     }
     return recruiterMap.get(name)!;
   };
@@ -200,7 +200,8 @@ export async function fetchRecruiterKPIs(frame: TimeFrame = 'month'): Promise<Re
     const name = f.Name?.trim();
     if (!name) continue;
     const stat = getOrCreate(name);
-    if (f.Status === 'Internal Interview')               stat.prevInternalInterviews++;
+    if (f.Status === 'Phone Interview')                  stat.prevPhoneInterviews++;
+    else if (f.Status === 'Internal Interview')          stat.prevInternalInterviews++;
     else if (f.Status === 'Client-Candidate Interview')  stat.prevClientInterviews++;
   }
 
@@ -320,7 +321,7 @@ type MarketingConfigFields = {
   'Weekly Budget'?: number;
 };
 
-function timeBoundaries(frame: TimeFrame) {
+export function timeBoundaries(frame: TimeFrame) {
   const now = Date.now();
   const d = new Date();
   let start: number;

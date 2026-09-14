@@ -12,6 +12,8 @@ import {
 } from '../services/airtable';
 import { fetchXeroFinanceData, hasXeroCredentials } from '../services/xero';
 import { fetchMetaSpendByFrame } from '../services/metaAds';
+import { fetchAutoCallKPIs, hasAutoCallCredentials } from '../services/autocall';
+import { fetchJobAdderStageKPIs, hasJobAdderStageCredentials } from '../services/jobadderStages';
 import type { TimeFrame, LTGPFrame } from '../types';
 
 const hasAirtableKey    = Boolean(import.meta.env.VITE_AIRTABLE_API_KEY);
@@ -47,6 +49,24 @@ export function useRecruiterKPIs(frame: TimeFrame = 'month') {
     queryKey: ['recruitment', frame],
     queryFn: () => fetchRecruiterKPIs(frame),
     enabled: hasRecruitCredentials,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useAutoCallKPIs(frame: TimeFrame = 'month') {
+  return useQuery({
+    queryKey: ['recruitment-autocalls', frame],
+    queryFn: () => fetchAutoCallKPIs(frame),
+    enabled: hasAutoCallCredentials,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useJobAdderStageKPIs(frame: TimeFrame = 'month') {
+  return useQuery({
+    queryKey: ['recruitment-jobadder-stages', frame],
+    queryFn: () => fetchJobAdderStageKPIs(frame),
+    enabled: hasJobAdderStageCredentials,
     placeholderData: keepPreviousData,
   });
 }
