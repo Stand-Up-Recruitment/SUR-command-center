@@ -120,8 +120,6 @@ export function RecruiterCard() {
       r.prevCandidatesPitched = js.prevCandidatesPitched;
       r.internalInterviewsBotBooked = js.internalInterviewsBotBooked;
       r.prevInternalInterviewsBotBooked = js.prevInternalInterviewsBotBooked;
-      r.internalInterviewsManualBooked = js.internalInterviewsManualBooked;
-      r.prevInternalInterviewsManualBooked = js.prevInternalInterviewsManualBooked;
     }
   }
 
@@ -252,6 +250,12 @@ export function RecruiterCard() {
             const rClientToContract = pct(r.placements, r.clientInterviews);
             const rPrevClientToContract = pct(r.prevPlacements, r.prevClientInterviews);
             const aging = jobAgingFor(r.name);
+            // Manually-booked isn't tracked directly — derived as the remainder of total
+            // internal interviews (Airtable) after subtracting bot bookings (Calendly).
+            const rManualBooked = r.internalInterviewsBotBooked !== undefined
+              ? Math.max(0, r.internalInterviews - r.internalInterviewsBotBooked) : undefined;
+            const rPrevManualBooked = r.prevInternalInterviewsBotBooked !== undefined
+              ? Math.max(0, r.prevInternalInterviews - r.prevInternalInterviewsBotBooked) : undefined;
 
             return (
               <div key={r.name} style={{ ...CARD_STYLE, padding: 16 }}>
@@ -269,7 +273,7 @@ export function RecruiterCard() {
                 <div style={{ borderTop: `1px solid ${COLORS.border}`, marginTop: 8, paddingTop: 4 }}>
                   {detailRow('Leads contacted by bot', r.leadsContactedByBot ?? '—', r.prevLeadsContactedByBot ?? '—', targetLabel(DRAFT_TARGETS_WEEKLY.leadsContactedByBot, frame))}
                   {detailRow('Internal interviews — bot booked', r.internalInterviewsBotBooked ?? '—', r.prevInternalInterviewsBotBooked ?? '—', targetLabel(DRAFT_TARGETS_WEEKLY.internalInterviewsBotBooked, frame))}
-                  {detailRow('Internal interviews — manually booked', r.internalInterviewsManualBooked ?? '—', r.prevInternalInterviewsManualBooked ?? '—', targetLabel(DRAFT_TARGETS_WEEKLY.internalInterviewsManualBooked, frame))}
+                  {detailRow('Internal interviews — manually booked', rManualBooked ?? '—', rPrevManualBooked ?? '—', targetLabel(DRAFT_TARGETS_WEEKLY.internalInterviewsManualBooked, frame))}
                   {detailRow('Reference checks completed', r.referenceChecks ?? '—', r.prevReferenceChecks ?? '—', targetLabel(DRAFT_TARGETS_WEEKLY.referenceChecks, frame))}
                   {detailRow('Candidates pitched to client', r.candidatesPitched ?? '—', r.prevCandidatesPitched ?? '—', targetLabel(DRAFT_TARGETS_WEEKLY.candidatesPitched, frame))}
                 </div>

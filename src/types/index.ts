@@ -53,8 +53,6 @@ export interface RecruiterStat {
   prevCandidatesPitched?: number;
   internalInterviewsBotBooked?: number;
   prevInternalInterviewsBotBooked?: number;
-  internalInterviewsManualBooked?: number;
-  prevInternalInterviewsManualBooked?: number;
 }
 
 // ─── Autocalls (leads contacted by bot) ────────────────────────────────────────
@@ -68,7 +66,11 @@ export interface AutoCallKPIs {
   byRecruiter: AutoCallStat[];
 }
 
-// ─── JobAdder pipeline stages (reference checks, pitched, interview booking source) ──
+// ─── JobAdder pipeline stages + Calendly bot bookings ──────────────────────────
+// referenceChecks/candidatesPitched come from JobAdder; internalInterviewsBotBooked
+// comes from Calendly (the bot books via Autocalls -> Calendly, not via a JobAdder
+// field) — manually-booked is derived client-side as internalInterviews (existing
+// Airtable total) minus this bot count, not tracked separately here.
 export interface JobAdderStageStat {
   name: string;
   referenceChecks: number;
@@ -77,8 +79,6 @@ export interface JobAdderStageStat {
   prevCandidatesPitched: number;
   internalInterviewsBotBooked: number;
   prevInternalInterviewsBotBooked: number;
-  internalInterviewsManualBooked: number;
-  prevInternalInterviewsManualBooked: number;
 }
 
 export interface JobAdderStageKPIs {
