@@ -769,7 +769,6 @@ export async function fetchRetentionKPIs(): Promise<RetentionKPIs> {
 
 // ─── LTGP:CAC ─────────────────────────────────────────────────────────────────
 // Actual contracted rates — update here if contracts change
-const NZD_TO_AUD = 0.90;
 const RECRUITER_HOURLY_NZD = 30;
 const RECRUITER_HOURS_WEEK = 42.5;
 const RECRUITER_COUNT = 2;
@@ -865,14 +864,13 @@ export async function fetchLTGPKPIs(frame: LTGPFrame): Promise<LTGPKPIs> {
 
   // ── Cost calculations ──────────────────────────────────────────────────────
   const monthlyRecruiterCostAud =
-    RECRUITER_HOURLY_NZD * RECRUITER_HOURS_WEEK * RECRUITER_COUNT * WEEKS_PER_MONTH * NZD_TO_AUD;
-  const ownerHourlyAud = (OWNER_MONTHLY_GROSS_NZD / (OWNER_HOURS_WEEK * WEEKS_PER_MONTH)) * NZD_TO_AUD;
+    RECRUITER_HOURLY_NZD * RECRUITER_HOURS_WEEK * RECRUITER_COUNT * WEEKS_PER_MONTH;
+  const ownerHourlyAud = OWNER_MONTHLY_GROSS_NZD / (OWNER_HOURS_WEEK * WEEKS_PER_MONTH);
   const ownerCostPerCall = ownerHourlyAud * CALL_DURATION_HRS;
   const ownerAcquisitionCost = ownerCallsCompleted * ownerCostPerCall;
 
-  // Meta spend is billed in NZD — convert to AUD
-  const candidateMetaSpend = metaResult.candidateSpend * NZD_TO_AUD;
-  const clientMetaSpend = metaResult.clientSpend * NZD_TO_AUD;
+  const candidateMetaSpend = metaResult.candidateSpend;
+  const clientMetaSpend = metaResult.clientSpend;
 
   // ── CAC ───────────────────────────────────────────────────────────────────
   const candidateCac = candidatesPlaced > 0 ? candidateMetaSpend / candidatesPlaced : 0;
@@ -907,8 +905,8 @@ export async function fetchLTGPKPIs(frame: LTGPFrame): Promise<LTGPKPIs> {
       f => isClientQualified(f) && isInPeriod(f['Last Updated Date'], prevBoundaries.start, prevBoundaries.end)
     ).length;
     const prevOwnerAcquisitionCost = prevOwnerCallsCompleted * ownerCostPerCall;
-    const prevCandidateMetaSpend = prevMetaResult.candidateSpend * NZD_TO_AUD;
-    const prevClientMetaSpend = prevMetaResult.clientSpend * NZD_TO_AUD;
+    const prevCandidateMetaSpend = prevMetaResult.candidateSpend;
+    const prevClientMetaSpend = prevMetaResult.clientSpend;
     prevCandidateCac = prevCandidatesPlaced > 0 ? prevCandidateMetaSpend / prevCandidatesPlaced : 0;
     prevClientCac = prevClientsWon > 0 ? (prevClientMetaSpend + prevOwnerAcquisitionCost) / prevClientsWon : 0;
     prevQualifiedCandidateCac = prevQualifiedCandidates > 0 ? prevCandidateMetaSpend / prevQualifiedCandidates : 0;
@@ -932,8 +930,7 @@ export async function fetchLTGPKPIs(frame: LTGPFrame): Promise<LTGPKPIs> {
   const clientFinancedPass = clientCac > 0 ? 8_000 > 2 * clientCac : false;
 
   // ── Flags ─────────────────────────────────────────────────────────────────
-  const candidateCplNzd = candidatesPlaced > 0 ? (candidateMetaSpend / NZD_TO_AUD) / candidatesPlaced : 0;
-  const clientCplNzd    = clientsWon > 0 ? (clientMetaSpend / NZD_TO_AUD) / clientsWon : 0;
+  const clientCplNzd = clientsWon > 0 ? clientMetaSpend / clientsWon : 0;
 
   const flags: LTGPFlag[] = [
     {
@@ -962,10 +959,10 @@ export async function fetchLTGPKPIs(frame: LTGPFrame): Promise<LTGPKPIs> {
     },
     {
       label: 'Candidate CAC (NZD) > $150',
-      triggered: candidateCplNzd > 150,
+      triggered: candidateCac > 150,
       severity: 'amber',
       formula: 'Candidate Meta spend ÷ candidates placed, in NZD, > $150',
-      actual: `NZD $${Math.round(candidateCplNzd).toLocaleString()}`,
+      actual: `NZD $${Math.round(candidateCac).toLocaleString()}`,
       suggestion: 'Meta candidate spend is inefficient. Review creative and audience targeting.',
     },
     {

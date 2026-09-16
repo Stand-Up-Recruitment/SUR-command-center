@@ -14,14 +14,14 @@ const FRAMES: { label: string; value: LTGPFrame }[] = [
 
 const AVG_PLACEMENT_CYCLE_DAYS = 45;
 
-function fmtAud(n: number): string {
-  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;
-  if (n >= 1_000) return `$${Math.round(n / 1_000)}k`;
-  return `$${Math.round(n)}`;
+function fmtNzd(n: number): string {
+  if (n >= 1_000_000) return `NZ$${(n / 1_000_000).toFixed(2)}M`;
+  if (n >= 1_000) return `NZ$${Math.round(n / 1_000)}k`;
+  return `NZ$${Math.round(n)}`;
 }
 
-function fmtAudFull(n: number): string {
-  return `$${Math.round(n).toLocaleString()}`;
+function fmtNzdFull(n: number): string {
+  return `NZ$${Math.round(n).toLocaleString()}`;
 }
 
 function ratioColor(ratio: number): string {
@@ -175,7 +175,7 @@ function LTGPContent({ data, frame }: { data: LTGPKPIs; frame: LTGPFrame }) {
           </div>
           {ratio > 0 && (
             <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 6, fontFamily: 'monospace' }}>
-              LTGP per Client ÷ Client CAC = {fmtAudFull(data.ltgpPerClient)} ÷ {fmtAudFull(data.clientCac)} = {ratio.toFixed(1)}×
+              LTGP per Client ÷ Client CAC = {fmtNzdFull(data.ltgpPerClient)} ÷ {fmtNzdFull(data.clientCac)} = {ratio.toFixed(1)}×
             </div>
           )}
         </div>
@@ -196,13 +196,13 @@ function LTGPContent({ data, frame }: { data: LTGPKPIs; frame: LTGPFrame }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
         <KpiTile
           label="LTGP per Client"
-          value={data.ltgpPerClient > 0 ? fmtAud(data.ltgpPerClient) : '—'}
+          value={data.ltgpPerClient > 0 ? fmtNzd(data.ltgpPerClient) : '—'}
           sub="Lifetime Gross Profit"
           trend={data.hasPrevPeriod ? { current: data.ltgpPerClient, previous: data.prevLtgpPerClient, higherIsBetter: true } : undefined}
         />
         <KpiTile
           label="Client CAC"
-          value={data.clientCac > 0 ? fmtAud(data.clientCac) : '—'}
+          value={data.clientCac > 0 ? fmtNzd(data.clientCac) : '—'}
           ratio={ratio > 0 ? `${ratio.toFixed(1)}:1 LTGP ratio` : undefined}
           ratioColor={ratio > 0 ? ratioColor(ratio) : undefined}
           sub="Cost to acquire one client"
@@ -210,13 +210,13 @@ function LTGPContent({ data, frame }: { data: LTGPKPIs; frame: LTGPFrame }) {
         />
         <KpiTile
           label="Qualified Client CAC"
-          value={data.qualifiedClientCac > 0 ? fmtAud(data.qualifiedClientCac) : '—'}
+          value={data.qualifiedClientCac > 0 ? fmtNzd(data.qualifiedClientCac) : '—'}
           sub="Meta spend per qualified lead (pre-conversion)"
           trend={data.hasPrevPeriod ? { current: data.qualifiedClientCac, previous: data.prevQualifiedClientCac } : undefined}
         />
         <KpiTile
           label="Candidate CAC"
-          value={data.candidateCac > 0 ? fmtAud(data.candidateCac) : '—'}
+          value={data.candidateCac > 0 ? fmtNzd(data.candidateCac) : '—'}
           ratio={data.candidateCac > 0 && data.grossProfitPerPlacement > 0
             ? `${(data.grossProfitPerPlacement / data.candidateCac).toFixed(1)}:1 GP ratio`
             : undefined}
@@ -230,7 +230,7 @@ function LTGPContent({ data, frame }: { data: LTGPKPIs; frame: LTGPFrame }) {
         />
         <KpiTile
           label="Qualified Candidate CAC"
-          value={data.qualifiedCandidateCac > 0 ? fmtAud(data.qualifiedCandidateCac) : '—'}
+          value={data.qualifiedCandidateCac > 0 ? fmtNzd(data.qualifiedCandidateCac) : '—'}
           sub="Meta spend per qualified lead (pre-conversion)"
           trend={data.hasPrevPeriod ? { current: data.qualifiedCandidateCac, previous: data.prevQualifiedCandidateCac } : undefined}
         />
@@ -274,7 +274,7 @@ function LTGPContent({ data, frame }: { data: LTGPKPIs; frame: LTGPFrame }) {
             {data.clientCac > 0 ? (data.clientFinancedPass ? 'PASS' : 'FAIL') : '—'}
           </div>
           <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 8 }}>
-            $8,000 first payment {data.clientCac > 0 ? (data.clientFinancedPass ? '>' : '<') : 'vs'} 2 × Client CAC ({data.clientCac > 0 ? fmtAudFull(2 * data.clientCac) : '?'})
+            $8,000 first payment {data.clientCac > 0 ? (data.clientFinancedPass ? '>' : '<') : 'vs'} 2 × Client CAC ({data.clientCac > 0 ? fmtNzdFull(2 * data.clientCac) : '?'})
           </div>
           <div style={{ fontSize: 10, color: COLORS.textMuted, marginTop: 4 }}>
             Hormozi 2026: first 30d GP must exceed 2× CAC
@@ -289,10 +289,10 @@ function LTGPContent({ data, frame }: { data: LTGPKPIs; frame: LTGPFrame }) {
             CAC Inputs
           </div>
           {([
-            ['Cand. Meta Spend', fmtAudFull(data.candidateMetaSpend)],
-            ['Client Meta Spend', fmtAudFull(data.clientMetaSpend)],
+            ['Cand. Meta Spend', fmtNzdFull(data.candidateMetaSpend)],
+            ['Client Meta Spend', fmtNzdFull(data.clientMetaSpend)],
             ['Owner Calls', String(data.ownerCallsCompleted)],
-            ['Owner Acq. Cost', fmtAudFull(data.ownerAcquisitionCost)],
+            ['Owner Acq. Cost', fmtNzdFull(data.ownerAcquisitionCost)],
             ['Candidates Placed', String(data.candidatesPlaced)],
             ['Clients Won', String(data.clientsWon)],
           ] as [string, string][]).map(([label, val]) => (
@@ -308,9 +308,9 @@ function LTGPContent({ data, frame }: { data: LTGPKPIs; frame: LTGPFrame }) {
             LTGP Inputs
           </div>
           {([
-            ['Avg Placement Value', fmtAudFull(data.avgPlacementValueAud)],
-            ['Monthly Recruiter Cost', fmtAudFull(data.monthlyRecruiterCostAud)],
-            ['GP / Placement', data.grossProfitPerPlacement > 0 ? fmtAudFull(data.grossProfitPerPlacement) : '—'],
+            ['Avg Placement Value', fmtNzdFull(data.avgPlacementValueAud)],
+            ['Monthly Recruiter Cost', fmtNzdFull(data.monthlyRecruiterCostAud)],
+            ['GP / Placement', data.grossProfitPerPlacement > 0 ? fmtNzdFull(data.grossProfitPerPlacement) : '—'],
             ['Placements / Client', data.avgPlacementsPerClient.toFixed(2)],
           ] as [string, string][]).map(([label, val]) => (
             <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '4px 0', borderBottom: `1px solid ${COLORS.borderSubtle}` }}>
@@ -343,7 +343,7 @@ export function LTGPCard() {
             LTGP:CAC
           </h2>
           <p style={{ fontSize: 13, color: COLORS.textMuted, margin: '3px 0 0' }}>
-            {periodLabel} · Hormozi framework · All figures in AUD
+            {periodLabel} · Hormozi framework · All figures in NZD
           </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
