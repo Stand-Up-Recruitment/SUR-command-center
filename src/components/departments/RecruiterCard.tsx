@@ -92,8 +92,12 @@ export function RecruiterCard() {
   // who have open jobs even if they had no interviews/placements this period.
   // Match by first name since both sources key recruiters by first name only.
   const firstName = (n: string) => n.trim().split(' ')[0].toLowerCase();
+  // Nihanga is HR & Business Operations, not a recruiter — JobAdder lists her as the
+  // owner on some open jobs, but she shouldn't appear as a "By Recruiter" card.
+  const NON_RECRUITERS = ['nihanga'];
   const displayRecruiters = [...data.byRecruiter];
   for (const stat of jobAgingData?.byRecruiter ?? []) {
+    if (NON_RECRUITERS.includes(firstName(stat.name))) continue;
     if (!displayRecruiters.some(r => firstName(r.name) === firstName(stat.name))) {
       displayRecruiters.push({
         name: stat.name, phoneInterviews: 0, prevPhoneInterviews: 0, internalInterviews: 0, prevInternalInterviews: 0,
