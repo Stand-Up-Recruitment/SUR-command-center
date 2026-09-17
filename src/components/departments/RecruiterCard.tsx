@@ -90,7 +90,7 @@ export function RecruiterCard() {
 
   // Job aging is a live snapshot, not tied to the selected period — include recruiters
   // who have open jobs even if they had no interviews/placements this period.
-  // Match by first name since Airtable stores first-name-only while Open Roles stores full names.
+  // Match by first name since both sources key recruiters by first name only.
   const firstName = (n: string) => n.trim().split(' ')[0].toLowerCase();
   const displayRecruiters = [...data.byRecruiter];
   for (const stat of jobAgingData?.byRecruiter ?? []) {

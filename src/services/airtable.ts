@@ -3,8 +3,6 @@ import type {
   SalesKPIs,
   RecruiterKPIs,
   RecruiterStat,
-  JobAgingKPIs,
-  JobAgingStat,
   MarketingKPIs,
   RevenueKPIs,
   LeadMetric,
@@ -135,7 +133,6 @@ export async function fetchSalesKPIs(frame: TimeFrame = 'month'): Promise<SalesK
 const PIPELINE_TABLE_ID    = 'tblpHoIL0R3MTQOXF';
 const PLACEMENTS_TABLE_ID  = 'tblvttoRo4DuZAIeW';
 const INSTALMENTS_TABLE_ID = 'tblzsNY9hiQunnopk';
-const OPEN_ROLES_TABLE_ID  = 'tblCZFrD3UQ1M0vsl';
 
 // A placement is a "fall-through" when it was later terminated (Status='End' with a
 // Cancellation Date) — same predicate the Retention card uses. Attributed to the period
@@ -257,47 +254,6 @@ export async function fetchRecruiterKPIs(frame: TimeFrame = 'month'): Promise<Re
     prevFallThroughRate,
     activePipeline: pipeline.length,
     byRecruiter,
-  };
-}
-
-// ─── Job aging ────────────────────────────────────────────────────────────────
-export async function fetchJobAging(): Promise<JobAgingKPIs> {
-  const roles = await fetchAllFromBase<{ Status?: string; Owner?: string; Created?: string }>(
-    CANDIDATES_BASE_ID, OPEN_ROLES_TABLE_ID, {}
-  );
-
-  const now = Date.now();
-  const bandFor = (days: number): 'fresh' | 'ageing' | 'stale' =>
-    days <= 21 ? 'fresh' : days <= 35 ? 'ageing' : 'stale';
-
-  const byRecruiter = new Map<string, JobAgingStat>();
-  const getOrCreate = (name: string) => {
-    if (!byRecruiter.has(name)) {
-      byRecruiter.set(name, { name, totalOpenJobs: 0, fresh: 0, ageing: 0, stale: 0 });
-    }
-    return byRecruiter.get(name)!;
-  };
-
-  let fresh = 0, ageing = 0, stale = 0, totalOpenJobs = 0;
-  for (const f of roles) {
-    if (f.Status !== 'Open' || !f.Created) continue;
-    totalOpenJobs++;
-    const days = Math.floor((now - new Date(f.Created).getTime()) / 86_400_000);
-    const band = bandFor(days);
-    if (band === 'fresh') fresh++;
-    else if (band === 'ageing') ageing++;
-    else stale++;
-
-    const name = f.Owner?.trim();
-    if (!name) continue;
-    const stat = getOrCreate(name);
-    stat.totalOpenJobs++;
-    stat[band]++;
-  }
-
-  return {
-    totalOpenJobs, fresh, ageing, stale,
-    byRecruiter: Array.from(byRecruiter.values()).sort((a, b) => a.name.localeCompare(b.name)),
   };
 }
 

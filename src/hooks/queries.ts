@@ -3,7 +3,6 @@ import {
   fetchSalesKPIs,
   fetchMarketingKPIs,
   fetchRecruiterKPIs,
-  fetchJobAging,
   fetchRevenueKPIs,
   fetchRetentionKPIs,
   fetchAusPlacements,
@@ -14,6 +13,7 @@ import { fetchXeroFinanceData, hasXeroCredentials } from '../services/xero';
 import { fetchMetaSpendByFrame } from '../services/metaAds';
 import { fetchAutoCallKPIs, hasAutoCallCredentials } from '../services/autocall';
 import { fetchJobAdderStageKPIs, hasJobAdderStageCredentials } from '../services/jobadderStages';
+import { fetchJobAging, hasOpenJobsCredentials } from '../services/jobadderJobs';
 import type { TimeFrame, LTGPFrame } from '../types';
 
 const hasAirtableKey    = Boolean(import.meta.env.VITE_AIRTABLE_API_KEY);
@@ -75,7 +75,7 @@ export function useJobAging() {
   return useQuery({
     queryKey: ['job-aging'],
     queryFn: fetchJobAging,
-    enabled: hasAirtableKey && hasCandidatesBase,
+    enabled: hasOpenJobsCredentials,
   });
 }
 
