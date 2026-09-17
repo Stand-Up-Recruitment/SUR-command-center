@@ -124,7 +124,7 @@ export function RecruiterCard() {
   }
 
   const jobAgingFor = (name: string) => {
-    const stat = jobAgingData?.byRecruiter.find(r => firstName(r.name) === firstName(name));
+    const stat = jobAgingData?.byRecruiter?.find(r => firstName(r.name) === firstName(name));
     return stat ?? { totalOpenJobs: 0, fresh: 0, ageing: 0, stale: 0 };
   };
 
