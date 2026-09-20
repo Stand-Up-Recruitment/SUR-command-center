@@ -192,14 +192,8 @@ function LTGPContent({ data, frame }: { data: LTGPKPIs; frame: LTGPFrame }) {
         </div>
       </div>
 
-      {/* Five KPI tiles */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
-        <KpiTile
-          label="LTGP per Client"
-          value={data.ltgpPerClient > 0 ? fmtNzd(data.ltgpPerClient) : '—'}
-          sub="Lifetime Gross Profit"
-          trend={data.hasPrevPeriod ? { current: data.ltgpPerClient, previous: data.prevLtgpPerClient, higherIsBetter: true } : undefined}
-        />
+      {/* Three KPI tiles */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
         <KpiTile
           label="Client CAC"
           value={data.clientCac > 0 ? fmtNzd(data.clientCac) : '—'}
@@ -209,24 +203,10 @@ function LTGPContent({ data, frame }: { data: LTGPKPIs; frame: LTGPFrame }) {
           trend={data.hasPrevPeriod ? { current: data.clientCac, previous: data.prevClientCac } : undefined}
         />
         <KpiTile
-          label="Qualified Client CAC"
-          value={data.qualifiedClientCac > 0 ? fmtNzd(data.qualifiedClientCac) : '—'}
-          sub="Meta spend per qualified lead (pre-conversion)"
-          trend={data.hasPrevPeriod ? { current: data.qualifiedClientCac, previous: data.prevQualifiedClientCac } : undefined}
-        />
-        <KpiTile
-          label="Candidate CAC"
-          value={data.candidateCac > 0 ? fmtNzd(data.candidateCac) : '—'}
-          ratio={data.candidateCac > 0 && data.grossProfitPerPlacement > 0
-            ? `${(data.grossProfitPerPlacement / data.candidateCac).toFixed(1)}:1 GP ratio`
-            : undefined}
-          ratioColor={(() => {
-            if (!data.candidateCac || !data.grossProfitPerPlacement) return undefined;
-            const r = data.grossProfitPerPlacement / data.candidateCac;
-            return r >= 3 ? COLORS.success : r >= 1.5 ? COLORS.warning : COLORS.danger;
-          })()}
-          sub="Meta spend per placement"
-          trend={data.hasPrevPeriod ? { current: data.candidateCac, previous: data.prevCandidateCac } : undefined}
+          label="Placement CAC"
+          value={data.placementCac > 0 ? fmtNzd(data.placementCac) : '—'}
+          sub="Total cost per placement (Meta spend + owner cost)"
+          trend={data.hasPrevPeriod ? { current: data.placementCac, previous: data.prevPlacementCac } : undefined}
         />
         <KpiTile
           label="Qualified Candidate CAC"

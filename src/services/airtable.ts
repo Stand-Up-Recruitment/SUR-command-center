@@ -835,6 +835,9 @@ export async function fetchLTGPKPIs(frame: LTGPFrame): Promise<LTGPKPIs> {
     : 0;
   const qualifiedCandidateCac = qualifiedCandidates > 0 ? candidateMetaSpend / qualifiedCandidates : 0;
   const qualifiedClientCac = qualifiedClients > 0 ? clientMetaSpend / qualifiedClients : 0;
+  const placementCac = candidatesPlaced > 0
+    ? (candidateMetaSpend + clientMetaSpend + ownerAcquisitionCost) / candidatesPlaced
+    : 0;
 
   // ── Previous-period CAC (for trend comparison) ──────────────────────────────
   const prevBoundaries = ltgpPrevBoundaries(frame);
@@ -843,6 +846,7 @@ export async function fetchLTGPKPIs(frame: LTGPFrame): Promise<LTGPKPIs> {
   let prevClientCac = 0;
   let prevQualifiedCandidateCac = 0;
   let prevQualifiedClientCac = 0;
+  let prevPlacementCac = 0;
   let prevLtgpPerClient = 0;
   if (prevBoundaries && prevMetaResult) {
     const prevCandidatesPlaced = allPlacements.filter(
@@ -867,6 +871,9 @@ export async function fetchLTGPKPIs(frame: LTGPFrame): Promise<LTGPKPIs> {
     prevClientCac = prevClientsWon > 0 ? (prevClientMetaSpend + prevOwnerAcquisitionCost) / prevClientsWon : 0;
     prevQualifiedCandidateCac = prevQualifiedCandidates > 0 ? prevCandidateMetaSpend / prevQualifiedCandidates : 0;
     prevQualifiedClientCac = prevQualifiedClients > 0 ? prevClientMetaSpend / prevQualifiedClients : 0;
+    prevPlacementCac = prevCandidatesPlaced > 0
+      ? (prevCandidateMetaSpend + prevClientMetaSpend + prevOwnerAcquisitionCost) / prevCandidatesPlaced
+      : 0;
 
     const prevRecruiterCostPerPlacement = prevCandidatesPlaced > 0 ? monthlyRecruiterCostAud / prevCandidatesPlaced : 0;
     const prevGrossProfitPerPlacement = avgPlacementValueAud - prevRecruiterCostPerPlacement;
@@ -975,11 +982,13 @@ export async function fetchLTGPKPIs(frame: LTGPFrame): Promise<LTGPKPIs> {
     clientCac,
     qualifiedCandidateCac,
     qualifiedClientCac,
+    placementCac,
     hasPrevPeriod,
     prevCandidateCac,
     prevClientCac,
     prevQualifiedCandidateCac,
     prevQualifiedClientCac,
+    prevPlacementCac,
     prevLtgpPerClient,
     ltgpPerClient,
     ltgpCacRatio,
