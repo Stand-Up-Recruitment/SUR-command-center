@@ -1,5 +1,5 @@
 import { Skeleton } from '../shared/Skeleton';
-import { useXeroFinanceData, useAusPlacements, useScheduledInvoices } from '../../hooks/queries';
+import { useXeroFinanceData, useAusPlacements, useScheduledInvoices, useCacKPIs } from '../../hooks/queries';
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
 const NZ   = '#1D9E75';
@@ -66,14 +66,6 @@ function KPDelta({ label, value, valueColor, accent, delta, invert }: {
       ) : (
         <div style={{ fontSize: 11, color: MUTED, marginTop: 3 }}>added this month —</div>
       )}
-    </div>
-  );
-}
-
-function G4({ children }: { children: React.ReactNode }) {
-  return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 10, marginBottom: '.875rem' }}>
-      {children}
     </div>
   );
 }
@@ -146,7 +138,7 @@ function FinanceSkeleton() {
   return (
     <div>
       <SH color={TEXT} label="P&L Summary" />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 10, marginBottom: '.875rem' }}>{[0,1,2,3].map(kpCard)}</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0,1fr))', gap: 10, marginBottom: '.875rem' }}>{[0,1,2,3,4].map(kpCard)}</div>
       <SH color={MUTED} label="Cash Position" />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 10, marginBottom: '.875rem' }}>{[0,1,2].map(kpCard)}</div>
       <SH color={AM} label="Variance Commentary" />
@@ -164,15 +156,16 @@ function FinanceSkeleton() {
 
 // ─── Section components ───────────────────────────────────────────────────────
 
-function PLSummarySection({ totalRevenue, totalGrossProfit, totalOpex, netProfit, lm }: {
+function PLSummarySection({ totalRevenue, totalGrossProfit, totalOpex, netProfit, lm, cac }: {
   totalRevenue: number; totalGrossProfit: number; totalOpex: number; netProfit: number;
   lm: { revenue: number; grossProfit: number; netProfit: number; opex?: number } | undefined;
+  cac: { candidateCac: number; prevCandidateCac: number; hasPrevPeriod: boolean } | undefined;
 }) {
   return (
     <>
-      <SH color={TEXT} label="P&L Summary" sub="revenue · gross profit · opex · net profit" />
+      <SH color={TEXT} label="P&L Summary" sub="revenue · gross profit · opex · net profit · candidate CAC" />
 
-      <G4>
+      <G5>
         <KPDelta
           accent={NZ}
           label="Total revenue"
@@ -202,7 +195,15 @@ function PLSummarySection({ totalRevenue, totalGrossProfit, totalOpex, netProfit
           valueColor={netProfit >= 0 ? NZ : RD}
           delta={lm ? { value: netProfit - lm.netProfit, label: 'added this month' } : null}
         />
-      </G4>
+        <KPDelta
+          accent={RD}
+          label="Candidate CAC"
+          value={cac ? fmtNZD(cac.candidateCac) : '—'}
+          valueColor={RD}
+          invert
+          delta={cac?.hasPrevPeriod ? { value: cac.candidateCac - cac.prevCandidateCac, label: 'vs prior 30 days' } : null}
+        />
+      </G5>
     </>
   );
 }
@@ -526,6 +527,7 @@ export function FinanceCard() {
   const { data, error } = useXeroFinanceData();
   const { data: placements } = useAusPlacements();
   const { data: scheduledInvoices } = useScheduledInvoices();
+  const { data: cac } = useCacKPIs();
 
   if (!data) return <FinanceSkeleton />;
 
@@ -613,7 +615,7 @@ export function FinanceCard() {
 
   return (
     <div style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
-      <PLSummarySection totalRevenue={totalRevenue} totalGrossProfit={totalGrossProfit} totalOpex={totalOpex} netProfit={data.netProfit} lm={lm} />
+      <PLSummarySection totalRevenue={totalRevenue} totalGrossProfit={totalGrossProfit} totalOpex={totalOpex} netProfit={data.netProfit} lm={lm} cac={cac} />
 
       <CashPositionSection
         cashKpis={cashKpis}

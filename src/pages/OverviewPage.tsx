@@ -9,7 +9,6 @@ import {
   useRevenueKPIs,
   useRetentionKPIs,
   useXeroFinanceData,
-  useLTGPKPIs,
 } from '../hooks/queries';
 import {
   OverviewMarketingChart,
@@ -18,7 +17,6 @@ import {
   OverviewRevenueChart,
   OverviewFinanceChart,
   OverviewRetentionChart,
-  OverviewLTGPChart,
 } from '../components/overview/OverviewCharts';
 import type { DepartmentStatus } from '../types';
 
@@ -29,7 +27,6 @@ const departments = [
   { name: 'Revenue',     path: '/revenue',      description: 'Invoices, collections & payment flow' },
   { name: 'Finance',     path: '/finance',      description: 'P&L, cash flow & invoices' },
   { name: 'Retention',   path: '/retention',    description: 'Candidate & client retention' },
-  { name: 'LTGP:CAC',   path: '/ltgp',         description: 'Lifetime Gross Profit vs acquisition cost' },
 ] as const;
 
 function fmtMoney(n: number): string {
@@ -43,7 +40,6 @@ export function OverviewPage() {
   const { data: rev, isLoading: revLoading } = useRevenueKPIs();
   const { data: ret, isLoading: retLoading } = useRetentionKPIs();
   const { data: fin, isLoading: finLoading } = useXeroFinanceData();
-  const { data: ltgp, isLoading: ltgpLoading } = useLTGPKPIs();
 
   const indicators: Record<string, { loading: boolean; status: DepartmentStatus; kpi: string; showStatus: boolean }> = {
     '/marketing': {
@@ -93,14 +89,6 @@ export function OverviewPage() {
         : 'no-data',
       kpi: ret ? `${ret.replacementRate}% replacement rate` : '—',
     },
-    '/ltgp': {
-      loading: ltgpLoading,
-      showStatus: true,
-      status: ltgp
-        ? (ltgp.ltgpCacRatio >= 9 ? 'on-track' : ltgp.ltgpCacRatio >= 6 ? 'at-risk' : 'off-track')
-        : 'no-data',
-      kpi: ltgp && ltgp.ltgpCacRatio > 0 ? `${ltgp.ltgpCacRatio.toFixed(1)}× LTGP:CAC` : '—',
-    },
   };
 
   const chartFor = (path: string) => {
@@ -110,7 +98,6 @@ export function OverviewPage() {
     if (path === '/revenue') return rev ? <OverviewRevenueChart data={rev} /> : null;
     if (path === '/finance') return fin ? <OverviewFinanceChart data={fin} /> : null;
     if (path === '/retention') return ret ? <OverviewRetentionChart data={ret} /> : null;
-    if (path === '/ltgp') return ltgp ? <OverviewLTGPChart data={ltgp} /> : null;
     return null;
   };
 

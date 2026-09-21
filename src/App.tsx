@@ -13,7 +13,6 @@ import { RecruitmentPage } from './pages/RecruitmentPage';
 import { RevenuePage } from './pages/RevenuePage';
 import { FinancePage } from './pages/FinancePage';
 import { RetentionPage } from './pages/RetentionPage';
-import { LTGPPage } from './pages/LTGPPage';
 
 const IS_DEMO =
   !import.meta.env.VITE_AIRTABLE_API_KEY ||
@@ -26,7 +25,6 @@ function AppRoutes() {
     return (
       <Routes>
         <Route path="/marketing" element={<MarketingPage />} />
-        <Route path="/ltgp"      element={<LTGPPage />} />
         <Route path="*"          element={<Navigate to="/marketing" replace />} />
       </Routes>
     );
@@ -41,7 +39,6 @@ function AppRoutes() {
       <Route path="/revenue"     element={<RevenuePage />} />
       <Route path="/finance"     element={<FinancePage />} />
       <Route path="/retention"   element={<RetentionPage />} />
-      <Route path="/ltgp"       element={<LTGPPage />} />
     </Routes>
   );
 }

@@ -7,7 +7,7 @@ import {
   fetchRetentionKPIs,
   fetchAusPlacements,
   fetchScheduledInvoices,
-  fetchLTGPKPIs,
+  fetchCacKPIs,
 } from '../services/airtable';
 import { fetchXeroFinanceData, hasXeroCredentials } from '../services/xero';
 import { fetchMetaSpendByFrame } from '../services/metaAds';
@@ -129,13 +129,13 @@ export function useMetaAusSpend(frame: LTGPFrame = '30d') {
   });
 }
 
-export const hasLTGPCredentials = hasAirtableKey && hasClientsBase;
+export const hasCacCredentials = hasAirtableKey && hasClientsBase;
 
-export function useLTGPKPIs(frame: LTGPFrame = '30d') {
+export function useCacKPIs() {
   return useQuery({
-    queryKey: ['ltgp', frame],
-    queryFn: () => fetchLTGPKPIs(frame),
-    enabled: hasLTGPCredentials,
+    queryKey: ['cac'],
+    queryFn: fetchCacKPIs,
+    enabled: hasCacCredentials,
     placeholderData: keepPreviousData,
   });
 }

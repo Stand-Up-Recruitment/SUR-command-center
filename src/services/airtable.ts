@@ -11,9 +11,7 @@ import type {
   AusPlacement,
   ScheduledInvoice,
   RetentionKPIs,
-  LTGPFrame,
-  LTGPKPIs,
-  LTGPFlag,
+  CacKPIs,
 } from '../types';
 import { fetchMetaSpend, fetchMetaSpendByFrame, fetchMetaSpendPrevPeriod, fetchMetaCprByGroup } from './metaAds';
 
@@ -723,259 +721,54 @@ export async function fetchRetentionKPIs(): Promise<RetentionKPIs> {
   };
 }
 
-// ─── LTGP:CAC ─────────────────────────────────────────────────────────────────
-// Actual contracted rates — update here if contracts change
-const RECRUITER_HOURLY_NZD = 30;
-const RECRUITER_HOURS_WEEK = 42.5;
-const RECRUITER_COUNT = 2;
-const WEEKS_PER_MONTH = 4.33;
-const OWNER_MONTHLY_GROSS_NZD = 2500;
-const OWNER_HOURS_WEEK = 42.5;
-const CALL_DURATION_HRS = 0.5;
-// Avg days from placement confirmed to fully billed ($8k at start + $8k at 30d = ~45 day midpoint)
-const AVG_PLACEMENT_CYCLE_DAYS = 45;
+// ─── CAC ──────────────────────────────────────────────────────────────────────
+const CAC_WINDOW_DAYS = 30;
 
-function ltgpBoundaries(frame: LTGPFrame): { start: number; now: number } {
-  const now = Date.now();
-  if (frame === '7d')   return { start: now - 7   * 86_400_000, now };
-  if (frame === '30d')  return { start: now - 30  * 86_400_000, now };
-  if (frame === '90d')  return { start: now - 90  * 86_400_000, now };
-  if (frame === '12m')  return { start: now - 365 * 86_400_000, now };
-  return { start: 0, now }; // 'all'
-}
-
-const LTGP_FRAME_DAYS: Record<Exclude<LTGPFrame, 'all'>, number> = {
-  '7d': 7,
-  '30d': 30,
-  '90d': 90,
-  '12m': 365,
-};
-
-/** Equal-length window immediately preceding the current `frame` window. `null` for 'all' (no prior period). */
-function ltgpPrevBoundaries(frame: LTGPFrame): { start: number; end: number } | null {
-  if (frame === 'all') return null;
-  const days = LTGP_FRAME_DAYS[frame];
-  const end = Date.now() - days * 86_400_000;
-  return { start: end - days * 86_400_000, end };
-}
-
-type LTGPPlacementFields = {
+type CacPlacementFields = {
   'Created Date'?: string;
-  'Company Name'?: string[] | string;
 };
 
-type LTGPInstalmentFields = {
-  'Installments #'?: number;
-  'Invoice Amount'?: number;
-  Placements?: string[];
-};
+export async function fetchCacKPIs(): Promise<CacKPIs> {
+  if (!CLIENTS_BASE_ID) throw new Error('CAC credentials not configured');
 
-export async function fetchLTGPKPIs(frame: LTGPFrame): Promise<LTGPKPIs> {
-  if (!CLIENTS_BASE_ID) throw new Error('LTGP credentials not configured');
-
-  const [allPlacements, allInstalments, allMainClients, allClientLeads, allCandidateLeads, metaResult, prevMetaResult] = await Promise.all([
-    fetchAllFromBase<LTGPPlacementFields>(CLIENTS_BASE_ID, PLACEMENTS_TABLE_ID),
-    fetchAllFromBase<LTGPInstalmentFields>(CLIENTS_BASE_ID, INSTALMENTS_TABLE_ID),
+  const [allPlacements, allMainClients, metaResult, prevMetaResult] = await Promise.all([
+    fetchAllFromBase<CacPlacementFields>(CLIENTS_BASE_ID, PLACEMENTS_TABLE_ID),
     fetchAllFromBase<{ 'Signed Date'?: string }>(CLIENTS_BASE_ID, MAIN_CLIENT_TABLE_ID),
-    fetchAllFromBase<ClientLeadFields & { 'Call Booked'?: string }>(CLIENTS_BASE_ID, CLIENTS_TABLE_ID),
-    fetchAllFromBase<CandidateLeadFields>(CANDIDATES_BASE_ID, CANDIDATES_TABLE_ID),
-    fetchMetaSpendByFrame(frame).catch(() => ({ candidateSpend: 0, clientSpend: 0, isEstimated: true })),
-    fetchMetaSpendPrevPeriod(frame).catch(() => null),
+    fetchMetaSpendByFrame('30d').catch(() => ({ candidateSpend: 0, clientSpend: 0, isEstimated: true })),
+    fetchMetaSpendPrevPeriod('30d').catch(() => null),
   ]);
 
-  // ── avg_placements_per_client (all-time, lifetime metric) ──────────────────
-  const companySet = new Set<string>();
-  let totalPlacementsAllTime = 0;
-  for (const p of allPlacements) {
-    const co = Array.isArray(p['Company Name']) ? p['Company Name'][0] : p['Company Name'];
-    const name = co?.trim();
-    if (name) { companySet.add(name); totalPlacementsAllTime++; }
-  }
-  const avgPlacementsPerClient = companySet.size > 0 ? totalPlacementsAllTime / companySet.size : 1;
+  const now = Date.now();
+  const start = now - CAC_WINDOW_DAYS * 86_400_000;
+  const prevEnd = start;
+  const prevStart = prevEnd - CAC_WINDOW_DAYS * 86_400_000;
 
-  // ── avg_placement_value from real invoice data (all-time) ──────────────────
-  const feeByPlacement = new Map<string, number>();
-  for (const inst of allInstalments) {
-    const pid = inst.Placements?.[0];
-    if (pid && inst['Invoice Amount']) {
-      feeByPlacement.set(pid, (feeByPlacement.get(pid) ?? 0) + inst['Invoice Amount']);
-    }
-  }
-  const totalFees = Array.from(feeByPlacement.values()).reduce((s, v) => s + v, 0);
-  const avgPlacementValueAud = feeByPlacement.size > 0 ? totalFees / feeByPlacement.size : 16_000;
-
-  // ── Period-filtered counts ─────────────────────────────────────────────────
-  const { start, now } = ltgpBoundaries(frame);
   const candidatesPlaced = allPlacements.filter(p => isInPeriod(p['Created Date'], start, now)).length;
   const clientsWon = allMainClients.filter(c => isInPeriod(c['Signed Date'], start, now)).length;
-  const ownerCallsCompleted = allClientLeads.filter(
-    f => f['Call Booked'] != null && f['Call Booked'] !== '' && isInPeriod(f['Call Booked'], start, now)
-  ).length;
-  const qualifiedCandidates = allCandidateLeads.filter(
-    f => isInPeriod(f.Created, start, now) && isCandidateQualified(f)
-  ).length;
-  const qualifiedClients = allClientLeads.filter(
-    f => isClientQualified(f) && isInPeriod(f['Last Updated Date'], start, now)
-  ).length;
 
-  // ── Cost calculations ──────────────────────────────────────────────────────
-  const monthlyRecruiterCostAud =
-    RECRUITER_HOURLY_NZD * RECRUITER_HOURS_WEEK * RECRUITER_COUNT * WEEKS_PER_MONTH;
-  const ownerHourlyAud = OWNER_MONTHLY_GROSS_NZD / (OWNER_HOURS_WEEK * WEEKS_PER_MONTH);
-  const ownerCostPerCall = ownerHourlyAud * CALL_DURATION_HRS;
-  const ownerAcquisitionCost = ownerCallsCompleted * ownerCostPerCall;
+  const candidateCac = candidatesPlaced > 0 ? metaResult.candidateSpend / candidatesPlaced : 0;
+  const clientCac = clientsWon > 0 ? metaResult.clientSpend / clientsWon : 0;
 
-  const candidateMetaSpend = metaResult.candidateSpend;
-  const clientMetaSpend = metaResult.clientSpend;
-
-  // ── CAC ───────────────────────────────────────────────────────────────────
-  const candidateCac = candidatesPlaced > 0 ? candidateMetaSpend / candidatesPlaced : 0;
-  const clientCac = clientsWon > 0 ? clientMetaSpend / clientsWon : 0;
-  const qualifiedCandidateCac = qualifiedCandidates > 0 ? candidateMetaSpend / qualifiedCandidates : 0;
-  const qualifiedClientCac = qualifiedClients > 0 ? clientMetaSpend / qualifiedClients : 0;
-
-  // ── Previous-period CAC (for trend comparison) ──────────────────────────────
-  const prevBoundaries = ltgpPrevBoundaries(frame);
-  const hasPrevPeriod = prevBoundaries !== null && prevMetaResult !== null;
+  const hasPrevPeriod = prevMetaResult !== null;
   let prevCandidateCac = 0;
   let prevClientCac = 0;
-  let prevQualifiedCandidateCac = 0;
-  let prevQualifiedClientCac = 0;
-  let prevLtgpPerClient = 0;
-  if (prevBoundaries && prevMetaResult) {
+  if (prevMetaResult) {
     const prevCandidatesPlaced = allPlacements.filter(
-      p => isInPeriod(p['Created Date'], prevBoundaries.start, prevBoundaries.end)
+      p => isInPeriod(p['Created Date'], prevStart, prevEnd)
     ).length;
     const prevClientsWon = allMainClients.filter(
-      c => isInPeriod(c['Signed Date'], prevBoundaries.start, prevBoundaries.end)
+      c => isInPeriod(c['Signed Date'], prevStart, prevEnd)
     ).length;
-    const prevQualifiedCandidates = allCandidateLeads.filter(
-      f => isInPeriod(f.Created, prevBoundaries.start, prevBoundaries.end) && isCandidateQualified(f)
-    ).length;
-    const prevQualifiedClients = allClientLeads.filter(
-      f => isClientQualified(f) && isInPeriod(f['Last Updated Date'], prevBoundaries.start, prevBoundaries.end)
-    ).length;
-    const prevCandidateMetaSpend = prevMetaResult.candidateSpend;
-    const prevClientMetaSpend = prevMetaResult.clientSpend;
-    prevCandidateCac = prevCandidatesPlaced > 0 ? prevCandidateMetaSpend / prevCandidatesPlaced : 0;
-    prevClientCac = prevClientsWon > 0 ? prevClientMetaSpend / prevClientsWon : 0;
-    prevQualifiedCandidateCac = prevQualifiedCandidates > 0 ? prevCandidateMetaSpend / prevQualifiedCandidates : 0;
-    prevQualifiedClientCac = prevQualifiedClients > 0 ? prevClientMetaSpend / prevQualifiedClients : 0;
-    prevLtgpPerClient = 19_000;
+    prevCandidateCac = prevCandidatesPlaced > 0 ? prevMetaResult.candidateSpend / prevCandidatesPlaced : 0;
+    prevClientCac = prevClientsWon > 0 ? prevMetaResult.clientSpend / prevClientsWon : 0;
   }
 
-  // ── LTGP ──────────────────────────────────────────────────────────────────
-  const recruiterCostPerPlacement = candidatesPlaced > 0 ? monthlyRecruiterCostAud / candidatesPlaced : 0;
-  const grossProfitPerPlacement = avgPlacementValueAud - recruiterCostPerPlacement;
-  const ltgpPerClient = 19_000;
-
-  // ── Ratio & checks ────────────────────────────────────────────────────────
-  const ltgpCacRatio = clientCac > 0 ? ltgpPerClient / clientCac : 0;
-  const paybackPeriodDays = grossProfitPerPlacement > 0
-    ? (clientCac / grossProfitPerPlacement) * AVG_PLACEMENT_CYCLE_DAYS
-    : 0;
-  const clientFinancedPass = clientCac > 0 ? 8_000 > 2 * clientCac : false;
-
-  // ── Flags ─────────────────────────────────────────────────────────────────
-  const clientCplNzd = clientsWon > 0 ? clientMetaSpend / clientsWon : 0;
-
-  const flags: LTGPFlag[] = [
-    {
-      label: 'LTGP:CAC below 9:1',
-      triggered: ltgpCacRatio > 0 && ltgpCacRatio < 9,
-      severity: 'amber',
-      formula: 'LTGP:CAC ratio < 9',
-      actual: `${ltgpCacRatio.toFixed(1)}:1`,
-      suggestion: 'Check candidate conversion rate, Meta lead quality, and avg placements per client.',
-    },
-    {
-      label: 'LTGP:CAC below 6:1',
-      triggered: ltgpCacRatio > 0 && ltgpCacRatio < 6,
-      severity: 'red',
-      formula: 'LTGP:CAC ratio < 6',
-      actual: `${ltgpCacRatio.toFixed(1)}:1`,
-      suggestion: 'Critical — acquisition is eating margin. Immediate review required.',
-    },
-    {
-      label: 'Client-financed check fail',
-      triggered: clientCac > 0 && !clientFinancedPass,
-      severity: 'amber',
-      formula: '$8,000 < 2 × Client CAC',
-      actual: `$8,000 vs 2 × $${Math.round(clientCac).toLocaleString()}`,
-      suggestion: 'First payment does not cover acquisition cost. Review client CAC and payment terms.',
-    },
-    {
-      label: 'Candidate CAC (NZD) > $150',
-      triggered: candidateCac > 150,
-      severity: 'amber',
-      formula: 'Candidate Meta spend ÷ candidates placed, in NZD, > $150',
-      actual: `NZD $${Math.round(candidateCac).toLocaleString()}`,
-      suggestion: 'Meta candidate spend is inefficient. Review creative and audience targeting.',
-    },
-    {
-      label: 'Client CAC (NZD) > $200',
-      triggered: clientCplNzd > 200,
-      severity: 'amber',
-      formula: 'Client Meta spend ÷ clients won, in NZD, > $200',
-      actual: `NZD $${Math.round(clientCplNzd).toLocaleString()}`,
-      suggestion: 'Client Meta spend is inefficient. Check creative and owner close rate.',
-    },
-    {
-      label: 'Avg placements per client < 1.5',
-      triggered: avgPlacementsPerClient < 1.5,
-      severity: 'amber',
-      formula: 'All-time placements ÷ unique clients < 1.5',
-      actual: avgPlacementsPerClient.toFixed(2),
-      suggestion: 'Clients not returning. Investigate post-placement relationship.',
-    },
-    {
-      label: 'Candidates placed < 3 in period',
-      triggered: candidatesPlaced > 0 && candidatesPlaced < 3,
-      severity: 'amber',
-      formula: 'candidates placed < 3',
-      actual: String(candidatesPlaced),
-      suggestion: 'Volume low relative to fixed recruiter cost. Candidate CAC will spike.',
-    },
-    {
-      label: 'No placements in period',
-      triggered: candidatesPlaced === 0,
-      severity: 'red',
-      formula: 'candidates placed = 0',
-      actual: '0',
-      suggestion: 'No placements recorded. Check date range or Airtable data.',
-    },
-  ];
-
   return {
-    candidateMetaSpend,
-    clientMetaSpend,
-    metaSplitIsEstimated: metaResult.isEstimated,
-    ownerCallsCompleted,
-    ownerCostPerCall,
-    ownerAcquisitionCost,
-    candidatesPlaced,
-    clientsWon,
-    qualifiedCandidates,
-    qualifiedClients,
-    avgPlacementValueAud,
-    monthlyRecruiterCostAud,
-    recruiterCostPerPlacement,
-    grossProfitPerPlacement,
-    avgPlacementsPerClient,
     candidateCac,
     clientCac,
-    qualifiedCandidateCac,
-    qualifiedClientCac,
+    metaSplitIsEstimated: metaResult.isEstimated,
     hasPrevPeriod,
     prevCandidateCac,
     prevClientCac,
-    prevQualifiedCandidateCac,
-    prevQualifiedClientCac,
-    prevLtgpPerClient,
-    ltgpPerClient,
-    ltgpCacRatio,
-    paybackPeriodDays,
-    clientFinancedPass,
-    flags,
   };
 }

@@ -310,53 +310,16 @@ export interface XeroFinanceData {
   };
 }
 
-// ─── LTGP:CAC ─────────────────────────────────────────────────────────────────
+// ─── CAC ──────────────────────────────────────────────────────────────────────
 export type LTGPFrame = '7d' | '30d' | '90d' | '12m' | 'all';
 
-export interface LTGPFlag {
-  label: string;
-  triggered: boolean;
-  severity: 'amber' | 'red';
-  formula: string;
-  actual: string;
-  suggestion: string;
-}
-
-export interface LTGPKPIs {
-  // CAC inputs
-  candidateMetaSpend: number;
-  clientMetaSpend: number;
-  metaSplitIsEstimated: boolean;
-  ownerCallsCompleted: number;
-  ownerCostPerCall: number;
-  ownerAcquisitionCost: number;
-  candidatesPlaced: number;
-  clientsWon: number;
-  qualifiedCandidates: number;
-  qualifiedClients: number;
-  // LTGP inputs
-  avgPlacementValueAud: number;
-  monthlyRecruiterCostAud: number;
-  recruiterCostPerPlacement: number;
-  grossProfitPerPlacement: number;
-  avgPlacementsPerClient: number;
-  // Outputs
+export interface CacKPIs {
   candidateCac: number;
   clientCac: number;
-  qualifiedCandidateCac: number;
-  qualifiedClientCac: number;
-  // Previous-period comparison
+  metaSplitIsEstimated: boolean;
   hasPrevPeriod: boolean;
   prevCandidateCac: number;
   prevClientCac: number;
-  prevQualifiedCandidateCac: number;
-  prevQualifiedClientCac: number;
-  prevLtgpPerClient: number;
-  ltgpPerClient: number;
-  ltgpCacRatio: number;
-  paybackPeriodDays: number;
-  clientFinancedPass: boolean;
-  flags: LTGPFlag[];
 }
 
 // ─── Shared ───────────────────────────────────────────────────────────────────

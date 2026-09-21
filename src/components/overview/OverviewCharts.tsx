@@ -1,6 +1,6 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area, Cell } from 'recharts';
 import { COLORS } from '../../styles/tokens';
-import type { MarketingKPIs, SalesKPIs, RecruiterKPIs, RevenueKPIs, XeroFinanceData, RetentionKPIs, LTGPKPIs } from '../../types';
+import type { MarketingKPIs, SalesKPIs, RecruiterKPIs, RevenueKPIs, XeroFinanceData, RetentionKPIs } from '../../types';
 
 const CHART_H = 110;
 const TT = {
@@ -124,30 +124,5 @@ export function OverviewRetentionChart({ data }: { data: RetentionKPIs }) {
         </Bar>
       </BarChart>
     </ResponsiveContainer>
-  );
-}
-
-function ltgpColor(ratio: number): string {
-  if (ratio >= 9) return COLORS.success;
-  if (ratio >= 6) return COLORS.warning;
-  return COLORS.danger;
-}
-
-export function OverviewLTGPChart({ data }: { data: LTGPKPIs }) {
-  const color = data.ltgpCacRatio > 0 ? ltgpColor(data.ltgpCacRatio) : COLORS.textMuted;
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <div style={{ fontSize: 48, fontWeight: 900, color, letterSpacing: '-2px', lineHeight: 1 }}>
-        {data.ltgpCacRatio > 0 ? `${data.ltgpCacRatio.toFixed(1)}×` : '—'}
-      </div>
-      <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
-        LTGP:CAC
-      </div>
-      {data.paybackPeriodDays > 0 && (
-        <div style={{ fontSize: 11, color: COLORS.textSecondary, marginTop: 2 }}>
-          {Math.round(data.paybackPeriodDays)}d payback
-        </div>
-      )}
-    </div>
   );
 }

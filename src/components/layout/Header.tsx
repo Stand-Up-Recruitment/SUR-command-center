@@ -12,10 +12,9 @@ const TABS = [
   { label: 'Revenue',     to: '/revenue'                },
   { label: 'Finance',     to: '/finance'                    },
   { label: 'Retention',   to: '/retention'                  },
-  { label: 'LTGP:CAC',   to: '/ltgp'                       },
 ] as const;
 
-const MARKETING_TABS = new Set(['/marketing', '/ltgp']);
+const MARKETING_TABS = new Set(['/marketing']);
 
 interface HeaderProps {
   onRefresh: () => void;

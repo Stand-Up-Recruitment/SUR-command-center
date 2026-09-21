@@ -6,7 +6,7 @@ import { StatusBadge } from '../shared/StatusBadge';
 import { WoWBadge } from '../shared/WoWBadge';
 import { TimeFramePicker } from '../shared/TimeFramePicker';
 import { Skeleton } from '../shared/Skeleton';
-import { useSalesKPIs } from '../../hooks/queries';
+import { useSalesKPIs, useCacKPIs } from '../../hooks/queries';
 import { COLORS, CARD_STYLE } from '../../styles/tokens';
 import type { DepartmentStatus, TimeFrame } from '../../types';
 
@@ -14,6 +14,12 @@ const TIMEFRAME_OPTIONS: { value: TimeFrame; label: string }[] = [
   { value: 'week',  label: 'Weekly' },
   { value: 'month', label: 'Monthly' },
 ];
+
+function fmtNzd(n: number): string {
+  if (n >= 1_000_000) return `NZ$${(n / 1_000_000).toFixed(2)}M`;
+  if (n >= 1_000) return `NZ$${Math.round(n / 1_000)}k`;
+  return `NZ$${Math.round(n)}`;
+}
 
 function funnelConversion(numerator: number, denominator: number): string {
   if (denominator === 0) return '—';
@@ -60,6 +66,7 @@ function SalesSkeleton() {
 export function SalesCard() {
   const [frame, setFrame] = useState<TimeFrame>('week');
   const { data, error, isLoading, isFetching } = useSalesKPIs(frame);
+  const { data: cac } = useCacKPIs();
 
   if (isLoading) return <SalesSkeleton />;
   if (!data) return null;
@@ -156,6 +163,16 @@ export function SalesCard() {
           {statCard('New Clients Closed', data.closedClients,       data.closedClients,       data.prevClosedClients)}
           {statCard('Lead to Close',      `${data.leadToCloseRate}%`, data.leadToCloseRate,   data.prevLeadToCloseRate)}
           {statCard('T.O.B.s Signed',     data.tobSignedThisMonth,  data.tobSignedThisMonth, data.tobSignedLastMonth)}
+        </div>
+
+        <div style={{ marginTop: 10, maxWidth: 220 }}>
+          {statCard(
+            'Client CAC · Last 30d',
+            cac ? fmtNzd(cac.clientCac) : '—',
+            cac?.clientCac ?? 0,
+            cac?.prevClientCac ?? 0,
+            { invertDirection: true, noWoW: !cac?.hasPrevPeriod }
+          )}
         </div>
 
         {/* Current vs Previous bar chart */}
