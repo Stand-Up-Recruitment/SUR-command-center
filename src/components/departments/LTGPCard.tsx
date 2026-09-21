@@ -58,11 +58,9 @@ function LTGPSkeleton() {
       </div>
       <div style={{ ...CARD_STYLE, padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
         <Skeleton height={72} width={180} radius={8} />
-        <div style={{ maxWidth: 280 }}>
-          <div style={{ background: COLORS.bgSubtle, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: '14px 16px' }}>
-            <Skeleton height={10} width={80} style={{ marginBottom: 10 }} />
-            <Skeleton height={22} width={70} />
-          </div>
+        <div style={{ background: COLORS.bgSubtle, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: '14px 16px' }}>
+          <Skeleton height={10} width={80} style={{ marginBottom: 10 }} />
+          <Skeleton height={22} width={70} />
         </div>
       </div>
     </div>
@@ -173,16 +171,14 @@ function LTGPContent({ data, frame }: { data: LTGPKPIs; frame: LTGPFrame }) {
       </div>
 
       {/* Client CAC tile */}
-      <div style={{ maxWidth: 280 }}>
-        <KpiTile
-          label="Client CAC"
-          value={data.clientCac > 0 ? fmtNzd(data.clientCac) : '—'}
-          ratio={ratio > 0 ? `${ratio.toFixed(1)}:1 LTGP ratio` : undefined}
-          ratioColor={ratio > 0 ? ratioColor(ratio) : undefined}
-          sub="Cost to acquire one client"
-          trend={data.hasPrevPeriod ? { current: data.clientCac, previous: data.prevClientCac } : undefined}
-        />
-      </div>
+      <KpiTile
+        label="Client CAC"
+        value={data.clientCac > 0 ? fmtNzd(data.clientCac) : '—'}
+        ratio={ratio > 0 ? `${ratio.toFixed(1)}:1 LTGP ratio` : undefined}
+        ratioColor={ratio > 0 ? ratioColor(ratio) : undefined}
+        sub="Cost to acquire one client"
+        trend={data.hasPrevPeriod ? { current: data.clientCac, previous: data.prevClientCac } : undefined}
+      />
 
     </div>
   );

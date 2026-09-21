@@ -861,16 +861,13 @@ export async function fetchLTGPKPIs(frame: LTGPFrame): Promise<LTGPKPIs> {
     prevClientCac = prevClientsWon > 0 ? prevClientMetaSpend / prevClientsWon : 0;
     prevQualifiedCandidateCac = prevQualifiedCandidates > 0 ? prevCandidateMetaSpend / prevQualifiedCandidates : 0;
     prevQualifiedClientCac = prevQualifiedClients > 0 ? prevClientMetaSpend / prevQualifiedClients : 0;
-
-    const prevRecruiterCostPerPlacement = prevCandidatesPlaced > 0 ? monthlyRecruiterCostAud / prevCandidatesPlaced : 0;
-    const prevGrossProfitPerPlacement = avgPlacementValueAud - prevRecruiterCostPerPlacement;
-    prevLtgpPerClient = prevGrossProfitPerPlacement * avgPlacementsPerClient;
+    prevLtgpPerClient = 19_000;
   }
 
   // ── LTGP ──────────────────────────────────────────────────────────────────
   const recruiterCostPerPlacement = candidatesPlaced > 0 ? monthlyRecruiterCostAud / candidatesPlaced : 0;
   const grossProfitPerPlacement = avgPlacementValueAud - recruiterCostPerPlacement;
-  const ltgpPerClient = grossProfitPerPlacement * avgPlacementsPerClient;
+  const ltgpPerClient = 19_000;
 
   // ── Ratio & checks ────────────────────────────────────────────────────────
   const ltgpCacRatio = clientCac > 0 ? ltgpPerClient / clientCac : 0;
