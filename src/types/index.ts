@@ -345,14 +345,12 @@ export interface LTGPKPIs {
   clientCac: number;
   qualifiedCandidateCac: number;
   qualifiedClientCac: number;
-  placementCac: number;
   // Previous-period comparison
   hasPrevPeriod: boolean;
   prevCandidateCac: number;
   prevClientCac: number;
   prevQualifiedCandidateCac: number;
   prevQualifiedClientCac: number;
-  prevPlacementCac: number;
   prevLtgpPerClient: number;
   ltgpPerClient: number;
   ltgpCacRatio: number;

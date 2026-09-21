@@ -12,8 +12,6 @@ const FRAMES: { label: string; value: LTGPFrame }[] = [
   { label: 'All', value: 'all' },
 ];
 
-const AVG_PLACEMENT_CYCLE_DAYS = 45;
-
 function fmtNzd(n: number): string {
   if (n >= 1_000_000) return `NZ$${(n / 1_000_000).toFixed(2)}M`;
   if (n >= 1_000) return `NZ$${Math.round(n / 1_000)}k`;
@@ -60,29 +58,11 @@ function LTGPSkeleton() {
       </div>
       <div style={{ ...CARD_STYLE, padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
         <Skeleton height={72} width={180} radius={8} />
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
-          {[0, 1, 2].map(i => (
-            <div key={i} style={{ background: COLORS.bgSubtle, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: '14px 16px' }}>
-              <Skeleton height={10} width={80} style={{ marginBottom: 10 }} />
-              <Skeleton height={22} width={70} />
-            </div>
-          ))}
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
-          {[0, 1].map(i => (
-            <div key={i} style={{ background: COLORS.bgSubtle, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: '14px 16px' }}>
-              <Skeleton height={10} width={80} style={{ marginBottom: 10 }} />
-              <Skeleton height={22} width={70} />
-            </div>
-          ))}
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          {[0, 1].map(i => (
-            <div key={i} style={{ background: COLORS.bgSubtle, border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: '14px 16px' }}>
-              <Skeleton height={10} width={80} style={{ marginBottom: 10 }} />
-              {[0, 1, 2, 3].map(j => <Skeleton key={j} height={10} width="90%" style={{ marginBottom: 6 }} />)}
-            </div>
-          ))}
+        <div style={{ maxWidth: 280 }}>
+          <div style={{ background: COLORS.bgSubtle, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: '14px 16px' }}>
+            <Skeleton height={10} width={80} style={{ marginBottom: 10 }} />
+            <Skeleton height={22} width={70} />
+          </div>
         </div>
       </div>
     </div>
@@ -192,8 +172,8 @@ function LTGPContent({ data, frame }: { data: LTGPKPIs; frame: LTGPFrame }) {
         </div>
       </div>
 
-      {/* Three KPI tiles */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+      {/* Client CAC tile */}
+      <div style={{ maxWidth: 280 }}>
         <KpiTile
           label="Client CAC"
           value={data.clientCac > 0 ? fmtNzd(data.clientCac) : '—'}
@@ -202,103 +182,6 @@ function LTGPContent({ data, frame }: { data: LTGPKPIs; frame: LTGPFrame }) {
           sub="Cost to acquire one client"
           trend={data.hasPrevPeriod ? { current: data.clientCac, previous: data.prevClientCac } : undefined}
         />
-        <KpiTile
-          label="Placement CAC"
-          value={data.placementCac > 0 ? fmtNzd(data.placementCac) : '—'}
-          sub="Total cost per placement (Meta spend + owner cost)"
-          trend={data.hasPrevPeriod ? { current: data.placementCac, previous: data.prevPlacementCac } : undefined}
-        />
-        <KpiTile
-          label="Qualified Candidate CAC"
-          value={data.qualifiedCandidateCac > 0 ? fmtNzd(data.qualifiedCandidateCac) : '—'}
-          sub="Meta spend per qualified lead (pre-conversion)"
-          trend={data.hasPrevPeriod ? { current: data.qualifiedCandidateCac, previous: data.prevQualifiedCandidateCac } : undefined}
-        />
-      </div>
-
-      {/* Payback period + client-financed check */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
-        <div style={{ background: COLORS.bgSubtle, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: '14px 16px' }}>
-          <div style={{ fontSize: 10, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
-            Payback Period
-          </div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: COLORS.textPrimary }}>
-            {data.paybackPeriodDays > 0 ? `${Math.round(data.paybackPeriodDays)}d` : '—'}
-          </div>
-          <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 4 }}>
-            Client CAC ÷ Gross Profit/placement × {AVG_PLACEMENT_CYCLE_DAYS}d cycle
-          </div>
-        </div>
-        <div style={{
-          background: COLORS.bgSubtle,
-          border: `1px solid ${data.clientCac > 0 ? (data.clientFinancedPass ? '#166534' : COLORS.accentBorder) : COLORS.border}`,
-          borderRadius: 10,
-          padding: '14px 16px',
-        }}>
-          <div style={{ fontSize: 10, fontWeight: 600, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
-            Client-Financed Check
-          </div>
-          <div style={{
-            display: 'inline-block',
-            fontSize: 13,
-            fontWeight: 800,
-            padding: '4px 12px',
-            borderRadius: 6,
-            background: data.clientCac > 0
-              ? (data.clientFinancedPass ? COLORS.successBg : COLORS.accentBg)
-              : COLORS.bgSubtle,
-            color: data.clientCac > 0
-              ? (data.clientFinancedPass ? COLORS.success : COLORS.danger)
-              : COLORS.textMuted,
-          }}>
-            {data.clientCac > 0 ? (data.clientFinancedPass ? 'PASS' : 'FAIL') : '—'}
-          </div>
-          <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 8 }}>
-            $8,000 first payment {data.clientCac > 0 ? (data.clientFinancedPass ? '>' : '<') : 'vs'} 2 × Client CAC ({data.clientCac > 0 ? fmtNzdFull(2 * data.clientCac) : '?'})
-          </div>
-          <div style={{ fontSize: 10, color: COLORS.textMuted, marginTop: 4 }}>
-            Hormozi 2026: first 30d GP must exceed 2× CAC
-          </div>
-        </div>
-      </div>
-
-      {/* Compact inputs */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        <div style={{ background: COLORS.bgSubtle, border: `1px solid ${COLORS.borderSubtle}`, borderRadius: 8, padding: '14px 16px' }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
-            CAC Inputs
-          </div>
-          {([
-            ['Cand. Meta Spend', fmtNzdFull(data.candidateMetaSpend)],
-            ['Client Meta Spend', fmtNzdFull(data.clientMetaSpend)],
-            ['Owner Calls', String(data.ownerCallsCompleted)],
-            ['Owner Acq. Cost', fmtNzdFull(data.ownerAcquisitionCost)],
-            ['Candidates Placed', String(data.candidatesPlaced)],
-            ['Clients Won', String(data.clientsWon)],
-          ] as [string, string][]).map(([label, val]) => (
-            <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '4px 0', borderBottom: `1px solid ${COLORS.borderSubtle}` }}>
-              <span style={{ fontSize: 11, color: COLORS.textMuted }}>{label}</span>
-              <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, fontFamily: 'monospace' }}>{val}</span>
-            </div>
-          ))}
-        </div>
-
-        <div style={{ background: COLORS.bgSubtle, border: `1px solid ${COLORS.borderSubtle}`, borderRadius: 8, padding: '14px 16px' }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
-            LTGP Inputs
-          </div>
-          {([
-            ['Avg Placement Value', fmtNzdFull(data.avgPlacementValueAud)],
-            ['Monthly Recruiter Cost', fmtNzdFull(data.monthlyRecruiterCostAud)],
-            ['GP / Placement', data.grossProfitPerPlacement > 0 ? fmtNzdFull(data.grossProfitPerPlacement) : '—'],
-            ['Placements / Client', data.avgPlacementsPerClient.toFixed(2)],
-          ] as [string, string][]).map(([label, val]) => (
-            <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '4px 0', borderBottom: `1px solid ${COLORS.borderSubtle}` }}>
-              <span style={{ fontSize: 11, color: COLORS.textMuted }}>{label}</span>
-              <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, fontFamily: 'monospace' }}>{val}</span>
-            </div>
-          ))}
-        </div>
       </div>
 
     </div>
