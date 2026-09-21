@@ -8,8 +8,6 @@ const FRAMES: { label: string; value: LTGPFrame }[] = [
   { label: '7d', value: '7d' },
   { label: '30d', value: '30d' },
   { label: '90d', value: '90d' },
-  { label: '12m', value: '12m' },
-  { label: 'All', value: 'all' },
 ];
 
 function fmtNzd(n: number): string {
