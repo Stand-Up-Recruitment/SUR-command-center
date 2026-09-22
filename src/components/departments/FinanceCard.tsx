@@ -384,7 +384,7 @@ export function FinanceCard() {
   // ── Computed values ─────────────────────────────────────────────────────────
   // AUS COGS from the Xero webhook includes some line items we exclude here, with the amount
   // added back to gross/net profit so the totals stay internally consistent.
-  const EXCLUDED_AUS_COGS_LABELS = ['Safety equipment', 'Salaries - Labour Hire Staff', 'Staff training'];
+  const EXCLUDED_AUS_COGS_LABELS = ['Safety equipment', 'Salaries - Labour Hire Staff', 'Staff Training'];
   const excludedAusCogsCost = data.ausCosts
     .filter(r => EXCLUDED_AUS_COGS_LABELS.includes(r.label))
     .reduce((sum, r) => sum + r.value, 0);
