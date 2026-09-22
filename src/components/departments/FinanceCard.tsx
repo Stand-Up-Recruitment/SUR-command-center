@@ -79,6 +79,14 @@ function G5({ children }: { children: React.ReactNode }) {
   );
 }
 
+function G2({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 10, marginBottom: '.875rem' }}>
+      {children}
+    </div>
+  );
+}
+
 function Card({ children, accent, accentSide }: { children: React.ReactNode; accent?: string; accentSide?: 'top' | 'left' }) {
   const borderTop  = accent && accentSide !== 'left' ? `3px solid ${accent}` : undefined;
   const borderLeft = accent && accentSide === 'left' ? `3px solid ${accent}` : undefined;
@@ -143,7 +151,12 @@ function FinanceSkeleton() {
 function PLSummarySection({ totalRevenue, totalGrossProfit, totalOpex, totalCogs, netProfit, lm, cac }: {
   totalRevenue: number; totalGrossProfit: number; totalOpex: number; totalCogs: number; netProfit: number;
   lm: { revenue: number; grossProfit: number; netProfit: number; opex?: number } | undefined;
-  cac: { clientCac: number; prevClientCac: number; hasPrevPeriod: boolean } | undefined;
+  cac: {
+    clientCac: number; prevClientCac: number;
+    qualifiedCandidateCac: number; prevQualifiedCandidateCac: number;
+    placementCac: number; prevPlacementCac: number;
+    hasPrevPeriod: boolean;
+  } | undefined;
 }) {
   const cogsPct = totalRevenue > 0 ? (totalCogs / totalRevenue) * 100 : 0;
   const grossMarginPct = totalRevenue > 0 ? (totalGrossProfit / totalRevenue) * 100 : 0;
@@ -151,7 +164,7 @@ function PLSummarySection({ totalRevenue, totalGrossProfit, totalOpex, totalCogs
 
   return (
     <>
-      <SH color={TEXT} label="P&L Summary" sub="revenue · gross profit · opex · net profit · client CAC" />
+      <SH color={TEXT} label="P&L Summary" sub="revenue · gross profit · opex · net profit · client CAC · qualified candidate CAC · placement CAC" />
 
       <G5>
         <KPDelta
@@ -195,6 +208,25 @@ function PLSummarySection({ totalRevenue, totalGrossProfit, totalOpex, totalCogs
           delta={cac?.hasPrevPeriod ? { value: cac.clientCac - cac.prevClientCac, label: 'vs prior 30 days' } : null}
         />
       </G5>
+
+      <G2>
+        <KPDelta
+          accent={RD}
+          label="Qualified candidate CAC"
+          value={cac ? fmtNZD(cac.qualifiedCandidateCac) : '—'}
+          valueColor={RD}
+          invert
+          delta={cac?.hasPrevPeriod ? { value: cac.qualifiedCandidateCac - cac.prevQualifiedCandidateCac, label: 'vs prior 30 days' } : null}
+        />
+        <KPDelta
+          accent={RD}
+          label="Placement CAC"
+          value={cac ? fmtNZD(cac.placementCac) : '—'}
+          valueColor={RD}
+          invert
+          delta={cac?.hasPrevPeriod ? { value: cac.placementCac - cac.prevPlacementCac, label: 'vs prior 30 days' } : null}
+        />
+      </G2>
     </>
   );
 }

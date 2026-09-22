@@ -315,9 +315,13 @@ export type LTGPFrame = '7d' | '30d' | '90d' | '12m' | 'all';
 
 export interface CacKPIs {
   clientCac: number;
+  qualifiedCandidateCac: number;
+  placementCac: number;
   metaSplitIsEstimated: boolean;
   hasPrevPeriod: boolean;
   prevClientCac: number;
+  prevQualifiedCandidateCac: number;
+  prevPlacementCac: number;
 }
 
 // ─── Shared ───────────────────────────────────────────────────────────────────

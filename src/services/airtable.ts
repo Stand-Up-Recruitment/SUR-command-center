@@ -725,10 +725,12 @@ export async function fetchRetentionKPIs(): Promise<RetentionKPIs> {
 const CAC_WINDOW_DAYS = 30;
 
 export async function fetchCacKPIs(): Promise<CacKPIs> {
-  if (!CLIENTS_BASE_ID) throw new Error('CAC credentials not configured');
+  if (!CLIENTS_BASE_ID || !CANDIDATES_BASE_ID) throw new Error('CAC credentials not configured');
 
-  const [allMainClients, metaResult, prevMetaResult] = await Promise.all([
+  const [allMainClients, allPlacements, allCandidates, metaResult, prevMetaResult] = await Promise.all([
     fetchAllFromBase<{ 'Signed Date'?: string }>(CLIENTS_BASE_ID, MAIN_CLIENT_TABLE_ID),
+    fetchAllFromBase<{ 'Created Date'?: string }>(CLIENTS_BASE_ID, PLACEMENTS_TABLE_ID),
+    fetchAllFromBase<CandidateLeadFields>(CANDIDATES_BASE_ID, CANDIDATES_TABLE_ID, {}),
     fetchMetaSpendByFrame('30d').catch(() => ({ candidateSpend: 0, clientSpend: 0, isEstimated: true })),
     fetchMetaSpendPrevPeriod('30d').catch(() => null),
   ]);
@@ -741,19 +743,49 @@ export async function fetchCacKPIs(): Promise<CacKPIs> {
   const clientsWon = allMainClients.filter(c => isInPeriod(c['Signed Date'], start, now)).length;
   const clientCac = clientsWon > 0 ? metaResult.clientSpend / clientsWon : 0;
 
+  const placementsCount = allPlacements.filter(p => isInPeriod(p['Created Date'], start, now)).length;
+  const placementCac = placementsCount > 0
+    ? (metaResult.candidateSpend + metaResult.clientSpend) / placementsCount
+    : 0;
+
+  const qualifiedCandidates = allCandidates
+    .filter(c => isInPeriod(c.Created, start, now))
+    .filter(isCandidateQualified).length;
+  const qualifiedCandidateCac = qualifiedCandidates > 0 ? metaResult.candidateSpend / qualifiedCandidates : 0;
+
   const hasPrevPeriod = prevMetaResult !== null;
   let prevClientCac = 0;
+  let prevPlacementCac = 0;
+  let prevQualifiedCandidateCac = 0;
   if (prevMetaResult) {
     const prevClientsWon = allMainClients.filter(
       c => isInPeriod(c['Signed Date'], prevStart, prevEnd)
     ).length;
     prevClientCac = prevClientsWon > 0 ? prevMetaResult.clientSpend / prevClientsWon : 0;
+
+    const prevPlacementsCount = allPlacements.filter(
+      p => isInPeriod(p['Created Date'], prevStart, prevEnd)
+    ).length;
+    prevPlacementCac = prevPlacementsCount > 0
+      ? (prevMetaResult.candidateSpend + prevMetaResult.clientSpend) / prevPlacementsCount
+      : 0;
+
+    const prevQualifiedCandidates = allCandidates
+      .filter(c => isInPeriod(c.Created, prevStart, prevEnd))
+      .filter(isCandidateQualified).length;
+    prevQualifiedCandidateCac = prevQualifiedCandidates > 0
+      ? prevMetaResult.candidateSpend / prevQualifiedCandidates
+      : 0;
   }
 
   return {
     clientCac,
+    qualifiedCandidateCac,
+    placementCac,
     metaSplitIsEstimated: metaResult.isEstimated,
     hasPrevPeriod,
     prevClientCac,
+    prevQualifiedCandidateCac,
+    prevPlacementCac,
   };
 }
