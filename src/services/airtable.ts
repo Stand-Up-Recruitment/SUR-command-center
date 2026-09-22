@@ -724,15 +724,10 @@ export async function fetchRetentionKPIs(): Promise<RetentionKPIs> {
 // ─── CAC ──────────────────────────────────────────────────────────────────────
 const CAC_WINDOW_DAYS = 30;
 
-type CacPlacementFields = {
-  'Created Date'?: string;
-};
-
 export async function fetchCacKPIs(): Promise<CacKPIs> {
   if (!CLIENTS_BASE_ID) throw new Error('CAC credentials not configured');
 
-  const [allPlacements, allMainClients, metaResult, prevMetaResult] = await Promise.all([
-    fetchAllFromBase<CacPlacementFields>(CLIENTS_BASE_ID, PLACEMENTS_TABLE_ID),
+  const [allMainClients, metaResult, prevMetaResult] = await Promise.all([
     fetchAllFromBase<{ 'Signed Date'?: string }>(CLIENTS_BASE_ID, MAIN_CLIENT_TABLE_ID),
     fetchMetaSpendByFrame('30d').catch(() => ({ candidateSpend: 0, clientSpend: 0, isEstimated: true })),
     fetchMetaSpendPrevPeriod('30d').catch(() => null),
@@ -743,32 +738,22 @@ export async function fetchCacKPIs(): Promise<CacKPIs> {
   const prevEnd = start;
   const prevStart = prevEnd - CAC_WINDOW_DAYS * 86_400_000;
 
-  const candidatesPlaced = allPlacements.filter(p => isInPeriod(p['Created Date'], start, now)).length;
   const clientsWon = allMainClients.filter(c => isInPeriod(c['Signed Date'], start, now)).length;
-
-  const candidateCac = candidatesPlaced > 0 ? metaResult.candidateSpend / candidatesPlaced : 0;
   const clientCac = clientsWon > 0 ? metaResult.clientSpend / clientsWon : 0;
 
   const hasPrevPeriod = prevMetaResult !== null;
-  let prevCandidateCac = 0;
   let prevClientCac = 0;
   if (prevMetaResult) {
-    const prevCandidatesPlaced = allPlacements.filter(
-      p => isInPeriod(p['Created Date'], prevStart, prevEnd)
-    ).length;
     const prevClientsWon = allMainClients.filter(
       c => isInPeriod(c['Signed Date'], prevStart, prevEnd)
     ).length;
-    prevCandidateCac = prevCandidatesPlaced > 0 ? prevMetaResult.candidateSpend / prevCandidatesPlaced : 0;
     prevClientCac = prevClientsWon > 0 ? prevMetaResult.clientSpend / prevClientsWon : 0;
   }
 
   return {
-    candidateCac,
     clientCac,
     metaSplitIsEstimated: metaResult.isEstimated,
     hasPrevPeriod,
-    prevCandidateCac,
     prevClientCac,
   };
 }

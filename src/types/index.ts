@@ -314,11 +314,9 @@ export interface XeroFinanceData {
 export type LTGPFrame = '7d' | '30d' | '90d' | '12m' | 'all';
 
 export interface CacKPIs {
-  candidateCac: number;
   clientCac: number;
   metaSplitIsEstimated: boolean;
   hasPrevPeriod: boolean;
-  prevCandidateCac: number;
   prevClientCac: number;
 }
 
