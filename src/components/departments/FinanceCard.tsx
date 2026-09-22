@@ -382,17 +382,14 @@ export function FinanceCard() {
   if (!data) return <FinanceSkeleton />;
 
   // ── Computed values ─────────────────────────────────────────────────────────
-  // AUS COGS from the Xero webhook includes some line items we exclude here, with the amount
-  // added back to gross/net profit so the totals stay internally consistent.
-  const EXCLUDED_AUS_COGS_LABELS = ['Safety equipment', 'Salaries - Labour Hire Staff', 'Staff Training'];
-  const excludedAusCogsCost = data.ausCosts
-    .filter(r => EXCLUDED_AUS_COGS_LABELS.includes(r.label))
-    .reduce((sum, r) => sum + r.value, 0);
-  const ausCosts = data.ausCosts.filter(r => !EXCLUDED_AUS_COGS_LABELS.includes(r.label));
-  const ausTotalCogs = data.ausTotalCogs - excludedAusCogsCost;
-  const ausGrossProfit = data.ausGrossProfit + excludedAusCogsCost;
-  const ausNetProfit = (data.ausNetProfit ?? data.ausGrossProfit) + excludedAusCogsCost;
-  const netProfit = data.netProfit + excludedAusCogsCost;
+  // AUS COGS excludes Safety equipment, Salaries - Labour Hire Staff, and Staff Training
+  // upstream (n8n "Finance — Xero P&L Webhook"), with the excluded amount already added
+  // back into gross/net profit, so the webhook's figures can be used directly here.
+  const ausCosts = data.ausCosts;
+  const ausTotalCogs = data.ausTotalCogs;
+  const ausGrossProfit = data.ausGrossProfit;
+  const ausNetProfit = data.ausNetProfit ?? data.ausGrossProfit;
+  const netProfit = data.netProfit;
 
   const totalRevenue    = data.nzRevenue + data.ausRevenue;
   const totalGrossProfit = data.nzGrossProfit + ausGrossProfit;
