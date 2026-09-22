@@ -382,15 +382,17 @@ export function FinanceCard() {
   if (!data) return <FinanceSkeleton />;
 
   // ── Computed values ─────────────────────────────────────────────────────────
-  // AUS COGS from the Xero webhook includes "Salaries - Labour Hire Staff" — excluded here,
-  // with the amount added back to gross/net profit so the totals stay internally consistent.
-  const LABOUR_HIRE_COGS_LABEL = 'Salaries - Labour Hire Staff';
-  const labourHireCost = data.ausCosts.find(r => r.label === LABOUR_HIRE_COGS_LABEL)?.value ?? 0;
-  const ausCosts = data.ausCosts.filter(r => r.label !== LABOUR_HIRE_COGS_LABEL);
-  const ausTotalCogs = data.ausTotalCogs - labourHireCost;
-  const ausGrossProfit = data.ausGrossProfit + labourHireCost;
-  const ausNetProfit = (data.ausNetProfit ?? data.ausGrossProfit) + labourHireCost;
-  const netProfit = data.netProfit + labourHireCost;
+  // AUS COGS from the Xero webhook includes some line items we exclude here, with the amount
+  // added back to gross/net profit so the totals stay internally consistent.
+  const EXCLUDED_AUS_COGS_LABELS = ['Safety equipment', 'Salaries - Labour Hire Staff', 'Staff training'];
+  const excludedAusCogsCost = data.ausCosts
+    .filter(r => EXCLUDED_AUS_COGS_LABELS.includes(r.label))
+    .reduce((sum, r) => sum + r.value, 0);
+  const ausCosts = data.ausCosts.filter(r => !EXCLUDED_AUS_COGS_LABELS.includes(r.label));
+  const ausTotalCogs = data.ausTotalCogs - excludedAusCogsCost;
+  const ausGrossProfit = data.ausGrossProfit + excludedAusCogsCost;
+  const ausNetProfit = (data.ausNetProfit ?? data.ausGrossProfit) + excludedAusCogsCost;
+  const netProfit = data.netProfit + excludedAusCogsCost;
 
   const totalRevenue    = data.nzRevenue + data.ausRevenue;
   const totalGrossProfit = data.nzGrossProfit + ausGrossProfit;
