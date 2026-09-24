@@ -300,6 +300,9 @@ export interface XeroFinanceData {
   // CAC formulas, since advertising/ausAdvertising above are FY-to-date (wrong period).
   jobBoardAdvertising90d?: number;
   prevJobBoardAdvertising90d?: number;
+  // Unpaid ACCREC invoices already raised in Xero, past their due date (NZD).
+  // Distinct from the frontend's own Airtable-scheduled overdue total.
+  overdueXeroInvoices?: number;
   nzWorkerStats?: NZWorkerStats;
   cashFlow: CashWeek[];
   cashOutlook?: CashWeek[];

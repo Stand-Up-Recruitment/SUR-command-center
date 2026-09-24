@@ -423,7 +423,9 @@ export function FinanceCard() {
   // and summed separately instead, since they aren't guaranteed cash for any given week.
   const closing = new Date(cashKpis.closingDate).getTime();
   const todayMs = new Date().getTime();
-  let overdueReceivables = 0;
+  // Starts from unpaid invoices already raised in Xero (already NZD), then adds
+  // Airtable-scheduled-but-not-yet-invoiced overdue amounts below.
+  let overdueReceivables = data.overdueXeroInvoices ?? 0;
   const scheduledByWeek = combined.map(() => 0);
   (scheduledInvoices ?? []).forEach(s => {
     const due = new Date(s.dueDate).getTime();
