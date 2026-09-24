@@ -87,14 +87,6 @@ function KPDelta({ label, value, valueColor, accent, sub, delta, deltaPts, inver
   );
 }
 
-function G5({ children }: { children: React.ReactNode }) {
-  return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0,1fr))', gap: 10, marginBottom: '.875rem' }}>
-      {children}
-    </div>
-  );
-}
-
 function G4({ children }: { children: React.ReactNode }) {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 10, marginBottom: '.875rem' }}>
