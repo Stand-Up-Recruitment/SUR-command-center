@@ -160,12 +160,16 @@ function TwelveMonthTrendChart({ data }: { data: XeroFinanceData['monthlyTrend']
   };
 
   const chartData = view === 'overall'
-    ? [{
-        month: 'Total',
-        revenue: data.reduce((sum, d) => sum + d.revenue, 0),
-        netProfit: data.reduce((sum, d) => sum + d.netProfit, 0),
-        isCurrentMonth: false,
-      }]
+    ? data.reduce<typeof data>((acc, d, i) => {
+        const prev = acc[i - 1];
+        acc.push({
+          month: d.month,
+          revenue: (prev?.revenue ?? 0) + d.revenue,
+          netProfit: (prev?.netProfit ?? 0) + d.netProfit,
+          isCurrentMonth: d.isCurrentMonth,
+        });
+        return acc;
+      }, [])
     : data;
 
   return (
