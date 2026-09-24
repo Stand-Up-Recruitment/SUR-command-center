@@ -303,6 +303,10 @@ export interface XeroFinanceData {
   // Unpaid ACCREC invoices already raised in Xero, past their due date (NZD).
   // Distinct from the frontend's own Airtable-scheduled overdue total.
   overdueXeroInvoices?: number;
+  // Trailing 12 months of AUS-only Revenue/Net Profit, oldest first, for the
+  // 12-month trend chart. Each entry is that single month's own total, not a
+  // running total. The last entry (isCurrentMonth) is a partial month-to-date.
+  monthlyTrend?: { month: string; revenue: number; netProfit: number; isCurrentMonth?: boolean }[];
   nzWorkerStats?: NZWorkerStats;
   cashFlow: CashWeek[];
   cashOutlook?: CashWeek[];

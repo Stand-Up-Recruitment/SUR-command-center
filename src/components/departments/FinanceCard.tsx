@@ -1,6 +1,10 @@
 import { Skeleton } from '../shared/Skeleton';
 import { useXeroFinanceData, useScheduledInvoices, useCacKPIs } from '../../hooks/queries';
 import { AUD_TO_NZD_APPROX } from '../../services/airtable';
+import {
+  ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, Cell,
+} from 'recharts';
+import type { XeroFinanceData } from '../../types';
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
 const NZ   = '#1D9E75';
@@ -130,6 +134,9 @@ function FinanceSkeleton() {
     <div>
       <SH color={TEXT} label="P&L Summary" />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0,1fr))', gap: 10, marginBottom: '.875rem' }}>{[0,1,2,3,4].map(kpCard)}</div>
+      <div style={{ background: BG2, border: `.5px solid ${BORDER}`, borderRadius: 12, padding: '1.25rem', marginBottom: '.875rem' }}>
+        <Skeleton height={240} />
+      </div>
       <SH color={MUTED} label="Cash Position" />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 10, marginBottom: '.875rem' }}>{[0,1,2].map(kpCard)}</div>
       <SH color={AM} label="Variance Commentary" />
@@ -147,7 +154,74 @@ function FinanceSkeleton() {
 
 // ─── Section components ───────────────────────────────────────────────────────
 
-function PLSummarySection({ totalRevenue, totalGrossProfit, totalOpex, totalCogs, netProfit, lm, cac }: {
+function TwelveMonthTrendChart({ data }: { data: XeroFinanceData['monthlyTrend'] }) {
+  if (!data || data.length === 0) return null;
+
+  const fmtAxis = (n: number) => {
+    const abs = Math.abs(n);
+    const sign = n < 0 ? '-' : '';
+    if (abs >= 1000) return `${sign}$${Math.round(abs / 1000)}K`;
+    return `${sign}$${Math.round(abs)}`;
+  };
+
+  return (
+    <Card>
+      <div style={{ fontSize: 13, fontWeight: 500, color: TEXT, marginBottom: 2 }}>12-Month Trend</div>
+      <div style={{ fontSize: 11, color: MUTED, marginBottom: '.75rem' }}>Revenue (bars) · Net profit (line) · Australia only · NZD</div>
+      <ResponsiveContainer width="100%" height={240}>
+        <ComposedChart data={data} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+          <XAxis dataKey="month" tick={{ fontSize: 11, fill: MUTED }} axisLine={false} tickLine={false} />
+          <YAxis
+            tick={{ fontSize: 11, fill: MUTED }}
+            axisLine={false}
+            tickLine={false}
+            tickFormatter={fmtAxis}
+            domain={[(min: number) => Math.min(0, min), (max: number) => Math.max(0, max)]}
+          />
+          <ReferenceLine y={0} stroke={BORDER} />
+          <Tooltip
+            contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${BORDER}`, background: BG2 }}
+            labelStyle={{ color: TEXT }}
+            formatter={(value, name) => [fmtNZD(Number(value)), String(name)]}
+          />
+          <Bar dataKey="revenue" name="Revenue" radius={[3, 3, 0, 0]} maxBarSize={36}>
+            {data.map((d, i) => (
+              <Cell
+                key={i}
+                fill={NZ}
+                fillOpacity={d.isCurrentMonth ? 0.35 : 1}
+                stroke={d.isCurrentMonth ? NZ : 'none'}
+                strokeDasharray={d.isCurrentMonth ? '3 3' : undefined}
+              />
+            ))}
+          </Bar>
+          <Line
+            dataKey="netProfit"
+            name="Net profit"
+            stroke={PU}
+            strokeWidth={2}
+            dot={(props: { cx?: number; cy?: number; payload?: { isCurrentMonth?: boolean }; index?: number }) => {
+              const { cx, cy, payload, index } = props;
+              return (
+                <circle
+                  key={`dot-${index}`}
+                  cx={cx}
+                  cy={cy}
+                  r={4}
+                  fill={payload?.isCurrentMonth ? BG2 : PU}
+                  stroke={PU}
+                  strokeWidth={2}
+                />
+              );
+            }}
+          />
+        </ComposedChart>
+      </ResponsiveContainer>
+    </Card>
+  );
+}
+
+function PLSummarySection({ totalRevenue, totalGrossProfit, totalOpex, totalCogs, netProfit, lm, cac, monthlyTrend }: {
   totalRevenue: number; totalGrossProfit: number; totalOpex: number; totalCogs: number; netProfit: number;
   lm: { revenue: number; grossProfit: number; netProfit: number; opex?: number } | undefined;
   cac: {
@@ -157,6 +231,7 @@ function PLSummarySection({ totalRevenue, totalGrossProfit, totalOpex, totalCogs
     hasPrevPeriod: boolean;
     ltgp: number; costPerPlacedClient: number; ltgpToCac: number;
   } | undefined;
+  monthlyTrend: XeroFinanceData['monthlyTrend'];
 }) {
   const cogsPct = totalRevenue > 0 ? (totalCogs / totalRevenue) * 100 : 0;
   const grossMarginPct = totalRevenue > 0 ? (totalGrossProfit / totalRevenue) * 100 : 0;
@@ -209,6 +284,8 @@ function PLSummarySection({ totalRevenue, totalGrossProfit, totalOpex, totalCogs
           sub={cac ? `LTGP ${fmtNZD(cac.ltgp)} · cost per placed client ${fmtNZD(cac.costPerPlacedClient)}` : undefined}
         />
       </G5>
+
+      <TwelveMonthTrendChart data={monthlyTrend} />
 
       <G3>
         <KPDelta
@@ -481,7 +558,7 @@ export function FinanceCard() {
 
   return (
     <div style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
-      <PLSummarySection totalRevenue={totalRevenue} totalGrossProfit={totalGrossProfit} totalOpex={totalOpex} totalCogs={totalCogs} netProfit={netProfit} lm={lm} cac={cac} />
+      <PLSummarySection totalRevenue={totalRevenue} totalGrossProfit={totalGrossProfit} totalOpex={totalOpex} totalCogs={totalCogs} netProfit={netProfit} lm={lm} cac={cac} monthlyTrend={data.monthlyTrend} />
 
       <CashPositionSection
         cashKpis={cashKpis}
