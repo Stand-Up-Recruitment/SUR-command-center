@@ -184,7 +184,7 @@ function TwelveMonthTrendChart({ data }: { data: XeroFinanceData['monthlyTrend']
             labelStyle={{ color: TEXT }}
             formatter={(value, name) => [fmtNZD(Number(value)), String(name)]}
           />
-          <Bar dataKey="revenue" name="Revenue" radius={[3, 3, 0, 0]} maxBarSize={36}>
+          <Bar dataKey="revenue" name="Revenue" fill={NZ} radius={[3, 3, 0, 0]} maxBarSize={36}>
             {data.map((d, i) => (
               <Cell
                 key={i}
