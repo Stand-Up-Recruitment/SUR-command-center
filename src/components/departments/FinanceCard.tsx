@@ -466,10 +466,13 @@ export function FinanceCard() {
   };
   combined.forEach((d, i) => {
     const weekDate = d.weekStart ? new Date(d.weekStart) : new Date(closing + (i - currentIdx) * 7 * 86_400_000);
-    // Current week's inflow/outflow are its own real actuals-so-far (partial, since
-    // the week isn't over) — never substitute next week's forecast, which is a
+    // Current week's inflow = its own real actuals-so-far (partial, since the week
+    // isn't over) plus overdue receivables — money that's already due and could
+    // land any day now, so it's counted as expected for the current week rather
+    // than a future one. Never substitute next week's forecast, which is a
     // different week's number and was showing up mislabeled as "this week".
-    const row: MonthCashRow = { weekLabel: d.weekLabel, isForecast: d.isForecast, inflow: d.inflow, outflow: d.outflow, scheduled: scheduledByWeek[i] };
+    const inflow = i === currentIdx ? (d.inflow ?? 0) + overdueReceivables : d.inflow;
+    const row: MonthCashRow = { weekLabel: d.weekLabel, isForecast: d.isForecast, inflow, outflow: d.outflow, scheduled: scheduledByWeek[i] };
     const key = monthKey(weekDate);
     if (key === monthKey(prevMonthDate)) monthBuckets.previous.rows.push(row);
     else if (key === monthKey(today)) monthBuckets.current.rows.push(row);
