@@ -90,9 +90,9 @@ function G5({ children }: { children: React.ReactNode }) {
   );
 }
 
-function G2({ children }: { children: React.ReactNode }) {
+function G3({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 10, marginBottom: '.875rem' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 10, marginBottom: '.875rem' }}>
       {children}
     </div>
   );
@@ -201,6 +201,16 @@ function PLSummarySection({ totalRevenue, totalGrossProfit, totalOpex, totalCogs
           sub={`${netMarginPct.toFixed(0)}% net margin`}
           delta={lm ? { value: netProfit - lm.netProfit, label: 'added this month' } : null}
         />
+        <KP
+          accent={PU}
+          label="LTGP:CAC"
+          value={cac ? `${cac.ltgpToCac.toFixed(1)}:1` : '—'}
+          valueColor={PU}
+          sub={cac ? `LTGP ${fmtNZD(cac.ltgp)} · cost per placed client ${fmtNZD(cac.costPerPlacedClient)}` : undefined}
+        />
+      </G5>
+
+      <G3>
         <KPDelta
           accent={RD}
           label="Client CAC"
@@ -209,9 +219,6 @@ function PLSummarySection({ totalRevenue, totalGrossProfit, totalOpex, totalCogs
           invert
           delta={cac?.hasPrevPeriod ? { value: cac.clientCac - cac.prevClientCac, label: 'vs prior 90 days' } : null}
         />
-      </G5>
-
-      <G2>
         <KPDelta
           accent={RD}
           label="Qualified candidate CAC"
@@ -229,18 +236,7 @@ function PLSummarySection({ totalRevenue, totalGrossProfit, totalOpex, totalCogs
           invert
           delta={cac?.hasPrevPeriod ? { value: cac.placementCac - cac.prevPlacementCac, label: 'vs prior 90 days' } : null}
         />
-      </G2>
-
-      <SH color={PU} label="Unit Economics" sub="LTGP · LTGP:CAC" />
-      <G2>
-        <KP
-          accent={PU}
-          label="LTGP:CAC"
-          value={cac ? `${cac.ltgpToCac.toFixed(1)}:1` : '—'}
-          valueColor={PU}
-          sub={cac ? `LTGP ${fmtNZD(cac.ltgp)} · cost per placed client ${fmtNZD(cac.costPerPlacedClient)}` : undefined}
-        />
-      </G2>
+      </G3>
     </>
   );
 }
