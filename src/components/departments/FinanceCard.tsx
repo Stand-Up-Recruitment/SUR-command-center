@@ -1,5 +1,6 @@
 import { Skeleton } from '../shared/Skeleton';
 import { useXeroFinanceData, useScheduledInvoices, useCacKPIs } from '../../hooks/queries';
+import { AUD_TO_NZD_APPROX } from '../../services/airtable';
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
 const NZ   = '#1D9E75';
@@ -48,19 +49,29 @@ function KP({ label, value, sub, accent, valueColor }: {
 }
 
 // KP card with an optional static sub-line and an optional delta sub-line (added this month)
-function KPDelta({ label, value, valueColor, accent, sub, delta, invert }: {
+function KPDelta({ label, value, valueColor, accent, sub, delta, deltaPts, invert }: {
   label: string; value: string; valueColor?: string; accent?: string; sub?: string;
-  delta?: { value: number; label: string } | null; invert?: boolean;
+  delta?: { value: number; label: string } | null;
+  deltaPts?: { value: number; label: string } | null;
+  invert?: boolean;
 }) {
-  const isGood = delta ? (invert ? delta.value <= 0 : delta.value >= 0) : true;
-  const deltaColor = delta ? (isGood ? NZ : RD) : MUTED;
-  const deltaSign  = delta ? (delta.value >= 0 ? '↑ +' : '↓ ') : '';
+  const isGood = delta ? (invert ? delta.value <= 0 : delta.value >= 0)
+    : deltaPts ? (invert ? deltaPts.value <= 0 : deltaPts.value >= 0)
+    : true;
+  const deltaColor = (delta || deltaPts) ? (isGood ? NZ : RD) : MUTED;
+  const deltaSign  = delta ? (delta.value >= 0 ? '↑ +' : '↓ ')
+    : deltaPts ? (deltaPts.value >= 0 ? '↑ +' : '↓ ')
+    : '';
   return (
     <div style={{ background: BG, border: `.5px solid ${BORDER}`, borderRadius: 8, borderTop: accent ? `3px solid ${accent}` : undefined, padding: '.875rem 1rem' }}>
       <div style={{ fontSize: 11, color: MUTED, marginBottom: 4 }}>{label}</div>
       <div style={{ fontSize: 21, fontWeight: 500, color: valueColor ?? TEXT, lineHeight: 1.1 }}>{value}</div>
       {sub && <div style={{ fontSize: 11, color: MUTED, marginTop: 3 }}>{sub}</div>}
-      {delta != null ? (
+      {deltaPts != null ? (
+        <div style={{ fontSize: 11, color: deltaColor, marginTop: 3 }}>
+          {deltaSign}{Math.abs(deltaPts.value).toFixed(1)} pts {deltaPts.label}
+        </div>
+      ) : delta != null ? (
         <div style={{ fontSize: 11, color: deltaColor, marginTop: 3 }}>
           {deltaSign}{fmtNZD(Math.abs(delta.value))} {delta.label}
         </div>
@@ -93,18 +104,6 @@ function Card({ children, accent, accentSide }: { children: React.ReactNode; acc
   return (
     <div style={{ background: BG2, border: `.5px solid ${BORDER}`, borderRadius: 12, borderTop, borderLeft, padding: '1.25rem', marginBottom: '.875rem' }}>
       {children}
-    </div>
-  );
-}
-
-function BR({ label, value, pct, color }: { label: string; value: string; pct: number; color: string }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7 }}>
-      <div style={{ fontSize: 11, color: MUTED, width: 175, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{label}</div>
-      <div style={{ flex: 1, background: BORDER, borderRadius: 2, height: 5 }}>
-        <div style={{ width: `${Math.max(pct, 0.06)}%`, height: 5, borderRadius: 2, background: color }} />
-      </div>
-      <div style={{ fontSize: 11, fontWeight: 500, color: TEXT, width: 62, textAlign: 'right' as const, flexShrink: 0 }}>{value}</div>
     </div>
   );
 }
@@ -156,15 +155,18 @@ function PLSummarySection({ totalRevenue, totalGrossProfit, totalOpex, totalCogs
     qualifiedCandidateCac: number; prevQualifiedCandidateCac: number;
     placementCac: number; prevPlacementCac: number;
     hasPrevPeriod: boolean;
+    ltgp: number; costPerPlacedClient: number; ltgpToCac: number;
   } | undefined;
 }) {
   const cogsPct = totalRevenue > 0 ? (totalCogs / totalRevenue) * 100 : 0;
   const grossMarginPct = totalRevenue > 0 ? (totalGrossProfit / totalRevenue) * 100 : 0;
   const netMarginPct = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
+  const prevGrossMarginPct = lm && lm.revenue > 0 ? (lm.grossProfit / lm.revenue) * 100 : undefined;
+  const grossMarginPtsDelta = prevGrossMarginPct != null ? grossMarginPct - prevGrossMarginPct : undefined;
 
   return (
     <>
-      <SH color={TEXT} label="P&L Summary" sub="revenue · gross profit · opex · net profit · client CAC · qualified candidate CAC · placement CAC" />
+      <SH color={TEXT} label="P&L Summary" sub="Australia only · revenue · gross profit · opex · net profit · client CAC · qualified candidate CAC · placement CAC · LTGP:CAC" />
 
       <G5>
         <KPDelta
@@ -180,8 +182,8 @@ function PLSummarySection({ totalRevenue, totalGrossProfit, totalOpex, totalCogs
           label="Gross profit"
           value={fmtNZD(totalGrossProfit)}
           valueColor={totalGrossProfit >= 0 ? NZ : RD}
-          sub={`${grossMarginPct.toFixed(0)}% gross margin`}
-          delta={lm ? { value: totalGrossProfit - lm.grossProfit, label: 'added this month' } : null}
+          sub={`${grossMarginPct.toFixed(1)}% gross margin`}
+          deltaPts={grossMarginPtsDelta != null ? { value: grossMarginPtsDelta, label: 'vs last month' } : null}
         />
         <KPDelta
           accent={AM}
@@ -205,7 +207,7 @@ function PLSummarySection({ totalRevenue, totalGrossProfit, totalOpex, totalCogs
           value={cac ? fmtNZD(cac.clientCac) : '—'}
           valueColor={RD}
           invert
-          delta={cac?.hasPrevPeriod ? { value: cac.clientCac - cac.prevClientCac, label: 'vs prior 30 days' } : null}
+          delta={cac?.hasPrevPeriod ? { value: cac.clientCac - cac.prevClientCac, label: 'vs prior 90 days' } : null}
         />
       </G5>
 
@@ -216,7 +218,8 @@ function PLSummarySection({ totalRevenue, totalGrossProfit, totalOpex, totalCogs
           value={cac ? fmtNZD(cac.qualifiedCandidateCac) : '—'}
           valueColor={RD}
           invert
-          delta={cac?.hasPrevPeriod ? { value: cac.qualifiedCandidateCac - cac.prevQualifiedCandidateCac, label: 'vs prior 30 days' } : null}
+          sub="(Candidate Meta spend + Job Board Advertising) ÷ NZ Citizen + Trade/Occupation candidates"
+          delta={cac?.hasPrevPeriod ? { value: cac.qualifiedCandidateCac - cac.prevQualifiedCandidateCac, label: 'vs prior 90 days' } : null}
         />
         <KPDelta
           accent={RD}
@@ -224,7 +227,18 @@ function PLSummarySection({ totalRevenue, totalGrossProfit, totalOpex, totalCogs
           value={cac ? fmtNZD(cac.placementCac) : '—'}
           valueColor={RD}
           invert
-          delta={cac?.hasPrevPeriod ? { value: cac.placementCac - cac.prevPlacementCac, label: 'vs prior 30 days' } : null}
+          delta={cac?.hasPrevPeriod ? { value: cac.placementCac - cac.prevPlacementCac, label: 'vs prior 90 days' } : null}
+        />
+      </G2>
+
+      <SH color={PU} label="Unit Economics" sub="LTGP · LTGP:CAC" />
+      <G2>
+        <KP
+          accent={PU}
+          label="LTGP:CAC"
+          value={cac ? `${cac.ltgpToCac.toFixed(1)}:1` : '—'}
+          valueColor={PU}
+          sub={cac ? `LTGP ${fmtNZD(cac.ltgp)} · cost per placed client ${fmtNZD(cac.costPerPlacedClient)}` : undefined}
         />
       </G2>
     </>
@@ -287,12 +301,12 @@ function MonthCashCard({ title, monthLabel, rows, cashFlowHasDetail, hasSchedule
         </table>
       )}
       {rows.length > 0 && (() => {
-        const netProfit = rows.reduce((sum, r) => sum + (r.inflow ?? 0) - (r.outflow ?? 0) + r.scheduled, 0);
+        const netCashFlow = rows.reduce((sum, r) => sum + (r.inflow ?? 0) - (r.outflow ?? 0) + r.scheduled, 0);
         return (
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, paddingTop: 8, borderTop: `.5px solid ${BORDER}` }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: MUTED }}>Net profit</span>
-            <span style={{ fontSize: 13, fontWeight: 700, color: netProfit >= 0 ? NZ : RD, whiteSpace: 'nowrap' }}>
-              {netProfit >= 0 ? '+' : '−'}{fmtNZD(Math.abs(netProfit))}
+            <span style={{ fontSize: 11, fontWeight: 700, color: MUTED }}>Net cash flow</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: netCashFlow >= 0 ? NZ : RD, whiteSpace: 'nowrap' }}>
+              {netCashFlow >= 0 ? '+' : '−'}{fmtNZD(Math.abs(netCashFlow))}
             </span>
           </div>
         );
@@ -303,7 +317,7 @@ function MonthCashCard({ title, monthLabel, rows, cashFlowHasDetail, hasSchedule
 
 function CashPositionSection({
   cashKpis, closingBalance, bankAccounts, cashFlowHasDetail, hasScheduledInvoices,
-  monthBuckets, hasCombined,
+  monthBuckets, hasCombined, overdueReceivables,
 }: {
   cashKpis: { closingDate: string; avgWeeklyOutflow: number };
   closingBalance: number;
@@ -312,6 +326,7 @@ function CashPositionSection({
   hasScheduledInvoices: boolean;
   monthBuckets: { previous: { label: string; rows: MonthCashRow[] }; current: { label: string; rows: MonthCashRow[] }; next: { label: string; rows: MonthCashRow[] } };
   hasCombined: boolean;
+  overdueReceivables: number;
 }) {
   return (
     <>
@@ -320,7 +335,7 @@ function CashPositionSection({
           ? `Actuals · forecast · as at ${fmtDate(cashKpis.closingDate)}`
           : 'Actuals · forecast'} />
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 10, marginBottom: '.875rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 10, marginBottom: '.875rem' }}>
         <KP accent={closingBalance >= 0 ? NZ : RD}
             label="Current bank balance"
             value={fmtNZD(closingBalance)}
@@ -330,6 +345,10 @@ function CashPositionSection({
             label="Avg weekly outflow"
             value={`−${fmtNZD(cashKpis.avgWeeklyOutflow)}`}
             sub="Negative-flow weeks avg" valueColor={RD} />
+        <KP accent={RD}
+            label="Overdue receivables"
+            value={fmtNZD(overdueReceivables)}
+            sub="Unpaid, due date passed · not in forecast" valueColor={overdueReceivables > 0 ? RD : MUTED} />
       </div>
 
       {/* Bank accounts (Profit First) */}
@@ -365,69 +384,27 @@ function CashPositionSection({
   );
 }
 
-function AUSBusinessSection({ data, ausCostsMax }: {
-  data: {
-    ausRevenue: number; ausTotalCogs: number; ausGrossProfit: number; ausNetProfit?: number;
-    ausTotalCosts: number; ausCosts: Array<{ label: string; value: number }>;
-    ausRecruiterBonuses?: number;
-  };
-  ausCostsMax: number;
-}) {
-  return (
-    <>
-      <SH color={AUS} label="Australia Business" sub="International placements & operations" />
-
-      <G5>
-        <KP accent={AUS} label="Revenue" value={fmtNZD(data.ausRevenue)}      sub="Sales - International" />
-        <KP accent={AUS} label="COGS"    value={fmtNZD(data.ausTotalCogs)}   sub={`100% of Cost of Sales${data.ausRecruiterBonuses ? ` + ${fmtNZD(data.ausRecruiterBonuses)} bonuses` : ''}`} valueColor={RD} />
-        <KP accent={AUS} label="Gross"   value={fmtNZD(data.ausGrossProfit)} sub={`${Math.round(data.ausGrossProfit / data.ausRevenue * 100)}% margin`} valueColor={data.ausGrossProfit >= 0 ? NZ : RD} />
-        <KP accent={AUS} label="Opex"    value={fmtNZD(data.ausTotalCosts)}  sub="90% of shared Opex" valueColor={RD} />
-        <KP accent={AUS} label="Net"     value={fmtNZD(data.ausNetProfit ?? data.ausGrossProfit)} sub="Net contribution" valueColor={(data.ausNetProfit ?? data.ausGrossProfit) >= 0 ? NZ : RD} />
-      </G5>
-
-      <Card accent={AUS}>
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 500, color: TEXT, marginBottom: '.75rem' }}>AUS operating expenses breakdown — {fmtNZD(data.ausTotalCosts)}</div>
-            {data.ausCosts.map((row, i) => (
-              <BR
-                key={row.label}
-                label={row.label}
-                value={fmtNZD(row.value)}
-                pct={Math.round((row.value / ausCostsMax) * 100)}
-                color={i === 0 ? AUS : AM}
-              />
-            ))}
-            <NoteBox>AUS now carries 100% of Cost of Sales{data.ausRecruiterBonuses ? `, plus ${fmtNZD(data.ausRecruiterBonuses)} in recruiter/staff commissions (Xero "Salaries - Commissions")` : ''} reclassified as a direct cost rather than overhead.</NoteBox>
-          </div>
-      </Card>
-    </>
-  );
-}
-
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function FinanceCard() {
   const { data, error } = useXeroFinanceData();
   const { data: scheduledInvoices } = useScheduledInvoices();
-  const { data: cac } = useCacKPIs();
-
-  if (!data) return <FinanceSkeleton />;
 
   // ── Computed values ─────────────────────────────────────────────────────────
-  // AUS COGS excludes Safety equipment, Salaries - Labour Hire Staff, and Staff Training
-  // upstream (n8n "Finance — Xero P&L Webhook"), with the excluded amount already added
-  // back into gross/net profit, so the webhook's figures can be used directly here.
-  const ausCosts = data.ausCosts;
-  const ausTotalCogs = data.ausTotalCogs;
-  const ausGrossProfit = data.ausGrossProfit;
-  const ausNetProfit = data.ausNetProfit ?? data.ausGrossProfit;
-  const netProfit = data.netProfit;
+  // Finance tab is Australia only — every headline number uses only the aus*
+  // fields the webhook already computes correctly; NZ revenue/costs never
+  // enter these totals (that mismatch was the source of the inflated Net Profit).
+  const totalRevenue     = data?.ausRevenue ?? 0;
+  const totalGrossProfit = data?.ausGrossProfit ?? 0;
+  const totalOpex        = data?.ausTotalCosts ?? 0;
+  const totalCogs        = data?.ausTotalCogs ?? 0;
+  const netProfit         = data?.ausNetProfit ?? data?.ausGrossProfit ?? 0;
+  const lm = data?.plLastMonth;
 
-  const totalRevenue    = data.nzRevenue + data.ausRevenue;
-  const totalGrossProfit = data.nzGrossProfit + ausGrossProfit;
-  const totalOpex = (data.nzTotalOpex ?? 0) + data.ausTotalCosts;
-  const totalCogs = data.nzTotalCogs + ausTotalCogs;
-  const lm = data.plLastMonth;
+  const grossMarginPct = totalRevenue > 0 ? (totalGrossProfit / totalRevenue) * 100 : undefined;
+  const { data: cac } = useCacKPIs(grossMarginPct, data?.jobBoardAdvertising90d, data?.prevJobBoardAdvertising90d);
+
+  if (!data) return <FinanceSkeleton />;
 
   const cashKpis    = data.cashKpis ?? { openingBalance: 0, closingBalance: 0, closingBalanceActual: 0, avgWeeklyOutflow: 0, openingDate: data.asOf, closingDate: data.asOf };
   const cashFlow    = data.cashFlow ?? [];
@@ -442,28 +419,33 @@ export function FinanceCard() {
 
   const currentIdx = combined.reduce((last, r, i) => (r.isForecast ? last : i), -1);
 
-  // Scheduled-but-unbilled Airtable invoices (Status = Scheduled, InvoiceID blank), bucketed into
-  // forecast weeks using each week's real weekStart/weekEnd from the API, falling back to
-  // anchoring on cashKpis.closingDate and stepping 7 days per week if a row lacks real dates.
-  const AUD_TO_NZD = 1 / 0.90; // mirrors NZD_TO_AUD in hooks/queries.ts
+  // Scheduled-but-unbilled Airtable invoices (Status = Scheduled, InvoiceID blank).
+  // Each invoice is bucketed into exactly one week — the week its due date falls in —
+  // using each week's real weekStart/weekEnd from the API, falling back to anchoring
+  // on cashKpis.closingDate and stepping 7 days per week if a row lacks real dates.
+  // Overdue invoices (due date already passed) are excluded from every week bucket
+  // and summed separately instead, since they aren't guaranteed cash for any given week.
   const closing = new Date(cashKpis.closingDate).getTime();
-  const scheduledByWeek = combined.map((r, i) => {
-    if (i < currentIdx) return 0;
-    if (i === currentIdx) {
-      // Current week: capture invoices due this week plus anything overdue (due before now).
-      return (scheduledInvoices ?? [])
-        .filter(s => new Date(s.dueDate).getTime() < closing)
-        .reduce((sum, s) => sum + s.amount * AUD_TO_NZD, 0);
+  const todayMs = new Date().getTime();
+  let overdueReceivables = 0;
+  const scheduledByWeek = combined.map(() => 0);
+  (scheduledInvoices ?? []).forEach(s => {
+    const due = new Date(s.dueDate).getTime();
+    const amountNZD = s.amount * AUD_TO_NZD_APPROX;
+    if (due < todayMs) {
+      overdueReceivables += amountNZD;
+      return;
     }
-    const [weekStart, weekEnd] = r.weekStart && r.weekEnd
-      ? [new Date(r.weekStart).getTime(), new Date(r.weekEnd).getTime()]
-      : [closing + (i - currentIdx - 1) * 7 * 86_400_000, closing + (i - currentIdx) * 7 * 86_400_000];
-    return (scheduledInvoices ?? [])
-      .filter(s => {
-        const t = new Date(s.dueDate).getTime();
-        return t >= weekStart && t < weekEnd;
-      })
-      .reduce((sum, s) => sum + s.amount * AUD_TO_NZD, 0);
+    for (let i = 0; i < combined.length; i++) {
+      const r = combined[i];
+      const [weekStart, weekEnd] = r.weekStart && r.weekEnd
+        ? [new Date(r.weekStart).getTime(), new Date(r.weekEnd).getTime()]
+        : [closing + (i - currentIdx - 1) * 7 * 86_400_000, closing + (i - currentIdx) * 7 * 86_400_000];
+      if (due >= weekStart && due < weekEnd) {
+        scheduledByWeek[i] += amountNZD;
+        break; // an invoice belongs to exactly one week — stop at the first match
+      }
+    }
   });
 
   const cashFlowHasDetail = actualWeeks.some(d => d.inflow != null || d.outflow != null);
@@ -494,7 +476,6 @@ export function FinanceCard() {
     else if (key === monthKey(today)) monthBuckets.current.rows.push(row);
     else if (key === monthKey(nextMonthDate)) monthBuckets.next.rows.push(row);
   });
-  const ausCostsMax = Math.max(...ausCosts.map(r => r.value), 1);
 
   return (
     <div style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
@@ -508,11 +489,7 @@ export function FinanceCard() {
         hasScheduledInvoices={hasScheduledInvoices}
         monthBuckets={monthBuckets}
         hasCombined={combined.length > 0}
-      />
-
-      <AUSBusinessSection
-        data={{ ...data, ausCosts, ausTotalCogs, ausGrossProfit, ausNetProfit }}
-        ausCostsMax={ausCostsMax}
+        overdueReceivables={overdueReceivables}
       />
 
       {error && (

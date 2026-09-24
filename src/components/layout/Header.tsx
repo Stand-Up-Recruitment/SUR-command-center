@@ -9,7 +9,6 @@ const TABS = [
   { label: 'Marketing',   to: '/marketing'              },
   { label: 'Sales',       to: '/sales'                  },
   { label: 'Recruitment', to: '/recruitment'            },
-  { label: 'Revenue',     to: '/revenue'                },
   { label: 'Finance',     to: '/finance'                    },
   { label: 'Retention',   to: '/retention'                  },
 ] as const;

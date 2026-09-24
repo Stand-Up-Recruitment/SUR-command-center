@@ -296,6 +296,10 @@ export interface XeroFinanceData {
   varianceCommentary?: string | null;
   recommendation?: string | null;
   audNzdRate?: number;
+  // Job Board Advertising (Xero Opex account), AUS share, trailing 90 days — for the
+  // CAC formulas, since advertising/ausAdvertising above are FY-to-date (wrong period).
+  jobBoardAdvertising90d?: number;
+  prevJobBoardAdvertising90d?: number;
   nzWorkerStats?: NZWorkerStats;
   cashFlow: CashWeek[];
   cashOutlook?: CashWeek[];
@@ -315,13 +319,27 @@ export type LTGPFrame = '7d' | '30d' | '90d' | '12m' | 'all';
 
 export interface CacKPIs {
   clientCac: number;
-  qualifiedCandidateCac: number;
   placementCac: number;
   metaSplitIsEstimated: boolean;
   hasPrevPeriod: boolean;
   prevClientCac: number;
-  prevQualifiedCandidateCac: number;
   prevPlacementCac: number;
+
+  // Qualified candidate = Airtable candidate record tagged NZ Citizen with a
+  // Trade/Occupation assigned (the existing isCandidateQualified definition),
+  // used in place of JobAdder's "qualified"+"citizen" tags (no JobAdder tool
+  // can filter candidates by tag in this environment).
+  qualifiedCandidateCac: number;
+  prevQualifiedCandidateCac: number;
+
+  // Unit economics: LTGP and LTGP:CAC
+  ltgp: number;
+  ltgpMethod: 'median' | 'average';
+  placementRate: number;
+  costPerPlacedClient: number;
+  ltgpToCac: number;
+  cohortSize: number;
+  placedClientCount: number;
 }
 
 // ─── Shared ───────────────────────────────────────────────────────────────────

@@ -22,6 +22,14 @@ const CLIENTS_TABLE_ID = 'tblF4uPjZ7eF4BFzP';
 const CANDIDATES_TABLE_ID = 'tblHhlHjb7keWPUdE';
 const CRM_TABLE_ID = 'tbl4XcHW2Gb7PF4fw';
 const MAIN_CLIENT_TABLE_ID = 'tblHJjDpCeTgevOvI';
+const SALES_TRANSCRIPT_TABLE_ID = 'tblUntytJJFaaWW6w'; // lives in CLIENTS_BASE_ID, confirmed against the live schema
+const SALES_TIME_COST_PER_CALL = 0.25 * 72; // 15 min @ $72/hr
+
+// Approximate flat AUD→NZD rate, shared so it isn't duplicated per call site.
+// The Calculation Rules doc specifies a monthly-average rate per transaction month;
+// this flat approximation matches the existing convention already used for cash-flow
+// invoice conversion until per-month rates are wired up.
+export const AUD_TO_NZD_APPROX = 1 / 0.90;
 
 // ─── Multi-base fetch helpers ─────────────────────────────────────────────────
 async function fetchAllFromBase<T>(
@@ -722,36 +730,103 @@ export async function fetchRetentionKPIs(): Promise<RetentionKPIs> {
 }
 
 // ─── CAC ──────────────────────────────────────────────────────────────────────
-const CAC_WINDOW_DAYS = 30;
+const CAC_WINDOW_DAYS = 90;
 
-export async function fetchCacKPIs(): Promise<CacKPIs> {
+type MainClientFields = {
+  'Signed Date'?: string;
+  'Company Name'?: string;
+};
+
+type PlacementCacFields = {
+  'Created Date'?: string;
+  'Candidate Start Date'?: string;
+  'Cancellation Date'?: string;
+  Status?: string;
+  'Total Amount'?: number;
+  'Candidate-Client Contract Sign Status'?: boolean;
+  'Company ID'?: string[]; // linked Main Client record ID(s)
+};
+
+function isPlacementCountedForCac(p: PlacementCacFields, from: number, to: number) {
+  if (!isInPeriod(p['Candidate Start Date'] ?? p['Created Date'], from, to)) return false;
+  if (p['Candidate-Client Contract Sign Status'] !== true) return false;
+  if (!p['Total Amount']) return false;
+  if (p['Cancellation Date'] && p['Candidate Start Date']) {
+    const cancelled = new Date(p['Cancellation Date']).getTime();
+    const started = new Date(p['Candidate Start Date']).getTime();
+    if (cancelled < started) return false;
+  }
+  return true;
+}
+
+function isPlacementCountedForLtgp(p: PlacementCacFields) {
+  if (p.Status === 'Pending') return false;
+  if (!['Live', 'Completed', 'End'].includes(p.Status ?? '')) return false;
+  if (!p['Total Amount']) return false;
+  if (p['Cancellation Date'] && p['Candidate Start Date']) {
+    const cancelled = new Date(p['Cancellation Date']).getTime();
+    const started = new Date(p['Candidate Start Date']).getTime();
+    if (cancelled < started) return false;
+  }
+  return true;
+}
+
+function median(values: number[]): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+}
+
+export async function fetchCacKPIs(
+  grossMarginPct: number = 0,
+  jobBoardAdvertising90d: number = 0,
+  prevJobBoardAdvertising90d: number = 0,
+): Promise<CacKPIs> {
   if (!CLIENTS_BASE_ID || !CANDIDATES_BASE_ID) throw new Error('CAC credentials not configured');
 
-  const [allMainClients, allPlacements, allCandidates, metaResult, prevMetaResult] = await Promise.all([
-    fetchAllFromBase<{ 'Signed Date'?: string }>(CLIENTS_BASE_ID, MAIN_CLIENT_TABLE_ID),
-    fetchAllFromBase<{ 'Created Date'?: string }>(CLIENTS_BASE_ID, PLACEMENTS_TABLE_ID),
+  const [allMainClientsRaw, allPlacements, salesTranscripts, allCandidates, metaResult, prevMetaResult] = await Promise.all([
+    fetchAllWithIdsFromBase<MainClientFields>(CLIENTS_BASE_ID, MAIN_CLIENT_TABLE_ID),
+    fetchAllFromBase<PlacementCacFields>(CLIENTS_BASE_ID, PLACEMENTS_TABLE_ID),
+    fetchAllFromBase<{ Created?: string }>(CLIENTS_BASE_ID, SALES_TRANSCRIPT_TABLE_ID, {}, ['Created'])
+      .catch(() => [] as { Created?: string }[]),
     fetchAllFromBase<CandidateLeadFields>(CANDIDATES_BASE_ID, CANDIDATES_TABLE_ID, {}),
-    fetchMetaSpendByFrame('30d').catch(() => ({ candidateSpend: 0, clientSpend: 0, isEstimated: true })),
-    fetchMetaSpendPrevPeriod('30d').catch(() => null),
+    fetchMetaSpendByFrame('90d').catch(() => ({ candidateSpend: 0, clientSpend: 0, isEstimated: true })),
+    fetchMetaSpendPrevPeriod('90d').catch(() => null),
   ]);
+
+  // Exclude the "Stand Up Recruitment" test record from every client-based count.
+  const allMainClients = allMainClientsRaw.filter(c => c.fields['Company Name'] !== 'Stand Up Recruitment');
 
   const now = Date.now();
   const start = now - CAC_WINDOW_DAYS * 86_400_000;
   const prevEnd = start;
   const prevStart = prevEnd - CAC_WINDOW_DAYS * 86_400_000;
 
-  const clientsWon = allMainClients.filter(c => isInPeriod(c['Signed Date'], start, now)).length;
-  const clientCac = clientsWon > 0 ? metaResult.clientSpend / clientsWon : 0;
+  const clientsWon = allMainClients.filter(c => isInPeriod(c.fields['Signed Date'], start, now)).length;
+  const salesCallsInWindow = salesTranscripts.filter(t => isInPeriod(t.Created, start, now)).length;
+  const salesTimeCost = salesCallsInWindow * SALES_TIME_COST_PER_CALL;
+  const clientTotalAcquisitionCost = metaResult.clientSpend + salesTimeCost;
+  const clientCac = clientsWon > 0 ? clientTotalAcquisitionCost / clientsWon : 0;
 
-  const placementsCount = allPlacements.filter(p => isInPeriod(p['Created Date'], start, now)).length;
-  const placementCac = placementsCount > 0
-    ? (metaResult.candidateSpend + metaResult.clientSpend) / placementsCount
+  // Job Board Advertising (Xero Opex account, AUS share, trailing 90 days) comes from
+  // the n8n Finance webhook's jobBoardAdvertising90d field — its own advertising/
+  // ausAdvertising fields are FY-to-date and cover the wrong period for this window.
+  const placementsInWindow = allPlacements.filter(p => isPlacementCountedForCac(p, start, now)).length;
+  const placementCac = placementsInWindow > 0
+    ? (clientTotalAcquisitionCost + metaResult.candidateSpend + jobBoardAdvertising90d) / placementsInWindow
     : 0;
 
-  const qualifiedCandidates = allCandidates
+  // Qualified candidate = Airtable candidate record with both NZ Citizen status
+  // and a Trade/Occupation assigned (isCandidateQualified), standing in for
+  // JobAdder's "qualified"+"citizen" tags — no JobAdder tool available here can
+  // filter candidates by tag.
+  const qualifiedCandidatesInWindow = allCandidates
     .filter(c => isInPeriod(c.Created, start, now))
     .filter(isCandidateQualified).length;
-  const qualifiedCandidateCac = qualifiedCandidates > 0 ? metaResult.candidateSpend / qualifiedCandidates : 0;
+  const qualifiedCandidateCac = qualifiedCandidatesInWindow > 0
+    ? (metaResult.candidateSpend + jobBoardAdvertising90d) / qualifiedCandidatesInWindow
+    : 0;
 
   const hasPrevPeriod = prevMetaResult !== null;
   let prevClientCac = 0;
@@ -759,33 +834,76 @@ export async function fetchCacKPIs(): Promise<CacKPIs> {
   let prevQualifiedCandidateCac = 0;
   if (prevMetaResult) {
     const prevClientsWon = allMainClients.filter(
-      c => isInPeriod(c['Signed Date'], prevStart, prevEnd)
+      c => isInPeriod(c.fields['Signed Date'], prevStart, prevEnd)
     ).length;
-    prevClientCac = prevClientsWon > 0 ? prevMetaResult.clientSpend / prevClientsWon : 0;
+    const prevSalesCalls = salesTranscripts.filter(t => isInPeriod(t.Created, prevStart, prevEnd)).length;
+    const prevClientTotalAcquisitionCost = prevMetaResult.clientSpend + prevSalesCalls * SALES_TIME_COST_PER_CALL;
+    prevClientCac = prevClientsWon > 0 ? prevClientTotalAcquisitionCost / prevClientsWon : 0;
 
-    const prevPlacementsCount = allPlacements.filter(
-      p => isInPeriod(p['Created Date'], prevStart, prevEnd)
+    const prevPlacementsInWindow = allPlacements.filter(
+      p => isPlacementCountedForCac(p, prevStart, prevEnd)
     ).length;
-    prevPlacementCac = prevPlacementsCount > 0
-      ? (prevMetaResult.candidateSpend + prevMetaResult.clientSpend) / prevPlacementsCount
+    prevPlacementCac = prevPlacementsInWindow > 0
+      ? (prevClientTotalAcquisitionCost + prevMetaResult.candidateSpend + prevJobBoardAdvertising90d) / prevPlacementsInWindow
       : 0;
 
-    const prevQualifiedCandidates = allCandidates
+    const prevQualifiedCandidatesInWindow = allCandidates
       .filter(c => isInPeriod(c.Created, prevStart, prevEnd))
       .filter(isCandidateQualified).length;
-    prevQualifiedCandidateCac = prevQualifiedCandidates > 0
-      ? prevMetaResult.candidateSpend / prevQualifiedCandidates
+    prevQualifiedCandidateCac = prevQualifiedCandidatesInWindow > 0
+      ? (prevMetaResult.candidateSpend + prevJobBoardAdvertising90d) / prevQualifiedCandidatesInWindow
       : 0;
   }
 
+  // ── LTGP / LTGP:CAC ──────────────────────────────────────────────────────────
+  // Cohort clients are joined to their placements via Placements' "Company ID"
+  // linked-record field (confirmed against the live Airtable schema).
+  const cohortStart = new Date('2026-04-01').getTime();
+  const cohortEnd = now - CAC_WINDOW_DAYS * 86_400_000;
+  const cohortClients = allMainClients.filter(c => isInPeriod(c.fields['Signed Date'], cohortStart, cohortEnd));
+
+  const placementsByClientId = new Map<string, PlacementCacFields[]>();
+  for (const p of allPlacements) {
+    if (!isPlacementCountedForLtgp(p)) continue;
+    for (const clientId of p['Company ID'] ?? []) {
+      if (!placementsByClientId.has(clientId)) placementsByClientId.set(clientId, []);
+      placementsByClientId.get(clientId)!.push(p);
+    }
+  }
+
+  const placedClientGrossProfits: number[] = [];
+  for (const client of cohortClients) {
+    const linked = placementsByClientId.get(client.id);
+    if (!linked || linked.length === 0) continue;
+    const feesNZD = linked.reduce((sum, p) => sum + (p['Total Amount'] ?? 0) * AUD_TO_NZD_APPROX, 0);
+    placedClientGrossProfits.push(feesNZD * (grossMarginPct / 100));
+  }
+
+  const cohortSize = cohortClients.length;
+  const placedClientCount = placedClientGrossProfits.length;
+  const ltgpMethod: 'median' | 'average' = placedClientCount < 30 ? 'median' : 'average';
+  const ltgp = ltgpMethod === 'median'
+    ? median(placedClientGrossProfits)
+    : placedClientGrossProfits.reduce((a, b) => a + b, 0) / (placedClientCount || 1);
+  const placementRate = cohortSize > 0 ? placedClientCount / cohortSize : 0;
+  const costPerPlacedClient = placementRate > 0 ? clientCac / placementRate : 0;
+  const ltgpToCac = costPerPlacedClient > 0 ? ltgp / costPerPlacedClient : 0;
+
   return {
     clientCac,
-    qualifiedCandidateCac,
     placementCac,
     metaSplitIsEstimated: metaResult.isEstimated,
     hasPrevPeriod,
     prevClientCac,
-    prevQualifiedCandidateCac,
     prevPlacementCac,
+    qualifiedCandidateCac,
+    prevQualifiedCandidateCac,
+    ltgp,
+    ltgpMethod,
+    placementRate,
+    costPerPlacedClient,
+    ltgpToCac,
+    cohortSize,
+    placedClientCount,
   };
 }

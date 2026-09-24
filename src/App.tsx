@@ -10,7 +10,6 @@ import { OverviewPage } from './pages/OverviewPage';
 import { MarketingPage } from './pages/MarketingPage';
 import { SalesPage } from './pages/SalesPage';
 import { RecruitmentPage } from './pages/RecruitmentPage';
-import { RevenuePage } from './pages/RevenuePage';
 import { FinancePage } from './pages/FinancePage';
 import { RetentionPage } from './pages/RetentionPage';
 
@@ -36,7 +35,6 @@ function AppRoutes() {
       <Route path="/marketing"   element={<MarketingPage />} />
       <Route path="/sales"       element={<SalesPage />} />
       <Route path="/recruitment" element={<RecruitmentPage />} />
-      <Route path="/revenue"     element={<RevenuePage />} />
       <Route path="/finance"     element={<FinancePage />} />
       <Route path="/retention"   element={<RetentionPage />} />
     </Routes>
