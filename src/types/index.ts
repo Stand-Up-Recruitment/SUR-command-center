@@ -347,6 +347,13 @@ export interface CacKPIs {
   ltgpToCac: number;
   cohortSize: number;
   placedClientCount: number;
+
+  // 30-day-vs-prior-30-day % change for the CAC card deltas (separate from the
+  // 90-day prev* fields above, which drive the headline-adjacent LTGP logic).
+  has30dPrevPeriod: boolean;
+  clientCacDeltaPct: number | null;
+  placementCacDeltaPct: number | null;
+  qualifiedCandidateCacDeltaPct: number | null;
 }
 
 // ─── Shared ───────────────────────────────────────────────────────────────────

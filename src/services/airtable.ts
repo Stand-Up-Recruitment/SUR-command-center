@@ -731,6 +731,9 @@ export async function fetchRetentionKPIs(): Promise<RetentionKPIs> {
 
 // ─── CAC ──────────────────────────────────────────────────────────────────────
 const CAC_WINDOW_DAYS = 90;
+// Comparison window for the CAC card deltas only — the headline CAC values above
+// still use CAC_WINDOW_DAYS; this just shrinks the "vs prior period" comparison.
+const CAC_DELTA_WINDOW_DAYS = 30;
 
 type MainClientFields = {
   'Signed Date'?: string;
@@ -785,7 +788,7 @@ export async function fetchCacKPIs(
 ): Promise<CacKPIs> {
   if (!CLIENTS_BASE_ID || !CANDIDATES_BASE_ID) throw new Error('CAC credentials not configured');
 
-  const [allMainClientsRaw, allPlacements, salesTranscripts, allCandidates, metaResult, prevMetaResult] = await Promise.all([
+  const [allMainClientsRaw, allPlacements, salesTranscripts, allCandidates, metaResult, prevMetaResult, meta30Result, prevMeta30Result] = await Promise.all([
     fetchAllWithIdsFromBase<MainClientFields>(CLIENTS_BASE_ID, MAIN_CLIENT_TABLE_ID),
     fetchAllFromBase<PlacementCacFields>(CLIENTS_BASE_ID, PLACEMENTS_TABLE_ID),
     fetchAllFromBase<{ Created?: string }>(CLIENTS_BASE_ID, SALES_TRANSCRIPT_TABLE_ID, {}, ['Created'])
@@ -793,6 +796,8 @@ export async function fetchCacKPIs(
     fetchAllFromBase<CandidateLeadFields>(CANDIDATES_BASE_ID, CANDIDATES_TABLE_ID, {}),
     fetchMetaSpendByFrame('90d').catch(() => ({ candidateSpend: 0, clientSpend: 0, isEstimated: true })),
     fetchMetaSpendPrevPeriod('90d').catch(() => null),
+    fetchMetaSpendByFrame('30d').catch(() => ({ candidateSpend: 0, clientSpend: 0, isEstimated: true })),
+    fetchMetaSpendPrevPeriod('30d').catch(() => null),
   ]);
 
   // Exclude the "Stand Up Recruitment" test record from every client-based count.
@@ -855,6 +860,61 @@ export async function fetchCacKPIs(
       : 0;
   }
 
+  // ── CAC card deltas: current 30 days vs prior 30 days, as a % change ────────
+  // Job board advertising has no daily granularity available (webhook only
+  // reports a 90-day trailing total), so it's approximated here as a flat
+  // one-third share of the 90-day figure for both the current and prior 30-day
+  // legs (uniform-spend assumption). Meta spend and Airtable-sourced counts use
+  // real 30-day windows.
+  const delta30Start = now - CAC_DELTA_WINDOW_DAYS * 86_400_000;
+  const deltaPrev30End = delta30Start;
+  const deltaPrev30Start = deltaPrev30End - CAC_DELTA_WINDOW_DAYS * 86_400_000;
+  const jobBoard30 = jobBoardAdvertising90d / 3;
+  const prevJobBoard30 = prevJobBoardAdvertising90d / 3;
+
+  const has30dPrevPeriod = prevMeta30Result !== null;
+  let clientCacDeltaPct: number | null = null;
+  let placementCacDeltaPct: number | null = null;
+  let qualifiedCandidateCacDeltaPct: number | null = null;
+  if (prevMeta30Result) {
+    const clientsWon30 = allMainClients.filter(c => isInPeriod(c.fields['Signed Date'], delta30Start, now)).length;
+    const prevClientsWon30 = allMainClients.filter(c => isInPeriod(c.fields['Signed Date'], deltaPrev30Start, deltaPrev30End)).length;
+    const salesCalls30 = salesTranscripts.filter(t => isInPeriod(t.Created, delta30Start, now)).length;
+    const prevSalesCalls30 = salesTranscripts.filter(t => isInPeriod(t.Created, deltaPrev30Start, deltaPrev30End)).length;
+
+    const clientTotalAcquisitionCost30 = meta30Result.clientSpend + salesCalls30 * SALES_TIME_COST_PER_CALL;
+    const prevClientTotalAcquisitionCost30 = prevMeta30Result.clientSpend + prevSalesCalls30 * SALES_TIME_COST_PER_CALL;
+    const clientCac30 = clientsWon30 > 0 ? clientTotalAcquisitionCost30 / clientsWon30 : 0;
+    const prevClientCac30 = prevClientsWon30 > 0 ? prevClientTotalAcquisitionCost30 / prevClientsWon30 : 0;
+    clientCacDeltaPct = prevClientCac30 > 0 ? ((clientCac30 - prevClientCac30) / prevClientCac30) * 100 : null;
+
+    const placementsInWindow30 = allPlacements.filter(p => isPlacementCountedForCac(p, delta30Start, now)).length;
+    const prevPlacementsInWindow30 = allPlacements.filter(p => isPlacementCountedForCac(p, deltaPrev30Start, deltaPrev30End)).length;
+    const placementCac30 = placementsInWindow30 > 0
+      ? (clientTotalAcquisitionCost30 + meta30Result.candidateSpend + jobBoard30) / placementsInWindow30
+      : 0;
+    const prevPlacementCac30 = prevPlacementsInWindow30 > 0
+      ? (prevClientTotalAcquisitionCost30 + prevMeta30Result.candidateSpend + prevJobBoard30) / prevPlacementsInWindow30
+      : 0;
+    placementCacDeltaPct = prevPlacementCac30 > 0 ? ((placementCac30 - prevPlacementCac30) / prevPlacementCac30) * 100 : null;
+
+    const qualifiedCandidatesInWindow30 = allCandidates
+      .filter(c => isInPeriod(c.Created, delta30Start, now))
+      .filter(isCandidateQualified).length;
+    const prevQualifiedCandidatesInWindow30 = allCandidates
+      .filter(c => isInPeriod(c.Created, deltaPrev30Start, deltaPrev30End))
+      .filter(isCandidateQualified).length;
+    const qualifiedCandidateCac30 = qualifiedCandidatesInWindow30 > 0
+      ? (meta30Result.candidateSpend + jobBoard30) / qualifiedCandidatesInWindow30
+      : 0;
+    const prevQualifiedCandidateCac30 = prevQualifiedCandidatesInWindow30 > 0
+      ? (prevMeta30Result.candidateSpend + prevJobBoard30) / prevQualifiedCandidatesInWindow30
+      : 0;
+    qualifiedCandidateCacDeltaPct = prevQualifiedCandidateCac30 > 0
+      ? ((qualifiedCandidateCac30 - prevQualifiedCandidateCac30) / prevQualifiedCandidateCac30) * 100
+      : null;
+  }
+
   // ── LTGP / LTGP:CAC ──────────────────────────────────────────────────────────
   // Cohort clients are joined to their placements via Placements' "Company ID"
   // linked-record field (confirmed against the live Airtable schema).
@@ -905,5 +965,9 @@ export async function fetchCacKPIs(
     ltgpToCac,
     cohortSize,
     placedClientCount,
+    has30dPrevPeriod,
+    clientCacDeltaPct,
+    placementCacDeltaPct,
+    qualifiedCandidateCacDeltaPct,
   };
 }

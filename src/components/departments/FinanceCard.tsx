@@ -54,18 +54,21 @@ function KP({ label, value, sub, accent, valueColor }: {
 }
 
 // KP card with an optional static sub-line and an optional delta sub-line (added this month)
-function KPDelta({ label, value, valueColor, accent, sub, delta, deltaPts, invert }: {
+function KPDelta({ label, value, valueColor, accent, sub, delta, deltaPts, deltaPct, invert }: {
   label: string; value: string; valueColor?: string; accent?: string; sub?: string;
   delta?: { value: number; label: string } | null;
   deltaPts?: { value: number; label: string } | null;
+  deltaPct?: { value: number; label: string } | null;
   invert?: boolean;
 }) {
   const isGood = delta ? (invert ? delta.value <= 0 : delta.value >= 0)
     : deltaPts ? (invert ? deltaPts.value <= 0 : deltaPts.value >= 0)
+    : deltaPct ? (invert ? deltaPct.value <= 0 : deltaPct.value >= 0)
     : true;
-  const deltaColor = (delta || deltaPts) ? (isGood ? NZ : RD) : MUTED;
+  const deltaColor = (delta || deltaPts || deltaPct) ? (isGood ? NZ : RD) : MUTED;
   const deltaSign  = delta ? (delta.value >= 0 ? '↑ +' : '↓ ')
     : deltaPts ? (deltaPts.value >= 0 ? '↑ +' : '↓ ')
+    : deltaPct ? (deltaPct.value >= 0 ? '↑ +' : '↓ ')
     : '';
   return (
     <div style={{ background: BG, border: `.5px solid ${BORDER}`, borderRadius: 8, borderTop: accent ? `3px solid ${accent}` : undefined, padding: '.875rem 1rem' }}>
@@ -75,6 +78,10 @@ function KPDelta({ label, value, valueColor, accent, sub, delta, deltaPts, inver
       {deltaPts != null ? (
         <div style={{ fontSize: 11, color: deltaColor, marginTop: 3 }}>
           {deltaSign}{Math.abs(deltaPts.value).toFixed(1)} pts {deltaPts.label}
+        </div>
+      ) : deltaPct != null ? (
+        <div style={{ fontSize: 11, color: deltaColor, marginTop: 3 }}>
+          {deltaSign}{Math.abs(deltaPct.value).toFixed(1)}% {deltaPct.label}
         </div>
       ) : delta != null ? (
         <div style={{ fontSize: 11, color: deltaColor, marginTop: 3 }}>
@@ -261,6 +268,10 @@ function PLSummarySection({ totalRevenue, totalGrossProfit, totalOpex, totalCogs
     qualifiedCandidateCac: number; prevQualifiedCandidateCac: number;
     placementCac: number; prevPlacementCac: number;
     hasPrevPeriod: boolean;
+    has30dPrevPeriod: boolean;
+    clientCacDeltaPct: number | null;
+    placementCacDeltaPct: number | null;
+    qualifiedCandidateCacDeltaPct: number | null;
     ltgp: number; costPerPlacedClient: number; ltgpToCac: number;
   } | undefined;
   monthlyTrend: XeroFinanceData['monthlyTrend'];
@@ -319,7 +330,7 @@ function PLSummarySection({ totalRevenue, totalGrossProfit, totalOpex, totalCogs
           value={cac ? fmtNZD(cac.clientCac) : '—'}
           valueColor={RD}
           invert
-          delta={cac?.hasPrevPeriod ? { value: cac.clientCac - cac.prevClientCac, label: 'vs prior 90 days' } : null}
+          deltaPct={cac?.has30dPrevPeriod ? { value: cac.clientCacDeltaPct ?? 0, label: 'vs last 30 days' } : null}
         />
         <KPDelta
           accent={RD}
@@ -328,7 +339,7 @@ function PLSummarySection({ totalRevenue, totalGrossProfit, totalOpex, totalCogs
           valueColor={RD}
           invert
           sub="(Candidate Meta spend + Job Board Advertising) ÷ NZ Citizen + Trade/Occupation candidates"
-          delta={cac?.hasPrevPeriod ? { value: cac.qualifiedCandidateCac - cac.prevQualifiedCandidateCac, label: 'vs prior 90 days' } : null}
+          deltaPct={cac?.has30dPrevPeriod ? { value: cac.qualifiedCandidateCacDeltaPct ?? 0, label: 'vs last 30 days' } : null}
         />
         <KPDelta
           accent={RD}
@@ -336,7 +347,7 @@ function PLSummarySection({ totalRevenue, totalGrossProfit, totalOpex, totalCogs
           value={cac ? fmtNZD(cac.placementCac) : '—'}
           valueColor={RD}
           invert
-          delta={cac?.hasPrevPeriod ? { value: cac.placementCac - cac.prevPlacementCac, label: 'vs prior 90 days' } : null}
+          deltaPct={cac?.has30dPrevPeriod ? { value: cac.placementCacDeltaPct ?? 0, label: 'vs last 30 days' } : null}
         />
         <KP
           accent={PU}
