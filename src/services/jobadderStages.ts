@@ -5,7 +5,8 @@ const WEBHOOK_URL = import.meta.env.VITE_N8N_JOBADDER_STAGES_WEBHOOK_URL as stri
 
 export const hasJobAdderStageCredentials = Boolean(WEBHOOK_URL);
 
-const toDateParam = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+// Exact instants — a date-only string shifted NZ midnight back to the previous UTC day.
+const toDateParam = (ms: number) => new Date(ms).toISOString();
 
 export async function fetchJobAdderStageKPIs(frame: TimeFrame = 'month'): Promise<JobAdderStageKPIs> {
   if (!WEBHOOK_URL) throw new Error('VITE_N8N_JOBADDER_STAGES_WEBHOOK_URL not configured');
