@@ -11,7 +11,7 @@ import {
 } from '../services/airtable';
 import { fetchXeroFinanceData, hasXeroCredentials } from '../services/xero';
 import { fetchMetaSpendByFrame } from '../services/metaAds';
-import { fetchAutoCallKPIs, hasAutoCallCredentials } from '../services/autocall';
+import { fetchVoiceCallKPIs } from '../services/voiceCalls';
 import { fetchJobAdderStageKPIs, hasJobAdderStageCredentials } from '../services/jobadderStages';
 import { fetchJobAging, hasOpenJobsCredentials } from '../services/jobadderJobs';
 import type { TimeFrame, LTGPFrame } from '../types';
@@ -53,12 +53,13 @@ export function useRecruiterKPIs(frame: TimeFrame = 'month') {
   });
 }
 
-export function useAutoCallKPIs(frame: TimeFrame = 'month') {
+export function useVoiceCallKPIs(frame: TimeFrame = 'month') {
   return useQuery({
-    queryKey: ['recruitment-autocalls', frame],
-    queryFn: () => fetchAutoCallKPIs(frame),
-    enabled: hasAutoCallCredentials,
+    queryKey: ['recruitment-voice-calls', frame],
+    queryFn: () => fetchVoiceCallKPIs(frame),
     placeholderData: keepPreviousData,
+    staleTime: 5 * 60_000, // endpoint data changes a few times an hour; proxy caches 5 min
+    retry: 1,
   });
 }
 

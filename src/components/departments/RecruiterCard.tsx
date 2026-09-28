@@ -2,10 +2,11 @@ import { useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { TimeFramePicker } from '../shared/TimeFramePicker';
 import { Skeleton } from '../shared/Skeleton';
-import { useRecruiterKPIs, useJobAging, useAutoCallKPIs, useJobAdderStageKPIs } from '../../hooks/queries';
+import { useRecruiterKPIs, useJobAging, useVoiceCallKPIs, useJobAdderStageKPIs } from '../../hooks/queries';
 import { timeBoundaries } from '../../services/airtable';
 import { COLORS, CARD_STYLE } from '../../styles/tokens';
-import type { DepartmentStatus, RecruiterStat, TimeFrame } from '../../types';
+import { PlacementsTrendChart } from '../shared/PlacementsTrendChart';
+import type { DepartmentStatus, RecruiterStat, RollingRates, TimeFrame } from '../../types';
 
 // Breakeven cost model — update these when Les's costs change (same pattern as
 // RECRUITER_COUNT in services/airtable.ts's LTGP calc).
@@ -14,12 +15,17 @@ const RECRUITER_WEEKLY_SALARY = 1442;  // NZD/week, ~$75k/year baseline
 const AVG_FEE_PER_PLACEMENT = 20000;   // NZD, blended flat-fee/% average
 const WEEKS_PER_MONTH = 4.33;
 
-// Draft placement target from Les's "Recruiter KPI Standards" doc — applied equally to
-// every recruiter until level-based targets are confirmed.
-const DRAFT_TARGET_CONTRACTS_MONTHLY = 2;    // ~2/month
-// Client interview targets are backed out of the placement target at this assumed
-// client → contract conversion until real conversion data is in.
-const ASSUMED_CLIENT_TO_CONTRACT = 0.8;
+// Monthly placement targets per recruiter (by first name); anyone not listed gets the default.
+const PLACEMENT_TARGETS_MONTHLY: Record<string, number> = { ayn: 4, ian: 4, kade: 2, lionel: 2 };
+const DEFAULT_PLACEMENT_TARGET_MONTHLY = 2;
+// 4 internal interviews a day per recruiter → 20/week, 80/month.
+const INTERNAL_TARGET_WEEKLY = 20;
+const INTERNAL_TARGET_MONTHLY = 80;
+
+// "What it takes" line colours (blue info band, per the mockup).
+const WIT_BG = 'rgba(55,138,221,0.14)';
+const WIT_BORDER = 'rgba(55,138,221,0.45)';
+const WIT_TEXT = '#6aa9ec';
 
 const MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
 const DAY_MS = 86_400_000;
@@ -33,6 +39,22 @@ const fmtTarget = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1)
 // · red below breakeven (or activity under 75%).
 const rag = (value: number, target: number, breakeven = target * 0.75) =>
   value >= target ? COLORS.success : value >= breakeven ? COLORS.warning : COLORS.danger;
+
+// Client interviews needed = placement target ÷ 4-month client → contract rate; internal
+// needed = client needed ÷ 4-month int → client rate; both rounded up. A rate of 0 (no data
+// in the window) falls back to the team's rate for that step.
+function whatItTakes(placementTarget: number, own: RollingRates, team: RollingRates) {
+  const c2c = own.clientToContract || team.clientToContract;
+  const i2c = own.intToClient || team.intToClient;
+  const ceil = (n: number) => Math.ceil(n - 1e-9); // guard float noise, e.g. 7.0000000001
+  const client = c2c > 0 ? ceil(placementTarget / c2c) : 0;
+  const internal = i2c > 0 ? ceil(client / i2c) : 0;
+  return {
+    client, internal, c2c, i2c,
+    teamRateUsed: !own.clientToContract || !own.intToClient,
+    limitedData: own.monthsOfData < 4,
+  };
+}
 
 const ragLabel = (color: string) =>
   color === COLORS.success ? 'On track' : color === COLORS.warning ? 'Below target' : 'Behind';
@@ -83,7 +105,7 @@ export function RecruiterCard() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const { data, error, isLoading, isFetching } = useRecruiterKPIs(frame);
   const { data: jobAgingData } = useJobAging();
-  const { data: autoCallData } = useAutoCallKPIs(frame);
+  const { data: voiceCallData } = useVoiceCallKPIs(frame);
   const { data: jobAdderStageData } = useJobAdderStageKPIs(frame);
 
   if (isLoading) return <RecruiterSkeleton />;
@@ -115,23 +137,23 @@ export function RecruiterCard() {
         name: stat.name, phoneInterviews: 0, prevPhoneInterviews: 0, internalInterviews: 0, prevInternalInterviews: 0,
         clientInterviews: 0, prevClientInterviews: 0, placements: 0, prevPlacements: 0,
         fallThroughRate: 0, prevFallThroughRate: 0,
+        rolling: { intToClient: 0, clientToContract: 0, monthsOfData: 0 },
+        monthlyPlacements: data.months.map(() => null),
       });
     }
   }
   baseRecruiters.sort((a, b) => a.name.localeCompare(b.name));
 
-  // Merge in Autocalls + JobAdder pipeline-stage KPIs (separate webhooks) by first name —
-  // left as undefined (rendered as "—") when a hook hasn't loaded or has no match.
+  // Merge in Voice Call Log + JobAdder pipeline-stage KPIs (separate webhooks) by first name —
+  // left as undefined (rendered as "—") when a hook hasn't loaded. A recruiter with no
+  // calls in the Voice Call Log dialled 0.
   // Copies each row so the React Query cache isn't mutated.
   const displayRecruiters: RecruiterStat[] = baseRecruiters.map(r => {
-    const ac = autoCallData?.byRecruiter.find(s => firstName(s.name) === firstName(r.name));
+    const vc = voiceCallData?.byRecruiter.find(s => firstName(s.name) === firstName(r.name));
     const js = jobAdderStageData?.byRecruiter.find(s => firstName(s.name) === firstName(r.name));
     return {
       ...r,
-      ...(ac && {
-        leadsContactedByBot: ac.leadsContactedByBot,
-        prevLeadsContactedByBot: ac.prevLeadsContactedByBot,
-      }),
+      ...(voiceCallData && { leadsContactedByBot: vc?.leadsContactedByBot ?? 0 }),
       ...(js && {
         referenceChecks: js.referenceChecks,
         prevReferenceChecks: js.prevReferenceChecks,
@@ -164,12 +186,24 @@ export function RecruiterCard() {
   const breakevenPerRecruiter = frame === 'week' ? breakevenWeekly : breakevenWeekly * WEEKS_PER_MONTH;
   const teamBreakeven = breakevenPerRecruiter * liveHeadcount;
 
-  const placementTarget = frame === 'week'
-    ? DRAFT_TARGET_CONTRACTS_MONTHLY / WEEKS_PER_MONTH
-    : DRAFT_TARGET_CONTRACTS_MONTHLY;
-  const clientTarget = Math.ceil(placementTarget / ASSUMED_CLIENT_TO_CONTRACT);
-  const teamPlacementTarget = placementTarget * liveHeadcount;
-  const teamClientTarget = clientTarget * liveHeadcount;
+  const monthlyPlacementTarget = (name: string) =>
+    PLACEMENT_TARGETS_MONTHLY[firstName(name)] ?? DEFAULT_PLACEMENT_TARGET_MONTHLY;
+  const placementTargetFor = (name: string) => frame === 'week'
+    ? monthlyPlacementTarget(name) / WEEKS_PER_MONTH
+    : monthlyPlacementTarget(name);
+  const internalTarget = frame === 'week' ? INTERNAL_TARGET_WEEKLY : INTERNAL_TARGET_MONTHLY;
+
+  const targets = new Map(displayRecruiters.map(r => {
+    const placement = placementTargetFor(r.name);
+    return [r.name, { placement, ...whatItTakes(placement, r.rolling, data.rolling) }];
+  }));
+  const targetsFor = (name: string) => targets.get(name)!;
+  // Team line = sum of the recruiters' lines.
+  const teamPlacementTarget = displayRecruiters.reduce((s, r) => s + targetsFor(r.name).placement, 0);
+  const teamClientTarget = displayRecruiters.reduce((s, r) => s + targetsFor(r.name).client, 0);
+  const teamInternalNeeded = displayRecruiters.reduce((s, r) => s + targetsFor(r.name).internal, 0);
+  const teamInternalTarget = internalTarget * liveHeadcount;
+  const unassignedJobs = jobAgingData?.unassigned;
 
   // Straight-line projection to period end from days elapsed so far (today counts).
   const periodDays = frame === 'week'
@@ -186,12 +220,13 @@ export function RecruiterCard() {
 
   const placementColor = rag(data.placements, teamPlacementTarget, teamBreakeven);
   const clientColor = rag(data.clientInterviews, teamClientTarget);
+  const internalColor = rag(data.internalInterviews, teamInternalTarget);
 
   // Recruitment bot — team totals summed from the per-recruiter webhooks.
   const sumDefined = (vals: (number | undefined)[]) =>
     vals.some(v => v !== undefined) ? vals.reduce<number>((s, v) => s + (v ?? 0), 0) : undefined;
   const botLeads = sumDefined(displayRecruiters.map(r => r.leadsContactedByBot));
-  const prevBotLeads = sumDefined(displayRecruiters.map(r => r.prevLeadsContactedByBot));
+  const prevBotLeads = voiceCallData?.prevTeamLeads;
   const botBooked = sumDefined(displayRecruiters.map(r => r.internalInterviewsBotBooked));
   const prevBotBooked = sumDefined(displayRecruiters.map(r => r.prevInternalInterviewsBotBooked));
   // Attended isn't tracked directly — an Airtable internal interview only exists once it
@@ -325,13 +360,13 @@ export function RecruiterCard() {
 
       {/* Funnel KPI tiles */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr auto 1fr 1fr', gap: 12 }}>
-        {kpiTile('Internal Interviews', pill('No target yet', COLORS.textSecondary),
-          bigValue(data.internalInterviews, 'TBC', COLORS.textSecondary),
-          'Target from conversion data', `Last ${periodLabel}: ${data.prevInternalInterviews}`)}
+        {kpiTile('Internal Interviews', pill(ragLabel(internalColor), internalColor),
+          bigValue(data.internalInterviews, teamInternalTarget, internalColor),
+          `Target ${internalTarget} per recruiter · 4/day`, `Last ${periodLabel}: ${data.prevInternalInterviews}`)}
         {connector(internalToClientPct)}
         {kpiTile('Client Interviews', pill(ragLabel(clientColor), clientColor),
           bigValue(data.clientInterviews, teamClientTarget, clientColor),
-          `Target est. at ${ASSUMED_CLIENT_TO_CONTRACT * 100}% conversion`, `Last ${periodLabel}: ${data.prevClientInterviews}`)}
+          'Target from "What it takes"', `Last ${periodLabel}: ${data.prevClientInterviews}`)}
         {connector(clientToContractPct)}
         {kpiTile('Placements', pill(ragLabel(placementColor), placementColor),
           bigValue(data.placements, fmtTarget(teamPlacementTarget), placementColor),
@@ -359,7 +394,7 @@ export function RecruiterCard() {
             <span style={{ fontSize: 12, color: COLORS.textMuted }}>Tap a recruiter for activity detail</span>
           </div>
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 880 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 960 }}>
               <thead>
                 <tr style={{ borderBottom: `1px solid ${COLORS.border}` }}>
                   <th style={{ ...th, paddingLeft: 18 }}>Recruiter</th>
@@ -368,7 +403,8 @@ export function RecruiterCard() {
                   <th style={th}>Client int.</th>
                   <th style={th}>Client → contract</th>
                   <th style={th}>Placements</th>
-                  <th style={{ ...th, width: '26%' }}>Open jobs by age</th>
+                  <th style={th}>Fall-through</th>
+                  <th style={{ ...th, width: '22%' }}>Open jobs</th>
                   <th style={{ ...th, paddingRight: 18 }}>Last {periodLabel}</th>
                 </tr>
               </thead>
@@ -376,51 +412,96 @@ export function RecruiterCard() {
                 {displayRecruiters.map(r => {
                   const aging = jobAgingFor(r.name);
                   const isOpen = expanded === r.name;
+                  const t = targetsFor(r.name);
                   // Manually-booked isn't tracked directly — derived as the remainder of total
                   // internal interviews (Airtable) after subtracting bot bookings (Calendly).
                   const rManualBooked = r.internalInterviewsBotBooked !== undefined
                     ? Math.max(0, r.internalInterviews - r.internalInterviewsBotBooked) : undefined;
-                  const rClientColor = rag(r.clientInterviews, clientTarget);
-                  const rPlacementColor = rag(r.placements, placementTarget, breakevenPerRecruiter);
+                  const rInternalColor = rag(r.internalInterviews, internalTarget);
+                  const rClientColor = rag(r.clientInterviews, t.client);
+                  const rPlacementColor = rag(r.placements, t.placement, breakevenPerRecruiter);
+                  const rateNote = [
+                    t.limitedData && 'limited data',
+                    t.teamRateUsed && 'team rate used',
+                  ].filter(Boolean).join(', ');
 
                   return [
                     <tr
                       key={r.name}
                       onClick={() => setExpanded(isOpen ? null : r.name)}
-                      style={{ borderBottom: `1px solid ${COLORS.border}`, cursor: 'pointer', background: isOpen ? COLORS.bgSubtle : undefined }}
+                      style={{ cursor: 'pointer', background: isOpen ? COLORS.bgSubtle : undefined }}
                     >
                       <td style={{ ...td, paddingLeft: 18, fontSize: 16, fontWeight: 800 }}>
                         {r.name} <span style={{ fontSize: 10, color: COLORS.textMuted }}>{isOpen ? '▾' : '▸'}</span>
                       </td>
-                      <td style={td}>{cellValue(r.internalInterviews, 'TBC')}</td>
+                      <td style={td}>{cellValue(r.internalInterviews, internalTarget, rInternalColor)}</td>
                       <td style={pctCell}>{pct(r.clientInterviews, r.internalInterviews)}%</td>
-                      <td style={td}>{cellValue(r.clientInterviews, clientTarget, rClientColor)}</td>
+                      <td style={td}>{cellValue(r.clientInterviews, t.client, rClientColor)}</td>
                       <td style={pctCell}>{pct(r.placements, r.clientInterviews)}%</td>
-                      <td style={td}>{cellValue(r.placements, fmtTarget(placementTarget), rPlacementColor)}</td>
+                      <td style={td}>{cellValue(r.placements, fmtTarget(t.placement), rPlacementColor)}</td>
+                      <td style={{ ...pctCell, color: r.fallThroughRate === 0 ? COLORS.success : COLORS.danger }}>{r.fallThroughRate}%</td>
                       <td style={td}>
                         {stackedBar(aging.fresh, aging.ageing, aging.stale)}
                         <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 6 }}>
-                          {aging.totalOpenJobs} jobs · {aging.fresh} fresh · {aging.ageing} ageing ·{' '}
+                          {aging.totalOpenJobs} jobs ·{' '}
                           <strong style={{ color: aging.stale > 0 ? COLORS.danger : COLORS.textPrimary }}>{aging.stale} stale</strong>
                         </div>
                       </td>
                       <td style={{ ...td, paddingRight: 18, fontFamily: MONO, color: COLORS.textSecondary }}>{r.prevPlacements}</td>
                     </tr>,
+                    <tr key={`${r.name}-wit`} style={{ borderBottom: isOpen ? undefined : `1px solid ${COLORS.border}` }}>
+                      <td colSpan={9} style={{ padding: '0 18px 14px' }}>
+                        <div style={{
+                          background: WIT_BG, borderRadius: 8, padding: '10px 14px',
+                          display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+                        }}>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: WIT_TEXT }}>
+                            ◎ What it takes: {t.internal} internal · {t.client} client interviews for {fmtTarget(t.placement)} placements
+                          </span>
+                          <span style={{ fontSize: 11, color: COLORS.textSecondary, fontFamily: MONO }}>
+                            4-mo rates: {Math.round(t.i2c * 100)}% · {Math.round(t.c2c * 100)}%{rateNote && ` (${rateNote})`}
+                          </span>
+                        </div>
+                      </td>
+                    </tr>,
                     isOpen && (
                       <tr key={`${r.name}-detail`} style={{ borderBottom: `1px solid ${COLORS.border}`, background: COLORS.bgSubtle }}>
-                        <td colSpan={8} style={{ padding: '16px 18px' }}>
+                        <td colSpan={9} style={{ padding: '16px 18px' }}>
                           <div style={{ display: 'flex', gap: 16 }}>
                             {miniStat(r.phoneInterviews, 'Manual calls')}
                             {miniStat(rManualBooked ?? '—', 'Internals manually booked')}
                             {miniStat(r.referenceChecks ?? '—', 'Reference checks')}
                             {miniStat(r.candidatesPitched ?? '—', 'Pitched to client')}
-                            {miniStat(`${r.fallThroughRate}%`, 'Fall-through')}
                           </div>
                         </td>
                       </tr>
                     ),
                   ];
                 })}
+                {unassignedJobs && unassignedJobs.totalOpenJobs > 0 && (
+                  <tr style={{ borderBottom: `1px solid ${COLORS.border}` }}>
+                    <td style={{ ...td, paddingLeft: 18, fontSize: 16, fontWeight: 800, color: COLORS.textSecondary }}>Unassigned</td>
+                    {[0, 1, 2, 3, 4, 5].map(i => <td key={i} style={{ ...td, color: COLORS.textMuted }}>—</td>)}
+                    <td style={td}>
+                      {stackedBar(unassignedJobs.fresh, unassignedJobs.ageing, unassignedJobs.stale)}
+                      <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 6 }}>
+                        {unassignedJobs.totalOpenJobs} jobs ·{' '}
+                        <strong style={{ color: unassignedJobs.stale > 0 ? COLORS.danger : COLORS.textPrimary }}>{unassignedJobs.stale} stale</strong>
+                      </div>
+                    </td>
+                    <td style={{ ...td, paddingRight: 18, color: COLORS.textMuted }}>—</td>
+                  </tr>
+                )}
+                <tr>
+                  <td colSpan={9} style={{ padding: '14px 18px 4px' }}>
+                    <div style={{ background: WIT_BG, border: `1px solid ${WIT_BORDER}`, borderRadius: 8, padding: '12px 14px' }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: WIT_TEXT }}>
+                        ◎ TEAM – What it takes: {teamInternalNeeded} internal · {teamClientTarget} client interviews for {fmtTarget(teamPlacementTarget)} placements
+                      </span>
+                      <span style={{ fontSize: 11, color: COLORS.textSecondary }}> (sum of recruiters)</span>
+                    </div>
+                  </td>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -432,8 +513,11 @@ export function RecruiterCard() {
         </div>
       )}
 
-      <p style={{ fontSize: 12, color: COLORS.textMuted, margin: 0 }}>
-        Client interview targets estimated at {ASSUMED_CLIENT_TO_CONTRACT * 100}% client → contract until conversion data is in. Internal interview targets TBC.
+      <p style={{ fontSize: 12, color: COLORS.textMuted, margin: 0, lineHeight: 1.6 }}>
+        Calculation: Client interviews needed = placement target ÷ 4-month client → contract rate (round up). Internal needed = client
+        needed ÷ 4-month int → client rate (round up). 4-month rates use the last 4 full months; where a recruiter has no rate yet, the
+        team rate is used. Client int. target in the row = client interviews needed. Internal int. target stays at {INTERNAL_TARGET_MONTHLY}/month
+        ({INTERNAL_TARGET_WEEKLY}/week).
       </p>
 
       {/* Recruitment bot — team */}
@@ -443,7 +527,7 @@ export function RecruiterCard() {
           {botDataMismatch && pill('Check data', COLORS.danger)}
         </div>
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-          {miniStat(botLeads ?? '—', 'Leads contacted', `Last ${periodLabel}: ${prevBotLeads ?? '—'}`, COLORS.textPrimary, 30)}
+          {miniStat(botLeads ?? '—', 'Leads contacted', `Calls dialled by Luke · last ${periodLabel}: ${prevBotLeads ?? '—'}`, COLORS.textPrimary, 30)}
           {miniStat(botBooked ?? '—', 'Internal interviews booked', `Last ${periodLabel}: ${prevBotBooked ?? '—'}`, COLORS.textPrimary, 30)}
           {miniStat(botAttended ?? '—', 'Booked interviews attended', 'Implied from recruiter totals', COLORS.textPrimary, 30)}
           {miniStat(showUpPct !== undefined ? `${showUpPct}%` : '—', 'Show-up rate', 'Attended ÷ booked',
@@ -455,6 +539,13 @@ export function RecruiterCard() {
           </div>
         )}
       </div>
+
+      <PlacementsTrendChart
+        months={data.months}
+        recruiters={displayRecruiters}
+        teamTarget={displayRecruiters.reduce((s, r) => s + monthlyPlacementTarget(r.name), 0)}
+        breakeven={breakevenWeekly * WEEKS_PER_MONTH * liveHeadcount}
+      />
 
       {error && (
         <p style={{ color: COLORS.warning, fontSize: 12, margin: 0 }}>⚠ Connection error — {error?.message}</p>

@@ -3,6 +3,7 @@ import type {
   SalesKPIs,
   RecruiterKPIs,
   RecruiterStat,
+  RollingRates,
   MarketingKPIs,
   RevenueKPIs,
   LeadMetric,
@@ -146,24 +147,59 @@ const INSTALMENTS_TABLE_ID = 'tblzsNY9hiQunnopk';
 const isFallThrough = (f: { Status?: string; 'Cancellation Date'?: string }) =>
   f.Status === 'End' && Boolean(f['Cancellation Date']);
 
+type PipelineFields = { Status?: string; Created?: string; Name?: string; 'Candidates Email'?: string[] };
+type RecruiterPlacementFields = { 'Created Date'?: string; Recruiter?: string; Status?: string; 'Cancellation Date'?: string };
+
+// The pipeline table logs one record per stage per candidate, but a candidate is sometimes
+// logged twice at the same stage. Count each candidate once per stage per period.
+function uniqueStageRecords(records: PipelineFields[], perRecruiter: boolean) {
+  const seen = new Set<string>();
+  return records.filter(f => {
+    const key = [f['Candidates Email']?.[0] ?? f.Created, f.Status, perRecruiter ? f.Name?.trim() : ''].join('|');
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+const monthKey = (d: string | Date) => {
+  const x = new Date(d);
+  return x.getFullYear() * 12 + x.getMonth();
+};
+
+// Int → client and client → contract over a window (the last 4 full calendar months).
+function rollingRates(pipeline: PipelineFields[], placements: RecruiterPlacementFields[], from: number, to: number): RollingRates {
+  const inWindow = uniqueStageRecords(pipeline.filter(f => isInPeriod(f.Created, from, to)), false);
+  const internal = inWindow.filter(f => f.Status === 'Internal Interview').length;
+  const client = inWindow.filter(f => f.Status === 'Client-Candidate Interview').length;
+  const placed = placements.filter(f => f.Status !== 'End' && isInPeriod(f['Created Date'], from, to)).length;
+  return {
+    intToClient: internal > 0 ? client / internal : 0,
+    clientToContract: client > 0 ? placed / client : 0,
+    monthsOfData: new Set(inWindow.map(f => monthKey(f.Created!))).size,
+  };
+}
+
 export async function fetchRecruiterKPIs(frame: TimeFrame = 'month'): Promise<RecruiterKPIs> {
   const b = timeBoundaries(frame);
 
   const [pipeline, placements] = await Promise.all([
-    fetchAllFromBase<{ Status?: string; Created?: string; Name?: string }>(
-      CANDIDATES_BASE_ID, PIPELINE_TABLE_ID, {}
-    ),
-    fetchAllFromBase<{ 'Created Date'?: string; Recruiter?: string; Status?: string; 'Cancellation Date'?: string }>(
-      CLIENTS_BASE_ID, PLACEMENTS_TABLE_ID, {}
-    ),
+    fetchAllFromBase<PipelineFields>(CANDIDATES_BASE_ID, PIPELINE_TABLE_ID, {}),
+    fetchAllFromBase<RecruiterPlacementFields>(CLIENTS_BASE_ID, PLACEMENTS_TABLE_ID, {}),
   ]);
 
-  const phoneThis    = pipeline.filter(f => f.Status === 'Phone Interview'             && isInPeriod(f.Created, b.start, b.now)).length;
-  const phonePrev    = pipeline.filter(f => f.Status === 'Phone Interview'             && isInPeriod(f.Created, b.prevStart, b.prevEnd)).length;
-  const internalThis = pipeline.filter(f => f.Status === 'Internal Interview'          && isInPeriod(f.Created, b.start, b.now)).length;
-  const internalPrev = pipeline.filter(f => f.Status === 'Internal Interview'          && isInPeriod(f.Created, b.prevStart, b.prevEnd)).length;
-  const clientThis   = pipeline.filter(f => f.Status === 'Client-Candidate Interview'  && isInPeriod(f.Created, b.start, b.now)).length;
-  const clientPrev   = pipeline.filter(f => f.Status === 'Client-Candidate Interview'  && isInPeriod(f.Created, b.prevStart, b.prevEnd)).length;
+  const pipelineThis = pipeline.filter(f => isInPeriod(f.Created, b.start, b.now));
+  const pipelinePrev = pipeline.filter(f => isInPeriod(f.Created, b.prevStart, b.prevEnd));
+  const teamThis = uniqueStageRecords(pipelineThis, false);
+  const teamPrev = uniqueStageRecords(pipelinePrev, false);
+  const countStage = (records: PipelineFields[], stage: string) => records.filter(f => f.Status === stage).length;
+
+  const phoneThis    = countStage(teamThis, 'Phone Interview');
+  const phonePrev    = countStage(teamPrev, 'Phone Interview');
+  const internalThis = countStage(teamThis, 'Internal Interview');
+  const internalPrev = countStage(teamPrev, 'Internal Interview');
+  const clientThis   = countStage(teamThis, 'Client-Candidate Interview');
+  const clientPrev   = countStage(teamPrev, 'Client-Candidate Interview');
 
   const placementsThis = placements.filter(f => f.Status !== 'End' && isInPeriod(f['Created Date'], b.start, b.now)).length;
   const placementsPrev = placements.filter(f => f.Status !== 'End' && isInPeriod(f['Created Date'], b.prevStart, b.prevEnd)).length;
@@ -177,11 +213,26 @@ export async function fetchRecruiterKPIs(frame: TimeFrame = 'month'): Promise<Re
   const fallThroughRate     = signedThis.length > 0 ? Math.round(fallThroughsThis / signedThis.length * 100) : 0;
   const prevFallThroughRate = signedPrev.length > 0 ? Math.round(fallThroughsPrev / signedPrev.length * 100) : 0;
 
-  // Group by recruiter (current period only)
+  // Rolling window (last 4 full months) and 12-month chart range — always monthly,
+  // independent of the selected frame.
+  const today = new Date();
+  const thisMonthStart = new Date(today.getFullYear(), today.getMonth(), 1).getTime();
+  const rollingStart = new Date(today.getFullYear(), today.getMonth() - 4, 1).getTime();
+  const chartMonthKeys = Array.from({ length: 12 }, (_, i) => monthKey(today) - 11 + i);
+  const months = chartMonthKeys.map(k =>
+    new Date(Math.floor(k / 12), k % 12, 1).toLocaleDateString('en-NZ', { month: 'short' }));
+
+  // Group by recruiter
   const recruiterMap = new Map<string, RecruiterStat>();
   const getOrCreate = (name: string) => {
     if (!recruiterMap.has(name)) {
-      recruiterMap.set(name, { name, phoneInterviews: 0, prevPhoneInterviews: 0, internalInterviews: 0, prevInternalInterviews: 0, clientInterviews: 0, prevClientInterviews: 0, placements: 0, prevPlacements: 0, fallThroughRate: 0, prevFallThroughRate: 0 });
+      recruiterMap.set(name, {
+        name, phoneInterviews: 0, prevPhoneInterviews: 0, internalInterviews: 0, prevInternalInterviews: 0,
+        clientInterviews: 0, prevClientInterviews: 0, placements: 0, prevPlacements: 0,
+        fallThroughRate: 0, prevFallThroughRate: 0,
+        rolling: { intToClient: 0, clientToContract: 0, monthsOfData: 0 },
+        monthlyPlacements: [],
+      });
     }
     return recruiterMap.get(name)!;
   };
@@ -190,7 +241,7 @@ export async function fetchRecruiterKPIs(frame: TimeFrame = 'month'): Promise<Re
   const prevSignedCountByRecruiter = new Map<string, number>();
   const prevFallThroughCountByRecruiter = new Map<string, number>();
 
-  for (const f of pipeline.filter(f => isInPeriod(f.Created, b.start, b.now))) {
+  for (const f of uniqueStageRecords(pipelineThis, true)) {
     const name = f.Name?.trim();
     if (!name) continue;
     const stat = getOrCreate(name);
@@ -199,7 +250,7 @@ export async function fetchRecruiterKPIs(frame: TimeFrame = 'month'): Promise<Re
     else if (f.Status === 'Client-Candidate Interview')  stat.clientInterviews++;
   }
 
-  for (const f of pipeline.filter(f => isInPeriod(f.Created, b.prevStart, b.prevEnd))) {
+  for (const f of uniqueStageRecords(pipelinePrev, true)) {
     const name = f.Name?.trim();
     if (!name) continue;
     const stat = getOrCreate(name);
@@ -241,6 +292,19 @@ export async function fetchRecruiterKPIs(frame: TimeFrame = 'month'): Promise<Re
     const prevSigned = prevSignedCountByRecruiter.get(name) ?? 0;
     stat.fallThroughRate     = signed > 0 ? Math.round((fallThroughCountByRecruiter.get(name) ?? 0) / signed * 100) : 0;
     stat.prevFallThroughRate = prevSigned > 0 ? Math.round((prevFallThroughCountByRecruiter.get(name) ?? 0) / prevSigned * 100) : 0;
+
+    const ownPipeline = pipeline.filter(f => f.Name?.trim() === name);
+    const ownPlacements = placements.filter(f => f.Recruiter?.trim() === name);
+    stat.rolling = rollingRates(ownPipeline, ownPlacements, rollingStart, thisMonthStart);
+
+    // Months before the recruiter's first activity (any pipeline record or contract) are null.
+    const activityKeys = [
+      ...ownPipeline.filter(f => f.Created).map(f => monthKey(f.Created!)),
+      ...ownPlacements.filter(f => f['Created Date']).map(f => monthKey(f['Created Date']!)),
+    ];
+    const firstKey = activityKeys.length > 0 ? Math.min(...activityKeys) : Infinity;
+    stat.monthlyPlacements = chartMonthKeys.map(k => k < firstKey ? null
+      : ownPlacements.filter(f => f.Status !== 'End' && f['Created Date'] && monthKey(f['Created Date']) === k).length);
   }
 
   const byRecruiter = Array.from(recruiterMap.values()).sort((a, b) => a.name.localeCompare(b.name));
@@ -259,6 +323,8 @@ export async function fetchRecruiterKPIs(frame: TimeFrame = 'month'): Promise<Re
     fallThroughRate,
     prevFallThroughRate,
     activePipeline: pipeline.length,
+    rolling: rollingRates(pipeline, placements, rollingStart, thisMonthStart),
+    months,
     byRecruiter,
   };
 }

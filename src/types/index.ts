@@ -43,27 +43,33 @@ export interface RecruiterStat {
   prevPlacements: number;
   fallThroughRate: number;     // % of contracts signed this period later terminated (Status='End' + Cancellation Date)
   prevFallThroughRate: number;
-  // Optional — merged in from separate Autocalls / JobAdder webhooks; absent until that
-  // hook's data has loaded, or if the recruiter has no matching bot assistant / JobAdder owner.
+  // Optional — merged in from the Voice Call Log / JobAdder webhooks; absent until that
+  // hook's data has loaded, or if the recruiter has no matching calls / JobAdder owner.
   leadsContactedByBot?: number;
-  prevLeadsContactedByBot?: number;
   referenceChecks?: number;
   prevReferenceChecks?: number;
   candidatesPitched?: number;
   prevCandidatesPitched?: number;
   internalInterviewsBotBooked?: number;
   prevInternalInterviewsBotBooked?: number;
+  // Rolling rates over the last 4 full calendar months — only used for the
+  // "What it takes" line. 0 when the recruiter has no denominator in the window.
+  rolling: RollingRates;
+  // Placements per month, last 12 months oldest-first (current month last, partial);
+  // null for months before the recruiter's first activity.
+  monthlyPlacements: (number | null)[];
 }
 
-// ─── Autocalls (leads contacted by bot) ────────────────────────────────────────
-export interface AutoCallStat {
-  name: string;
-  leadsContactedByBot: number;
-  prevLeadsContactedByBot: number;
+export interface RollingRates {
+  intToClient: number;       // client interviews ÷ internal interviews, 0–1
+  clientToContract: number;  // placements ÷ client interviews, 0–1
+  monthsOfData: number;      // full months in the window with interview data (0–4)
 }
 
-export interface AutoCallKPIs {
-  byRecruiter: AutoCallStat[];
+// ─── Voice Call Log (leads contacted by bot) ───────────────────────────────────
+export interface VoiceCallKPIs {
+  byRecruiter: { name: string; leadsContactedByBot: number }[];  // calls dialled, current period
+  prevTeamLeads: number;                                         // calls dialled, previous period (team)
 }
 
 // ─── JobAdder pipeline stages + Calendly bot bookings ──────────────────────────
@@ -99,6 +105,8 @@ export interface RecruiterKPIs {
   fallThroughRate: number;     // terminations within probation ÷ contracts signed, same period × 100
   prevFallThroughRate: number;
   activePipeline: number;      // total candidates in any stage (snapshot)
+  rolling: RollingRates;       // team rolling 4-month rates
+  months: string[];            // labels for monthlyPlacements, e.g. "Oct", oldest-first
   byRecruiter: RecruiterStat[];
 }
 
@@ -116,6 +124,8 @@ export interface JobAgingKPIs {
   fresh: number;
   ageing: number;
   stale: number;
+  // Active jobs with no owner — optional until the n8n workflow change is live.
+  unassigned?: Omit<JobAgingStat, 'name'>;
   byRecruiter: JobAgingStat[];
 }
 
