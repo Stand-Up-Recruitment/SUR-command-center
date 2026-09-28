@@ -39,6 +39,10 @@ export interface RecruiterStat {
   prevInternalInterviews: number;
   clientInterviews: number;
   prevClientInterviews: number;
+  // Internal interviews missed (JobAdder Internal Interview → No Show-up), per candidate;
+  // excludes candidates who later attended a rebooked interview.
+  noShows: number;
+  prevNoShows: number;
   placements: number;
   prevPlacements: number;
   fallThroughRate: number;     // % of contracts signed this period later terminated (Status='End' + Cancellation Date)
@@ -98,6 +102,8 @@ export interface RecruiterKPIs {
   prevInternalInterviews: number;
   clientInterviews: number;
   prevClientInterviews: number;
+  noShows: number;             // see RecruiterStat.noShows
+  prevNoShows: number;
   placements: number;
   prevPlacements: number;
   conversionRate: number;      // placements ÷ client interviews × 100

@@ -135,7 +135,7 @@ export function RecruiterCard() {
     if (!baseRecruiters.some(r => firstName(r.name) === firstName(stat.name))) {
       baseRecruiters.push({
         name: stat.name, phoneInterviews: 0, prevPhoneInterviews: 0, internalInterviews: 0, prevInternalInterviews: 0,
-        clientInterviews: 0, prevClientInterviews: 0, placements: 0, prevPlacements: 0,
+        clientInterviews: 0, prevClientInterviews: 0, noShows: 0, prevNoShows: 0, placements: 0, prevPlacements: 0,
         fallThroughRate: 0, prevFallThroughRate: 0,
         rolling: { intToClient: 0, clientToContract: 0, monthsOfData: 0 },
         monthlyPlacements: data.months.map(() => null),
@@ -229,12 +229,12 @@ export function RecruiterCard() {
   const prevBotLeads = voiceCallData?.prevTeamLeads;
   const botBooked = sumDefined(displayRecruiters.map(r => r.internalInterviewsBotBooked));
   const prevBotBooked = sumDefined(displayRecruiters.map(r => r.prevInternalInterviewsBotBooked));
-  // Attended isn't tracked directly — an Airtable internal interview only exists once it
-  // happened, so it caps how many of a recruiter's bot bookings could have been attended.
-  const botAttended = sumDefined(displayRecruiters.map(r =>
-    r.internalInterviewsBotBooked !== undefined ? Math.min(r.internalInterviews, r.internalInterviewsBotBooked) : undefined));
-  const showUpPct = botBooked !== undefined && botAttended !== undefined && botBooked > 0
-    ? pct(botAttended, botBooked) : undefined;
+  // Show-up rate = showed ÷ (showed + no-shows), per candidate, across all internal
+  // interviews (bot and manual). An Internal Interview row is only logged once the candidate
+  // leaves that JobAdder status, i.e. after the interview; a miss logs a No Show-up row instead.
+  const showUpRate = (showed: number, noShows: number) =>
+    showed + noShows > 0 ? pct(showed, showed + noShows) : undefined;
+  const showUpPct = showUpRate(data.internalInterviews, data.noShows);
   const botDataMismatch = botLeads !== undefined && botBooked !== undefined && botBooked > botLeads;
 
   const pill = (label: string, bg: string, color = '#0d0d0d') => (
@@ -417,6 +417,7 @@ export function RecruiterCard() {
                   // internal interviews (Airtable) after subtracting bot bookings (Calendly).
                   const rManualBooked = r.internalInterviewsBotBooked !== undefined
                     ? Math.max(0, r.internalInterviews - r.internalInterviewsBotBooked) : undefined;
+                  const rShowUp = showUpRate(r.internalInterviews, r.noShows);
                   const rInternalColor = rag(r.internalInterviews, internalTarget);
                   const rClientColor = rag(r.clientInterviews, t.client);
                   const rPlacementColor = rag(r.placements, t.placement, breakevenPerRecruiter);
@@ -472,6 +473,8 @@ export function RecruiterCard() {
                             {miniStat(rManualBooked ?? '—', 'Internals manually booked')}
                             {miniStat(r.referenceChecks ?? '—', 'Reference checks')}
                             {miniStat(r.candidatesPitched ?? '—', 'Pitched to client')}
+                            {miniStat(rShowUp !== undefined ? `${rShowUp}%` : '—', 'Show-up rate',
+                              `${r.noShows} no-show${r.noShows === 1 ? '' : 's'}`, rShowUp !== undefined ? rag(rShowUp, 80) : COLORS.textPrimary)}
                           </div>
                         </td>
                       </tr>
@@ -529,13 +532,13 @@ export function RecruiterCard() {
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
           {miniStat(botLeads ?? '—', 'Leads contacted', `Calls dialled by Luke · last ${periodLabel}: ${prevBotLeads ?? '—'}`, COLORS.textPrimary, 30)}
           {miniStat(botBooked ?? '—', 'Internal interviews booked', `Last ${periodLabel}: ${prevBotBooked ?? '—'}`, COLORS.textPrimary, 30)}
-          {miniStat(botAttended ?? '—', 'Booked interviews attended', 'Implied from recruiter totals', COLORS.textPrimary, 30)}
-          {miniStat(showUpPct !== undefined ? `${showUpPct}%` : '—', 'Show-up rate', 'Attended ÷ booked',
+          {miniStat(data.noShows, 'No-shows', `Internal interviews missed · last ${periodLabel}: ${data.prevNoShows}`, COLORS.textPrimary, 30)}
+          {miniStat(showUpPct !== undefined ? `${showUpPct}%` : '—', 'Show-up rate', 'Showed ÷ (showed + no-shows) · internal interviews',
             showUpPct !== undefined ? rag(showUpPct, 80) : COLORS.textPrimary, 30)}
         </div>
         {botDataMismatch && (
           <div style={{ background: COLORS.warningBg, color: COLORS.warning, borderRadius: 8, padding: '10px 14px', fontSize: 13 }}>
-            More bookings ({botBooked}) than leads contacted ({botLeads}): the counts don't reconcile. Confirm the show-up rate before acting on it.
+            More bookings ({botBooked}) than leads contacted ({botLeads}): the counts don't reconcile. Check the Calendly bookings and the Voice Call Log cover the same calls.
           </div>
         )}
       </div>

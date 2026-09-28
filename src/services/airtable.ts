@@ -201,6 +201,23 @@ export async function fetchRecruiterKPIs(frame: TimeFrame = 'month'): Promise<Re
   const clientThis   = countStage(teamThis, 'Client-Candidate Interview');
   const clientPrev   = countStage(teamPrev, 'Client-Candidate Interview');
 
+  // "No Show-up" rows are logged when a recruiter moves a candidate from Internal Interview
+  // to No Show-up in JobAdder. Counted per candidate: a no-show is dropped if the same
+  // candidate later has an Internal Interview row (rebooked and attended).
+  const lastAttended = new Map<string, number>();
+  for (const f of pipeline) {
+    const c = f['Candidates Email']?.[0];
+    if (f.Status !== 'Internal Interview' || !c || !f.Created) continue;
+    lastAttended.set(c, Math.max(lastAttended.get(c) ?? 0, Date.parse(f.Created)));
+  }
+  const isNoShow = (f: PipelineFields) => {
+    if (f.Status !== 'No Show-up') return false;
+    const c = f['Candidates Email']?.[0];
+    return !c || !f.Created || (lastAttended.get(c) ?? 0) <= Date.parse(f.Created);
+  };
+  const noShowsThis = teamThis.filter(isNoShow).length;
+  const noShowsPrev = teamPrev.filter(isNoShow).length;
+
   const placementsThis = placements.filter(f => f.Status !== 'End' && isInPeriod(f['Created Date'], b.start, b.now)).length;
   const placementsPrev = placements.filter(f => f.Status !== 'End' && isInPeriod(f['Created Date'], b.prevStart, b.prevEnd)).length;
 
@@ -228,7 +245,7 @@ export async function fetchRecruiterKPIs(frame: TimeFrame = 'month'): Promise<Re
     if (!recruiterMap.has(name)) {
       recruiterMap.set(name, {
         name, phoneInterviews: 0, prevPhoneInterviews: 0, internalInterviews: 0, prevInternalInterviews: 0,
-        clientInterviews: 0, prevClientInterviews: 0, placements: 0, prevPlacements: 0,
+        clientInterviews: 0, prevClientInterviews: 0, noShows: 0, prevNoShows: 0, placements: 0, prevPlacements: 0,
         fallThroughRate: 0, prevFallThroughRate: 0,
         rolling: { intToClient: 0, clientToContract: 0, monthsOfData: 0 },
         monthlyPlacements: [],
@@ -248,6 +265,7 @@ export async function fetchRecruiterKPIs(frame: TimeFrame = 'month'): Promise<Re
     if (f.Status === 'Phone Interview')                  stat.phoneInterviews++;
     else if (f.Status === 'Internal Interview')          stat.internalInterviews++;
     else if (f.Status === 'Client-Candidate Interview')  stat.clientInterviews++;
+    else if (isNoShow(f))                                stat.noShows++;
   }
 
   for (const f of uniqueStageRecords(pipelinePrev, true)) {
@@ -257,6 +275,7 @@ export async function fetchRecruiterKPIs(frame: TimeFrame = 'month'): Promise<Re
     if (f.Status === 'Phone Interview')                  stat.prevPhoneInterviews++;
     else if (f.Status === 'Internal Interview')          stat.prevInternalInterviews++;
     else if (f.Status === 'Client-Candidate Interview')  stat.prevClientInterviews++;
+    else if (isNoShow(f))                                stat.prevNoShows++;
   }
 
   for (const f of placements.filter(f => f.Status !== 'End' && isInPeriod(f['Created Date'], b.start, b.now))) {
@@ -316,6 +335,8 @@ export async function fetchRecruiterKPIs(frame: TimeFrame = 'month'): Promise<Re
     prevInternalInterviews: internalPrev,
     clientInterviews: clientThis,
     prevClientInterviews: clientPrev,
+    noShows: noShowsThis,
+    prevNoShows: noShowsPrev,
     placements: placementsThis,
     prevPlacements: placementsPrev,
     conversionRate:     clientThis > 0 ? Math.round(placementsThis / clientThis * 100) : 0,
