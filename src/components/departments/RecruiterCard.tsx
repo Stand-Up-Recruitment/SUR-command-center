@@ -542,9 +542,8 @@ export function RecruiterCard() {
 
       <PlacementsTrendChart
         months={data.months}
-        recruiters={displayRecruiters}
-        teamTarget={displayRecruiters.reduce((s, r) => s + monthlyPlacementTarget(r.name), 0)}
-        breakeven={breakevenWeekly * WEEKS_PER_MONTH * liveHeadcount}
+        recruiters={displayRecruiters.map(r => ({ ...r, target: monthlyPlacementTarget(r.name) }))}
+        breakevenPerRecruiter={breakevenWeekly * WEEKS_PER_MONTH}
       />
 
       {error && (
