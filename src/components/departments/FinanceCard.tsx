@@ -533,6 +533,10 @@ export function FinanceCard() {
   ];
 
   const currentIdx = combined.reduce((last, r, i) => (r.isForecast ? last : i), -1);
+  // The week containing today's (local) date — not simply the last actual row, which
+  // lags a week whenever the webhook data was built before this Monday.
+  const todayStr = new Date().toLocaleDateString('en-CA');
+  const thisWeekIdx = combined.findIndex(r => r.weekStart && r.weekEnd && r.weekStart <= todayStr && todayStr <= r.weekEnd);
 
   // Scheduled-but-unbilled Airtable invoices (Status = Scheduled, InvoiceID blank).
   // Each invoice is bucketed into exactly one week — the week its due date falls in —
@@ -590,7 +594,7 @@ export function FinanceCard() {
     // land any day now, so it's counted as expected for the current week rather
     // than a future one. Never substitute next week's forecast, which is a
     // different week's number and was showing up mislabeled as "this week".
-    const inflow = i === currentIdx ? (d.inflow ?? 0) + overdueReceivables : d.inflow;
+    const inflow = i === thisWeekIdx ? (d.inflow ?? 0) + overdueReceivables : d.inflow;
     const row: MonthCashRow = { weekLabel: d.weekLabel, isForecast: d.isForecast, inflow, outflow: d.outflow, scheduled: scheduledByWeek[i] };
     const key = monthKey(weekDate);
     if (key === monthKey(prevMonthDate)) monthBuckets.previous.rows.push(row);
