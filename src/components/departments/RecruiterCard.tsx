@@ -227,6 +227,10 @@ export function RecruiterCard() {
     vals.some(v => v !== undefined) ? vals.reduce<number>((s, v) => s + (v ?? 0), 0) : undefined;
   const botLeads = sumDefined(displayRecruiters.map(r => r.leadsContactedByBot));
   const prevBotLeads = voiceCallData?.prevTeamLeads;
+  // Leads contacted = bot calls dialled (Voice Call Log) + recruiters' own phone interviews
+  // (KPI's Recruiter Status = Phone Interview, unique candidates). Bot part counts as 0 until loaded.
+  const leadsContacted = (botLeads ?? 0) + data.phoneInterviews;
+  const prevLeadsContacted = (prevBotLeads ?? 0) + data.prevPhoneInterviews;
   // Booked = internal interviews that are over (KPI's Recruiter rows): showed + no-shows,
   // unique candidates, bot and manual bookings alike.
   const internalBooked = data.internalInterviews + data.noShows;
@@ -530,7 +534,7 @@ export function RecruiterCard() {
           <span style={SECTION_LABEL}>Recruitment Bot · Team</span>
         </div>
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-          {miniStat(botLeads ?? '—', 'Leads contacted', `Calls dialled by Luke · last ${periodLabel}: ${prevBotLeads ?? '—'}`, COLORS.textPrimary, 30)}
+          {miniStat(leadsContacted, 'Leads contacted', `Bot ${botLeads ?? '—'} · phone interviews ${data.phoneInterviews} · last ${periodLabel}: ${prevLeadsContacted}`, COLORS.textPrimary, 30)}
           {miniStat(internalBooked, 'Internal interviews booked', `Showed + no-shows · last ${periodLabel}: ${prevInternalBooked}`, COLORS.textPrimary, 30)}
           {miniStat(data.noShows, 'No-shows', `Internal interviews missed · last ${periodLabel}: ${data.prevNoShows}`, COLORS.textPrimary, 30)}
           {miniStat(showUpPct !== undefined ? `${showUpPct}%` : '—', 'Show-up rate', 'Showed ÷ booked',
