@@ -15,7 +15,7 @@ export default defineConfig(({ mode }) => {
           target: 'https://n8n.srv1303295.hstgr.cloud',
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/api\/voice-stats/, '/webhook/voice-call-stats'),
-          headers: N8N_DASH_TOKEN ? { Authorization: N8N_DASH_TOKEN } : {},
+          headers: N8N_DASH_TOKEN ? { 'x-dashboard-token': N8N_DASH_TOKEN } : {},
         },
       },
     },
