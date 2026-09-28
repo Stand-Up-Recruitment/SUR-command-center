@@ -227,15 +227,16 @@ export function RecruiterCard() {
     vals.some(v => v !== undefined) ? vals.reduce<number>((s, v) => s + (v ?? 0), 0) : undefined;
   const botLeads = sumDefined(displayRecruiters.map(r => r.leadsContactedByBot));
   const prevBotLeads = voiceCallData?.prevTeamLeads;
-  const botBooked = sumDefined(displayRecruiters.map(r => r.internalInterviewsBotBooked));
-  const prevBotBooked = sumDefined(displayRecruiters.map(r => r.prevInternalInterviewsBotBooked));
+  // Booked = internal interviews that are over (KPI's Recruiter rows): showed + no-shows,
+  // unique candidates, bot and manual bookings alike.
+  const internalBooked = data.internalInterviews + data.noShows;
+  const prevInternalBooked = data.prevInternalInterviews + data.prevNoShows;
   // Show-up rate = showed ÷ (showed + no-shows), per candidate, across all internal
   // interviews (bot and manual). An Internal Interview row is only logged once the candidate
   // leaves that JobAdder status, i.e. after the interview; a miss logs a No Show-up row instead.
   const showUpRate = (showed: number, noShows: number) =>
     showed + noShows > 0 ? pct(showed, showed + noShows) : undefined;
   const showUpPct = showUpRate(data.internalInterviews, data.noShows);
-  const botDataMismatch = botLeads !== undefined && botBooked !== undefined && botBooked > botLeads;
 
   const pill = (label: string, bg: string, color = '#0d0d0d') => (
     <span style={{
@@ -527,20 +528,14 @@ export function RecruiterCard() {
       <div style={{ ...CARD_STYLE, padding: 18, display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={SECTION_LABEL}>Recruitment Bot · Team</span>
-          {botDataMismatch && pill('Check data', COLORS.danger)}
         </div>
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
           {miniStat(botLeads ?? '—', 'Leads contacted', `Calls dialled by Luke · last ${periodLabel}: ${prevBotLeads ?? '—'}`, COLORS.textPrimary, 30)}
-          {miniStat(botBooked ?? '—', 'Internal interviews booked', `Last ${periodLabel}: ${prevBotBooked ?? '—'}`, COLORS.textPrimary, 30)}
+          {miniStat(internalBooked, 'Internal interviews booked', `Showed + no-shows · last ${periodLabel}: ${prevInternalBooked}`, COLORS.textPrimary, 30)}
           {miniStat(data.noShows, 'No-shows', `Internal interviews missed · last ${periodLabel}: ${data.prevNoShows}`, COLORS.textPrimary, 30)}
-          {miniStat(showUpPct !== undefined ? `${showUpPct}%` : '—', 'Show-up rate', 'Showed ÷ (showed + no-shows) · internal interviews',
+          {miniStat(showUpPct !== undefined ? `${showUpPct}%` : '—', 'Show-up rate', 'Showed ÷ booked',
             showUpPct !== undefined ? rag(showUpPct, 80) : COLORS.textPrimary, 30)}
         </div>
-        {botDataMismatch && (
-          <div style={{ background: COLORS.warningBg, color: COLORS.warning, borderRadius: 8, padding: '10px 14px', fontSize: 13 }}>
-            More bookings ({botBooked}) than leads contacted ({botLeads}): the counts don't reconcile. Check the Calendly bookings and the Voice Call Log cover the same calls.
-          </div>
-        )}
       </div>
 
       <PlacementsTrendChart
