@@ -324,7 +324,9 @@ export interface XeroFinanceData {
   // due date before today (NZ).
   ausReceivables?: {
     owedTotal: number; owedCount: number; overdueTotal: number; overdueCount: number;
-    openInvoices?: { invoiceNumber: string; contact: string; dueDate: string; amountDue: number }[];
+    // Australian invoices: every unpaid one, plus ones paid that were due in the
+    // last ~8 weeks. Amounts ex GST, NZD at Xero's invoice rate.
+    invoices?: { invoiceNumber: string; contact: string; dueDate: string; status: string; amountExGst: number; amountDueExGst: number }[];
   };
   // Trailing 12 months of AUS-only figures, oldest first, for the 12-month
   // trend chart and the top-row month comparisons. Each entry is that single

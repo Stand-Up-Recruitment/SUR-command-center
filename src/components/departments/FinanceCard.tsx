@@ -389,12 +389,16 @@ function PLSummarySection({ totalRevenue, totalGrossProfit, totalOpex, netProfit
   );
 }
 
-type MonthCashRow = { weekLabel: string; isForecast: boolean; inflow?: number; outflow?: number; scheduled: number };
+// expected = what was / is due to come in that week; actual = cash actually
+// received (undefined for forecast weeks); isPast = the week has finished.
+type MonthCashRow = { weekLabel: string; isForecast: boolean; isPast: boolean; expected: number; actual?: number; outflow?: number };
 
-function MonthCashCard({ title, monthLabel, rows, cashFlowHasDetail, hasScheduledInvoices }: {
+function MonthCashCard({ title, monthLabel, rows, cashFlowHasDetail }: {
   title: string; monthLabel: string; rows: MonthCashRow[];
-  cashFlowHasDetail: boolean; hasScheduledInvoices: boolean;
+  cashFlowHasDetail: boolean;
 }) {
+  const th = { fontSize: 10, fontWeight: 700, color: MUTED, padding: '4px 6px', borderBottom: `.5px solid ${BORDER}` } as const;
+  const td = { padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, textAlign: 'right' as const, whiteSpace: 'nowrap' as const };
   return (
     <Card>
       <div style={{ fontSize: 13, fontWeight: 500, color: TEXT }}>{title}</div>
@@ -405,16 +409,10 @@ function MonthCashCard({ title, monthLabel, rows, cashFlowHasDetail, hasSchedule
         <table style={{ width: '100%', fontSize: 11, borderCollapse: 'collapse' }}>
           <thead>
             <tr>
-              <th style={{ fontSize: 10, fontWeight: 700, color: MUTED, textAlign: 'left', padding: '4px 6px', borderBottom: `.5px solid ${BORDER}` }}>Week</th>
-              {cashFlowHasDetail && (
-                <th style={{ fontSize: 10, fontWeight: 700, color: MUTED, textAlign: 'right', padding: '4px 6px', borderBottom: `.5px solid ${BORDER}` }}>Inflow</th>
-              )}
-              {cashFlowHasDetail && (
-                <th style={{ fontSize: 10, fontWeight: 700, color: MUTED, textAlign: 'right', padding: '4px 6px', borderBottom: `.5px solid ${BORDER}` }}>Outflow</th>
-              )}
-              {hasScheduledInvoices && (
-                <th style={{ fontSize: 10, fontWeight: 700, color: MUTED, textAlign: 'right', padding: '4px 6px', borderBottom: `.5px solid ${BORDER}` }}>Scheduled*</th>
-              )}
+              <th style={{ ...th, textAlign: 'left' }}>Week</th>
+              <th style={{ ...th, textAlign: 'right' }}>Expected Receive</th>
+              {cashFlowHasDetail && <th style={{ ...th, textAlign: 'right' }}>Outflow</th>}
+              {cashFlowHasDetail && <th style={{ ...th, textAlign: 'right' }}>Actual Received</th>}
             </tr>
           </thead>
           <tbody>
@@ -424,19 +422,17 @@ function MonthCashCard({ title, monthLabel, rows, cashFlowHasDetail, hasSchedule
                   {d.weekLabel}
                   {d.isForecast && <span style={{ color: 'rgba(163,163,163,0.5)', marginLeft: 4 }}>(est.)</span>}
                 </td>
+                <td style={{ ...td, color: d.expected > 0 ? AUS : MUTED }}>
+                  {d.expected > 0 ? fmtNZD(d.expected) : '—'}
+                </td>
                 {cashFlowHasDetail && (
-                  <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, textAlign: 'right', color: NZ }}>
-                    {fmtNZD(d.inflow ?? 0)}
-                  </td>
-                )}
-                {cashFlowHasDetail && (
-                  <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, textAlign: 'right', color: RD, whiteSpace: 'nowrap' }}>
+                  <td style={{ ...td, color: RD }}>
                     {`−${fmtNZD(d.outflow ?? 0)}`}
                   </td>
                 )}
-                {hasScheduledInvoices && (
-                  <td style={{ padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, textAlign: 'right', color: d.scheduled > 0 ? AUS : MUTED }}>
-                    {d.scheduled > 0 ? `+${fmtNZD(d.scheduled)}` : '—'}
+                {cashFlowHasDetail && (
+                  <td style={{ ...td, color: d.actual != null ? NZ : MUTED }}>
+                    {d.actual != null ? fmtNZD(d.actual) : '—'}
                   </td>
                 )}
               </tr>
@@ -445,7 +441,9 @@ function MonthCashCard({ title, monthLabel, rows, cashFlowHasDetail, hasSchedule
         </table>
       )}
       {rows.length > 0 && (() => {
-        const netCashFlow = rows.reduce((sum, r) => sum + (r.inflow ?? 0) - (r.outflow ?? 0) + r.scheduled, 0);
+        // Finished weeks count what actually came in; the current and future
+        // weeks count what's expected, so the month total is a best estimate.
+        const netCashFlow = rows.reduce((sum, r) => sum + (r.isPast ? (r.actual ?? 0) : r.expected) - (r.outflow ?? 0), 0);
         return (
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, paddingTop: 8, borderTop: `.5px solid ${BORDER}` }}>
             <span style={{ fontSize: 11, fontWeight: 700, color: MUTED }}>Net cash flow</span>
@@ -460,7 +458,7 @@ function MonthCashCard({ title, monthLabel, rows, cashFlowHasDetail, hasSchedule
 }
 
 function CashPositionSection({
-  cashKpis, bankAccounts, monthlyTrend, ausReceivables, cashFlowHasDetail, hasScheduledInvoices,
+  cashKpis, bankAccounts, monthlyTrend, ausReceivables, cashFlowHasDetail,
   monthBuckets, hasCombined,
 }: {
   cashKpis: { closingDate: string };
@@ -468,7 +466,6 @@ function CashPositionSection({
   monthlyTrend: XeroFinanceData['monthlyTrend'];
   ausReceivables: XeroFinanceData['ausReceivables'];
   cashFlowHasDetail: boolean;
-  hasScheduledInvoices: boolean;
   monthBuckets: { previous: { label: string; rows: MonthCashRow[] }; current: { label: string; rows: MonthCashRow[] }; next: { label: string; rows: MonthCashRow[] } };
   hasCombined: boolean;
 }) {
@@ -522,13 +519,11 @@ function CashPositionSection({
       {hasCombined && (
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 10 }}>
-            <MonthCashCard title="Previous month" monthLabel={monthBuckets.previous.label} rows={monthBuckets.previous.rows} cashFlowHasDetail={cashFlowHasDetail} hasScheduledInvoices={hasScheduledInvoices} />
-            <MonthCashCard title="Current month" monthLabel={monthBuckets.current.label} rows={monthBuckets.current.rows} cashFlowHasDetail={cashFlowHasDetail} hasScheduledInvoices={hasScheduledInvoices} />
-            <MonthCashCard title="Next month" monthLabel={monthBuckets.next.label} rows={monthBuckets.next.rows} cashFlowHasDetail={cashFlowHasDetail} hasScheduledInvoices={hasScheduledInvoices} />
+            <MonthCashCard title="Previous month" monthLabel={monthBuckets.previous.label} rows={monthBuckets.previous.rows} cashFlowHasDetail={cashFlowHasDetail} />
+            <MonthCashCard title="Current month" monthLabel={monthBuckets.current.label} rows={monthBuckets.current.rows} cashFlowHasDetail={cashFlowHasDetail} />
+            <MonthCashCard title="Next month" monthLabel={monthBuckets.next.label} rows={monthBuckets.next.rows} cashFlowHasDetail={cashFlowHasDetail} />
           </div>
-          {hasScheduledInvoices && (
-            <NoteBox>*Scheduled invoices raised in Airtable but not yet issued in Xero (Status = Scheduled, no InvoiceID), bucketed by Due Date.</NoteBox>
-          )}
+          <NoteBox>Expected Receive = Australian Xero invoices due that week plus Airtable scheduled instalments (not yet invoiced). This week also includes overdue invoices. Actual Received = Australian cash received (Xero, ex GST).</NoteBox>
         </>
       )}
     </>
@@ -570,14 +565,6 @@ export function FinanceCard() {
   // lags a week whenever the webhook data was built before this Monday.
   const todayStr = new Date().toLocaleDateString('en-CA');
   const thisWeekIdx = combined.findIndex(r => r.weekStart && r.weekEnd && r.weekStart <= todayStr && todayStr <= r.weekEnd);
-  // Australian Xero invoices already raised and unpaid, falling due between today
-  // and the end of this week (earlier ones are already in the overdue total).
-  const thisWeekEnd = thisWeekIdx >= 0 ? combined[thisWeekIdx].weekEnd : undefined;
-  const ausDueThisWeek = thisWeekEnd
-    ? (data.ausReceivables?.openInvoices ?? [])
-        .filter(inv => inv.dueDate >= todayStr && inv.dueDate <= thisWeekEnd)
-        .reduce((sum, inv) => sum + inv.amountDue, 0)
-    : 0;
 
   // Scheduled-but-unbilled Airtable invoices (Status = Scheduled, InvoiceID blank).
   // Each invoice is bucketed into exactly one week — the week its due date falls in —
@@ -587,15 +574,15 @@ export function FinanceCard() {
   // and summed separately instead, since they aren't guaranteed cash for any given week.
   const closing = new Date(cashKpis.closingDate).getTime();
   const todayMs = new Date().getTime();
-  // Current-week expected inflow: overdue Australian Xero invoices (already NZD),
-  // plus Airtable-scheduled-but-not-yet-invoiced overdue amounts added below.
-  let overdueReceivables = data.ausReceivables?.overdueTotal ?? 0;
+  // Airtable-scheduled-but-not-yet-invoiced amounts already past due; added to
+  // the current week's Expected Receive below.
+  let scheduledOverdue = 0;
   const scheduledByWeek = combined.map(() => 0);
   (scheduledInvoices ?? []).forEach(s => {
     const due = new Date(s.dueDate).getTime();
     const amountNZD = s.amount * AUD_TO_NZD_APPROX;
     if (due < todayMs) {
-      overdueReceivables += amountNZD;
+      scheduledOverdue += amountNZD;
       return;
     }
     for (let i = 0; i < combined.length; i++) {
@@ -611,7 +598,23 @@ export function FinanceCard() {
   });
 
   const cashFlowHasDetail = actualWeeks.some(d => d.inflow != null || d.outflow != null);
-  const hasScheduledInvoices = scheduledByWeek.some(v => v > 0);
+
+  // Expected Receive per week from Australian Xero invoices (ex GST, NZD):
+  //   past week    → every invoice that was due that week (paid or not)
+  //   current week → same, plus unpaid invoices that went overdue before it
+  //   future week  → invoices still unpaid that fall due that week
+  const ausInvoices = data.ausReceivables?.invoices ?? [];
+  const expectedFromInvoices = (weekStart: string | undefined, weekEnd: string | undefined, i: number) => {
+    if (!weekStart || !weekEnd) return 0;
+    const dueInWeek = ausInvoices.filter(inv => inv.dueDate >= weekStart && inv.dueDate <= weekEnd);
+    if (i === thisWeekIdx) {
+      const overdue = ausInvoices.filter(inv => inv.amountDueExGst > 0 && inv.dueDate < weekStart);
+      return dueInWeek.reduce((sum, inv) => sum + inv.amountExGst, 0)
+        + overdue.reduce((sum, inv) => sum + inv.amountDueExGst, 0);
+    }
+    if (weekEnd < todayStr) return dueInWeek.reduce((sum, inv) => sum + inv.amountExGst, 0);
+    return dueInWeek.reduce((sum, inv) => sum + inv.amountDueExGst, 0);
+  };
 
   // Bucket each week into previous/current/next calendar month, anchored on today's real date
   // so "current month" always matches the calendar rather than the (often lagging) Xero closing date.
@@ -630,13 +633,18 @@ export function FinanceCard() {
   };
   combined.forEach((d, i) => {
     const weekDate = d.weekStart ? new Date(d.weekStart) : new Date(closing + (i - currentIdx) * 7 * 86_400_000);
-    // Current week's inflow = its own real actuals-so-far (partial, since the week
-    // isn't over) plus overdue receivables — money that's already due and could
-    // land any day now — plus Australian invoices raised but not yet due that fall
-    // due by the end of this week. Never substitute next week's forecast, which is
-    // a different week's number and was showing up mislabeled as "this week".
-    const inflow = i === thisWeekIdx ? (d.inflow ?? 0) + overdueReceivables + ausDueThisWeek : d.inflow;
-    const row: MonthCashRow = { weekLabel: d.weekLabel, isForecast: d.isForecast, inflow, outflow: d.outflow, scheduled: scheduledByWeek[i] };
+    const expected = expectedFromInvoices(d.weekStart, d.weekEnd, i)
+      + scheduledByWeek[i]
+      + (i === thisWeekIdx ? scheduledOverdue : 0);
+    // Actual Received = the week's real cash-basis AU inflow (so far, for the
+    // current week); forecast weeks haven't happened yet.
+    const isPast = !d.isForecast && i !== thisWeekIdx;
+    const row: MonthCashRow = {
+      weekLabel: d.weekLabel, isForecast: d.isForecast, isPast,
+      expected: Math.round(expected),
+      actual: d.isForecast ? undefined : d.inflow,
+      outflow: d.outflow,
+    };
     const key = monthKey(weekDate);
     if (key === monthKey(prevMonthDate)) monthBuckets.previous.rows.push(row);
     else if (key === monthKey(today)) monthBuckets.current.rows.push(row);
@@ -653,7 +661,6 @@ export function FinanceCard() {
         monthlyTrend={data.monthlyTrend}
         ausReceivables={data.ausReceivables}
         cashFlowHasDetail={cashFlowHasDetail}
-        hasScheduledInvoices={hasScheduledInvoices}
         monthBuckets={monthBuckets}
         hasCombined={combined.length > 0}
       />
