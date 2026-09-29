@@ -322,7 +322,10 @@ export interface XeroFinanceData {
   // Unpaid Xero invoices to Australian clients (lines coded to Sales -
   // International / Sales - Relocation Fees), NZD at Xero's rate. Overdue =
   // due date before today (NZ).
-  ausReceivables?: { owedTotal: number; owedCount: number; overdueTotal: number; overdueCount: number };
+  ausReceivables?: {
+    owedTotal: number; owedCount: number; overdueTotal: number; overdueCount: number;
+    openInvoices?: { invoiceNumber: string; contact: string; dueDate: string; amountDue: number }[];
+  };
   // Trailing 12 months of AUS-only figures, oldest first, for the 12-month
   // trend chart and the top-row month comparisons. Each entry is that single
   // month's own total, not a running total. The last entry (isCurrentMonth) is

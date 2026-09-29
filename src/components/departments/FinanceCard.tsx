@@ -570,6 +570,14 @@ export function FinanceCard() {
   // lags a week whenever the webhook data was built before this Monday.
   const todayStr = new Date().toLocaleDateString('en-CA');
   const thisWeekIdx = combined.findIndex(r => r.weekStart && r.weekEnd && r.weekStart <= todayStr && todayStr <= r.weekEnd);
+  // Australian Xero invoices already raised and unpaid, falling due between today
+  // and the end of this week (earlier ones are already in the overdue total).
+  const thisWeekEnd = thisWeekIdx >= 0 ? combined[thisWeekIdx].weekEnd : undefined;
+  const ausDueThisWeek = thisWeekEnd
+    ? (data.ausReceivables?.openInvoices ?? [])
+        .filter(inv => inv.dueDate >= todayStr && inv.dueDate <= thisWeekEnd)
+        .reduce((sum, inv) => sum + inv.amountDue, 0)
+    : 0;
 
   // Scheduled-but-unbilled Airtable invoices (Status = Scheduled, InvoiceID blank).
   // Each invoice is bucketed into exactly one week — the week its due date falls in —
@@ -624,10 +632,10 @@ export function FinanceCard() {
     const weekDate = d.weekStart ? new Date(d.weekStart) : new Date(closing + (i - currentIdx) * 7 * 86_400_000);
     // Current week's inflow = its own real actuals-so-far (partial, since the week
     // isn't over) plus overdue receivables — money that's already due and could
-    // land any day now, so it's counted as expected for the current week rather
-    // than a future one. Never substitute next week's forecast, which is a
-    // different week's number and was showing up mislabeled as "this week".
-    const inflow = i === thisWeekIdx ? (d.inflow ?? 0) + overdueReceivables : d.inflow;
+    // land any day now — plus Australian invoices raised but not yet due that fall
+    // due by the end of this week. Never substitute next week's forecast, which is
+    // a different week's number and was showing up mislabeled as "this week".
+    const inflow = i === thisWeekIdx ? (d.inflow ?? 0) + overdueReceivables + ausDueThisWeek : d.inflow;
     const row: MonthCashRow = { weekLabel: d.weekLabel, isForecast: d.isForecast, inflow, outflow: d.outflow, scheduled: scheduledByWeek[i] };
     const key = monthKey(weekDate);
     if (key === monthKey(prevMonthDate)) monthBuckets.previous.rows.push(row);
