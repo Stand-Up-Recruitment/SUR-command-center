@@ -381,6 +381,12 @@ export function RecruiterCard() {
           `${jobsFresh} fresh · ${jobsAgeing} ageing`, 'Clear or re-brief')}
       </div>
 
+      <PlacementsTrendChart
+        months={data.months}
+        recruiters={displayRecruiters.map(r => ({ ...r, target: monthlyPlacementTarget(r.name) }))}
+        breakevenPerRecruiter={breakevenWeekly * WEEKS_PER_MONTH}
+      />
+
       {/* Fall-through + candidate stock */}
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
         {strip('Fall-through', `Contracts that didn't stick · this ${periodLabel}`,
@@ -541,12 +547,6 @@ export function RecruiterCard() {
             showUpPct !== undefined ? rag(showUpPct, 80) : COLORS.textPrimary, 30)}
         </div>
       </div>
-
-      <PlacementsTrendChart
-        months={data.months}
-        recruiters={displayRecruiters.map(r => ({ ...r, target: monthlyPlacementTarget(r.name) }))}
-        breakevenPerRecruiter={breakevenWeekly * WEEKS_PER_MONTH}
-      />
 
       {error && (
         <p style={{ color: COLORS.warning, fontSize: 12, margin: 0 }}>⚠ Connection error — {error?.message}</p>
