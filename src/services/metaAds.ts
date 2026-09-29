@@ -150,10 +150,9 @@ function prevDateParam(frame: LTGPFrame): string | null {
 async function fetchAndGroupCampaigns(dateParam: string): Promise<{
   candidateSpend: number;
   clientSpend: number;
-  isEstimated: boolean;
 }> {
   const token = import.meta.env.VITE_META_TOKEN as string;
-  if (!token) return { candidateSpend: 0, clientSpend: 0, isEstimated: true };
+  if (!token) return { candidateSpend: 0, clientSpend: 0 };
 
   const campaigns: Array<{ campaign_name: string; spend: string }> = [];
   let nextUrl: string | null =
@@ -166,36 +165,24 @@ async function fetchAndGroupCampaigns(dateParam: string): Promise<{
     nextUrl = res.paging?.next ?? null;
   }
 
+  // Calculation Rules 3.1 / 4.1: only campaigns with "Candidates" / "Clients"
+  // in the name count; spend on any other campaign is left out entirely.
   let candidateSpend = 0;
   let clientSpend = 0;
-  let unmatchedSpend = 0;
-  let anyMatched = false;
 
   for (const c of campaigns) {
     const name = (c.campaign_name ?? '').toLowerCase();
     const spend = parseFloat(c.spend ?? '0');
-    if (name.includes('candidate')) { candidateSpend += spend; anyMatched = true; }
-    else if (name.includes('client')) { clientSpend += spend; anyMatched = true; }
-    else { unmatchedSpend += spend; }
+    if (name.includes('candidate')) candidateSpend += spend;
+    else if (name.includes('client')) clientSpend += spend;
   }
 
-  if (!anyMatched) {
-    return { candidateSpend: unmatchedSpend * 0.6, clientSpend: unmatchedSpend * 0.4, isEstimated: true };
-  }
-
-  if (unmatchedSpend > 0) {
-    candidateSpend += unmatchedSpend * 0.6;
-    clientSpend += unmatchedSpend * 0.4;
-    return { candidateSpend, clientSpend, isEstimated: true };
-  }
-
-  return { candidateSpend, clientSpend, isEstimated: false };
+  return { candidateSpend, clientSpend };
 }
 
 export async function fetchMetaSpendByFrame(frame: LTGPFrame): Promise<{
   candidateSpend: number;
   clientSpend: number;
-  isEstimated: boolean;
 }> {
   return fetchAndGroupCampaigns(currentDateParam(frame));
 }
@@ -204,7 +191,6 @@ export async function fetchMetaSpendByFrame(frame: LTGPFrame): Promise<{
 export async function fetchMetaSpendPrevPeriod(frame: LTGPFrame): Promise<{
   candidateSpend: number;
   clientSpend: number;
-  isEstimated: boolean;
 } | null> {
   const dateParam = prevDateParam(frame);
   if (!dateParam) return null;

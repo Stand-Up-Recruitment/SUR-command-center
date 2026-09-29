@@ -312,17 +312,26 @@ export interface XeroFinanceData {
   varianceCommentary?: string | null;
   recommendation?: string | null;
   audNzdRate?: number;
-  // Job Board Advertising (Xero Opex account), AUS share, trailing 90 days — for the
+  // Job Board Advertising (Xero Opex account), 100% AUS, trailing 90 days — for the
   // CAC formulas, since advertising/ausAdvertising above are FY-to-date (wrong period).
   jobBoardAdvertising90d?: number;
   prevJobBoardAdvertising90d?: number;
   // Unpaid ACCREC invoices already raised in Xero, past their due date (NZD).
   // Distinct from the frontend's own Airtable-scheduled overdue total.
   overdueXeroInvoices?: number;
-  // Trailing 12 months of AUS-only Revenue/Net Profit, oldest first, for the
-  // 12-month trend chart. Each entry is that single month's own total, not a
-  // running total. The last entry (isCurrentMonth) is a partial month-to-date.
-  monthlyTrend?: { month: string; revenue: number; netProfit: number; isCurrentMonth?: boolean }[];
+  // Unpaid Xero invoices to Australian clients (lines coded to Sales -
+  // International / Sales - Relocation Fees), NZD at Xero's rate. Overdue =
+  // due date before today (NZ).
+  ausReceivables?: { owedTotal: number; owedCount: number; overdueTotal: number; overdueCount: number };
+  // Trailing 12 months of AUS-only figures, oldest first, for the 12-month
+  // trend chart and the top-row month comparisons. Each entry is that single
+  // month's own total, not a running total. The last entry (isCurrentMonth) is
+  // a partial month-to-date (1st to today, NZ).
+  monthlyTrend?: { month: string; revenue: number; grossProfit?: number; opex?: number; netProfit: number; isCurrentMonth?: boolean }[];
+  // Last month from the 1st to the same day number as today (capped at month end).
+  lastMonthSamePoint?: { revenue: number; grossProfit: number; opex: number; netProfit: number; periodStart: string; periodEnd: string } | null;
+  // Monthly average AUD→NZD rates keyed 'YYYY-MM', for converting AUD placement fees.
+  audNzdMonthlyRates?: Record<string, number>;
   nzWorkerStats?: NZWorkerStats;
   cashFlow: CashWeek[];
   cashOutlook?: CashWeek[];
@@ -343,7 +352,6 @@ export type LTGPFrame = '7d' | '30d' | '90d' | '12m' | 'all';
 export interface CacKPIs {
   clientCac: number;
   placementCac: number;
-  metaSplitIsEstimated: boolean;
   hasPrevPeriod: boolean;
   prevClientCac: number;
   prevPlacementCac: number;
@@ -364,9 +372,8 @@ export interface CacKPIs {
   cohortSize: number;
   placedClientCount: number;
 
-  // 30-day-vs-prior-30-day % change for the CAC card deltas (separate from the
-  // 90-day prev* fields above, which drive the headline-adjacent LTGP logic).
-  has30dPrevPeriod: boolean;
+  // Last-90-days vs prior-90-days % change for the CAC card deltas (null when
+  // the prior period's CAC is 0).
   clientCacDeltaPct: number | null;
   placementCacDeltaPct: number | null;
   qualifiedCandidateCacDeltaPct: number | null;

@@ -132,10 +132,10 @@ export function useMetaAusSpend(frame: LTGPFrame = '30d') {
 
 export const hasCacCredentials = hasAirtableKey && hasClientsBase;
 
-export function useCacKPIs(grossMarginPct?: number, jobBoardAdvertising90d?: number, prevJobBoardAdvertising90d?: number) {
+export function useCacKPIs(grossMarginPct?: number, jobBoardAdvertising90d?: number, prevJobBoardAdvertising90d?: number, audNzdMonthlyRates?: Record<string, number>) {
   return useQuery({
-    queryKey: ['cac', grossMarginPct ?? 0, jobBoardAdvertising90d ?? 0, prevJobBoardAdvertising90d ?? 0],
-    queryFn: () => fetchCacKPIs(grossMarginPct, jobBoardAdvertising90d, prevJobBoardAdvertising90d),
+    queryKey: ['cac', grossMarginPct ?? 0, jobBoardAdvertising90d ?? 0, prevJobBoardAdvertising90d ?? 0, audNzdMonthlyRates ?? {}],
+    queryFn: () => fetchCacKPIs(grossMarginPct, jobBoardAdvertising90d, prevJobBoardAdvertising90d, audNzdMonthlyRates),
     enabled: hasCacCredentials,
     placeholderData: keepPreviousData,
   });

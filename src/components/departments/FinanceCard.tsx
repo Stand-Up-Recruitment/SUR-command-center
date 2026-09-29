@@ -53,43 +53,60 @@ function KP({ label, value, sub, accent, valueColor }: {
   );
 }
 
-// KP card with an optional static sub-line and an optional delta sub-line (added this month)
-function KPDelta({ label, value, valueColor, accent, sub, delta, deltaPts, deltaPct, invert }: {
+// KP card with an optional static sub-line and an optional % delta sub-line
+function KPDelta({ label, value, valueColor, accent, sub, deltaPct, invert }: {
   label: string; value: string; valueColor?: string; accent?: string; sub?: string;
-  delta?: { value: number; label: string } | null;
-  deltaPts?: { value: number; label: string } | null;
   deltaPct?: { value: number; label: string } | null;
   invert?: boolean;
 }) {
-  const isGood = delta ? (invert ? delta.value <= 0 : delta.value >= 0)
-    : deltaPts ? (invert ? deltaPts.value <= 0 : deltaPts.value >= 0)
-    : deltaPct ? (invert ? deltaPct.value <= 0 : deltaPct.value >= 0)
-    : true;
-  const deltaColor = (delta || deltaPts || deltaPct) ? (isGood ? NZ : RD) : MUTED;
-  const deltaSign  = delta ? (delta.value >= 0 ? '↑ +' : '↓ ')
-    : deltaPts ? (deltaPts.value >= 0 ? '↑ +' : '↓ ')
-    : deltaPct ? (deltaPct.value >= 0 ? '↑ +' : '↓ ')
-    : '';
+  const isGood = deltaPct ? (invert ? deltaPct.value <= 0 : deltaPct.value >= 0) : true;
   return (
     <div style={{ background: BG, border: `.5px solid ${BORDER}`, borderRadius: 8, borderTop: accent ? `3px solid ${accent}` : undefined, padding: '.875rem 1rem' }}>
       <div style={{ fontSize: 11, color: MUTED, marginBottom: 4 }}>{label}</div>
       <div style={{ fontSize: 21, fontWeight: 500, color: valueColor ?? TEXT, lineHeight: 1.1 }}>{value}</div>
       {sub && <div style={{ fontSize: 11, color: MUTED, marginTop: 3 }}>{sub}</div>}
-      {deltaPts != null ? (
-        <div style={{ fontSize: 11, color: deltaColor, marginTop: 3 }}>
-          {deltaSign}{Math.abs(deltaPts.value).toFixed(1)} pts {deltaPts.label}
+      {deltaPct != null && (
+        <div style={{ fontSize: 11, color: isGood ? NZ : RD, marginTop: 3 }}>
+          {deltaPct.value >= 0 ? '↑ +' : '↓ '}{Math.abs(deltaPct.value).toFixed(1)}% {deltaPct.label}
         </div>
-      ) : deltaPct != null ? (
-        <div style={{ fontSize: 11, color: deltaColor, marginTop: 3 }}>
-          {deltaSign}{Math.abs(deltaPct.value).toFixed(1)}% {deltaPct.label}
-        </div>
-      ) : delta != null ? (
-        <div style={{ fontSize: 11, color: deltaColor, marginTop: 3 }}>
-          {deltaSign}{fmtNZD(Math.abs(delta.value))} {delta.label}
-        </div>
-      ) : (
-        <div style={{ fontSize: 11, color: MUTED, marginTop: 3 }}>added this month —</div>
       )}
+    </div>
+  );
+}
+
+type MonthMetric = 'revenue' | 'grossProfit' | 'opex' | 'netProfit';
+type MonthFigures = Partial<Record<MonthMetric, number>>;
+type MonthCompare = {
+  currentName: string; lastName: string;
+  current?: MonthFigures; samePoint?: MonthFigures | null; lastTotal?: MonthFigures;
+};
+
+// Top-row card: big FY-to-date number, then "[Month] so far" and a same-point
+// comparison with last month. ▲/▼ is green/red, reversed when `invert` (opex).
+function KPMonth({ label, value, valueColor, accent, metric, compare, invert }: {
+  label: string; value: string; valueColor?: string; accent?: string;
+  metric: MonthMetric; compare: MonthCompare; invert?: boolean;
+}) {
+  const cur = compare.current?.[metric];
+  const prev = compare.samePoint?.[metric];
+  const lastTotal = compare.lastTotal?.[metric];
+  // Divide by |prev| so ▲ always means "went up", even when last month's
+  // figure was negative (e.g. a net loss).
+  const pct = cur != null && prev ? ((cur - prev) / Math.abs(prev)) * 100 : null;
+  const pctColor = pct == null ? MUTED : (invert ? pct <= 0 : pct >= 0) ? NZ : RD;
+  return (
+    <div style={{ background: BG, border: `.5px solid ${BORDER}`, borderRadius: 8, borderTop: accent ? `3px solid ${accent}` : undefined, padding: '.875rem 1rem' }}>
+      <div style={{ fontSize: 11, color: MUTED, marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 21, fontWeight: 500, color: valueColor ?? TEXT, lineHeight: 1.1 }}>{value}</div>
+      <div style={{ fontSize: 11, color: MUTED, marginTop: 3 }}>
+        {compare.currentName} so far: {cur != null ? fmtNZD(cur) : '—'}
+      </div>
+      <div style={{ fontSize: 11, color: MUTED, marginTop: 3 }}>
+        <span style={{ color: pctColor }}>
+          {pct == null ? '—' : `${pct >= 0 ? '▲' : '▼'} ${Math.abs(pct).toFixed(0)}%`}
+        </span>
+        {` vs ${compare.lastName} at the same point · ${compare.lastName} total ${lastTotal != null ? fmtNZD(lastTotal) : '—'}`}
+      </div>
     </div>
   );
 }
@@ -138,7 +155,7 @@ function FinanceSkeleton() {
         <Skeleton height={240} />
       </div>
       <SH color={MUTED} label="Cash Position" />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 10, marginBottom: '.875rem' }}>{[0,1,2].map(kpCard)}</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 10, marginBottom: '.875rem' }}>{[0,1,2,3].map(kpCard)}</div>
       <SH color={AM} label="Variance Commentary" />
       <div style={{ background: BG2, border: `.5px solid ${BORDER}`, borderRadius: 12, padding: '1.25rem', marginBottom: '.875rem' }}>
         <Skeleton height={13} width={400} style={{ marginBottom: 8 }} />
@@ -260,15 +277,14 @@ function TwelveMonthTrendChart({ data }: { data: XeroFinanceData['monthlyTrend']
   );
 }
 
-function PLSummarySection({ totalRevenue, totalGrossProfit, totalOpex, totalCogs, netProfit, lm, cac, monthlyTrend }: {
-  totalRevenue: number; totalGrossProfit: number; totalOpex: number; totalCogs: number; netProfit: number;
-  lm: { revenue: number; grossProfit: number; netProfit: number; opex?: number } | undefined;
+function PLSummarySection({ totalRevenue, totalGrossProfit, totalOpex, netProfit, lastMonthSamePoint, cac, monthlyTrend }: {
+  totalRevenue: number; totalGrossProfit: number; totalOpex: number; netProfit: number;
+  lastMonthSamePoint: XeroFinanceData['lastMonthSamePoint'];
   cac: {
     clientCac: number; prevClientCac: number;
     qualifiedCandidateCac: number; prevQualifiedCandidateCac: number;
     placementCac: number; prevPlacementCac: number;
     hasPrevPeriod: boolean;
-    has30dPrevPeriod: boolean;
     clientCacDeltaPct: number | null;
     placementCacDeltaPct: number | null;
     qualifiedCandidateCacDeltaPct: number | null;
@@ -276,48 +292,60 @@ function PLSummarySection({ totalRevenue, totalGrossProfit, totalOpex, totalCogs
   } | undefined;
   monthlyTrend: XeroFinanceData['monthlyTrend'];
 }) {
-  const cogsPct = totalRevenue > 0 ? (totalCogs / totalRevenue) * 100 : 0;
   const grossMarginPct = totalRevenue > 0 ? (totalGrossProfit / totalRevenue) * 100 : 0;
   const netMarginPct = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
-  const prevGrossMarginPct = lm && lm.revenue > 0 ? (lm.grossProfit / lm.revenue) * 100 : undefined;
-  const grossMarginPtsDelta = prevGrossMarginPct != null ? grossMarginPct - prevGrossMarginPct : undefined;
+
+  // Current month = the trend's partial isCurrentMonth entry; last month's
+  // total = the entry before it; "same point" = last month 1st → same day.
+  const curIdx = (monthlyTrend ?? []).findIndex(m => m.isCurrentMonth);
+  const currentMonth = curIdx >= 0 ? monthlyTrend?.[curIdx] : undefined;
+  const lastMonth = curIdx > 0 ? monthlyTrend?.[curIdx - 1] : undefined;
+  const shortMonth = (label?: string) => label?.split(' ')[0] ?? '—';
+  const compare: MonthCompare = {
+    currentName: shortMonth(currentMonth?.month),
+    lastName: shortMonth(lastMonth?.month),
+    current: currentMonth,
+    samePoint: lastMonthSamePoint,
+    lastTotal: lastMonth,
+  };
 
   return (
     <>
       <SH color={TEXT} label="P&L Summary" sub="Australia only · revenue · gross profit · opex · net profit · client CAC · qualified candidate CAC · placement CAC · LTGP:CAC" />
 
       <G4>
-        <KPDelta
+        <KPMonth
           accent={NZ}
           label="Total revenue"
           value={fmtNZD(totalRevenue)}
           valueColor={NZ}
-          sub={`${cogsPct.toFixed(0)}% COGS`}
-          delta={lm ? { value: totalRevenue - lm.revenue, label: 'added this month' } : null}
+          metric="revenue"
+          compare={compare}
         />
-        <KPDelta
+        <KPMonth
           accent={NZ}
-          label="Gross profit"
+          label={`Gross profit · ${grossMarginPct.toFixed(1)}% margin`}
           value={fmtNZD(totalGrossProfit)}
           valueColor={totalGrossProfit >= 0 ? NZ : RD}
-          sub={`${grossMarginPct.toFixed(1)}% gross margin`}
-          deltaPts={grossMarginPtsDelta != null ? { value: grossMarginPtsDelta, label: 'vs last month' } : null}
+          metric="grossProfit"
+          compare={compare}
         />
-        <KPDelta
+        <KPMonth
           accent={AM}
           label="Total operating expenses"
           value={fmtNZD(totalOpex)}
           valueColor={AM}
+          metric="opex"
+          compare={compare}
           invert
-          delta={lm?.opex != null ? { value: totalOpex - lm.opex, label: 'added this month' } : null}
         />
-        <KPDelta
+        <KPMonth
           accent={PU}
-          label="Net profit (FY to date)"
+          label={`Net profit (FY to date) · ${netMarginPct.toFixed(0)}% net margin`}
           value={fmtNZD(netProfit)}
           valueColor={netProfit >= 0 ? NZ : RD}
-          sub={`${netMarginPct.toFixed(0)}% net margin`}
-          delta={lm ? { value: netProfit - lm.netProfit, label: 'added this month' } : null}
+          metric="netProfit"
+          compare={compare}
         />
       </G4>
 
@@ -330,7 +358,7 @@ function PLSummarySection({ totalRevenue, totalGrossProfit, totalOpex, totalCogs
           value={cac ? fmtNZD(cac.clientCac) : '—'}
           valueColor={RD}
           invert
-          deltaPct={cac?.has30dPrevPeriod ? { value: cac.clientCacDeltaPct ?? 0, label: 'vs last 30 days' } : null}
+          deltaPct={cac?.clientCacDeltaPct != null ? { value: cac.clientCacDeltaPct, label: 'vs prior 90 days' } : null}
         />
         <KPDelta
           accent={RD}
@@ -339,7 +367,7 @@ function PLSummarySection({ totalRevenue, totalGrossProfit, totalOpex, totalCogs
           valueColor={RD}
           invert
           sub="(Candidate Meta spend + Job Board Advertising) ÷ NZ Citizen + Trade/Occupation candidates"
-          deltaPct={cac?.has30dPrevPeriod ? { value: cac.qualifiedCandidateCacDeltaPct ?? 0, label: 'vs last 30 days' } : null}
+          deltaPct={cac?.qualifiedCandidateCacDeltaPct != null ? { value: cac.qualifiedCandidateCacDeltaPct, label: 'vs prior 90 days' } : null}
         />
         <KPDelta
           accent={RD}
@@ -347,13 +375,14 @@ function PLSummarySection({ totalRevenue, totalGrossProfit, totalOpex, totalCogs
           value={cac ? fmtNZD(cac.placementCac) : '—'}
           valueColor={RD}
           invert
-          deltaPct={cac?.has30dPrevPeriod ? { value: cac.placementCacDeltaPct ?? 0, label: 'vs last 30 days' } : null}
+          deltaPct={cac?.placementCacDeltaPct != null ? { value: cac.placementCacDeltaPct, label: 'vs prior 90 days' } : null}
         />
         <KP
           accent={PU}
           label="LTGP:CAC"
           value={cac ? `${cac.ltgpToCac.toFixed(1)}:1` : '—'}
           valueColor={PU}
+          sub={cac ? `LTGP ${fmtNZD(cac.ltgp)} · cost per placed client ${fmtNZD(cac.costPerPlacedClient)}` : undefined}
         />
       </G4>
     </>
@@ -431,18 +460,37 @@ function MonthCashCard({ title, monthLabel, rows, cashFlowHasDetail, hasSchedule
 }
 
 function CashPositionSection({
-  cashKpis, closingBalance, bankAccounts, cashFlowHasDetail, hasScheduledInvoices,
-  monthBuckets, hasCombined, overdueReceivables,
+  cashKpis, bankAccounts, monthlyTrend, ausReceivables, cashFlowHasDetail, hasScheduledInvoices,
+  monthBuckets, hasCombined,
 }: {
-  cashKpis: { closingDate: string; avgWeeklyOutflow: number };
-  closingBalance: number;
+  cashKpis: { closingDate: string };
   bankAccounts: Array<{ name: string; balance: number }> | undefined;
+  monthlyTrend: XeroFinanceData['monthlyTrend'];
+  ausReceivables: XeroFinanceData['ausReceivables'];
   cashFlowHasDetail: boolean;
   hasScheduledInvoices: boolean;
   monthBuckets: { previous: { label: string; rows: MonthCashRow[] }; current: { label: string; rows: MonthCashRow[] }; next: { label: string; rows: MonthCashRow[] } };
   hasCombined: boolean;
-  overdueReceivables: number;
 }) {
+  // Available cash = 00 - Business OPS + 50 - PROFIT only. GST/TAX belongs to
+  // IRD and EMP ENT / EMP00 hold staff entitlements, so they're left out.
+  const accounts = bankAccounts ?? [];
+  const availableCash = accounts
+    .filter(a => a.name.startsWith('00 -') || a.name.startsWith('50 -'))
+    .reduce((sum, a) => sum + a.balance, 0);
+  const totalInBank = accounts.reduce((sum, a) => sum + a.balance, 0);
+
+  // Cash cover = available cash ÷ average AU opex (same basis as the Operating
+  // Expenses card) over the last 3 full months. Actuals only, no forecast.
+  const fullMonthOpex = (monthlyTrend ?? [])
+    .filter(m => !m.isCurrentMonth && m.opex != null)
+    .slice(-3)
+    .map(m => m.opex as number);
+  const avgMonthlyOpex = fullMonthOpex.length === 3 ? fullMonthOpex.reduce((a, b) => a + b, 0) / 3 : null;
+  const cashCover = avgMonthlyOpex && avgMonthlyOpex > 0 ? availableCash / avgMonthlyOpex : null;
+
+  const overdueCount = ausReceivables?.overdueCount ?? 0;
+
   return (
     <>
       <SH color={MUTED} label="Cash Position"
@@ -450,37 +498,25 @@ function CashPositionSection({
           ? `Actuals · forecast · as at ${fmtDate(cashKpis.closingDate)}`
           : 'Actuals · forecast'} />
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 10, marginBottom: '.875rem' }}>
-        <KP accent={closingBalance >= 0 ? NZ : RD}
-            label="Current bank balance"
-            value={fmtNZD(closingBalance)}
-            sub={`Xero reconciled · ${fmtDate(cashKpis.closingDate)}`}
-            valueColor={closingBalance >= 0 ? NZ : RD} />
+      <G4>
+        <KP accent={availableCash >= 0 ? NZ : RD}
+            label="Available cash"
+            value={bankAccounts ? fmtNZD(availableCash) : '—'}
+            sub={bankAccounts ? `Total in bank ${fmtNZD(totalInBank)}` : undefined}
+            valueColor={availableCash >= 0 ? NZ : RD} />
+        <KP accent={AUS}
+            label="Cash cover"
+            value={cashCover != null ? `${cashCover.toFixed(1)} months` : '—'}
+            sub={`Average spend ${avgMonthlyOpex != null ? fmtNZD(avgMonthlyOpex) : '—'}/month · how long available cash lasts if nothing comes in`} />
+        <KP accent={AM}
+            label="Owed to us"
+            value={ausReceivables ? fmtNZD(ausReceivables.owedTotal) : '—'}
+            valueColor={AM} />
         <KP accent={RD}
-            label="Avg weekly outflow"
-            value={`−${fmtNZD(cashKpis.avgWeeklyOutflow)}`}
-            sub="Negative-flow weeks avg" valueColor={RD} />
-        <KP accent={RD}
-            label="Overdue receivables"
-            value={fmtNZD(overdueReceivables)}
-            sub="Unpaid, due date passed · not in forecast" valueColor={overdueReceivables > 0 ? RD : MUTED} />
-      </div>
-
-      {/* Bank accounts (Profit First) */}
-      {bankAccounts && bankAccounts.length > 0 ? (
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: '.875rem' }}>
-          {bankAccounts.map(acct => (
-            <div key={acct.name} style={{ background: BG, border: `.5px solid ${BORDER}`, borderRadius: 8, padding: '.625rem .875rem', flex: '1 1 auto', minWidth: 120 }}>
-              <div style={{ fontSize: 10, color: MUTED, marginBottom: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{acct.name}</div>
-              <div style={{ fontSize: 17, fontWeight: 500, color: acct.balance >= 0 ? TEXT : RD }}>{fmtNZD(acct.balance)}</div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div style={{ background: BG, border: `.5px solid ${BORDER}`, borderRadius: 8, padding: '.625rem 1rem', marginBottom: '.875rem', fontSize: 12, color: MUTED, fontStyle: 'italic' }}>
-          Bank account breakdown not yet available
-        </div>
-      )}
+            label="Overdue"
+            value={ausReceivables ? `${fmtNZD(ausReceivables.overdueTotal)} · ${overdueCount} invoice${overdueCount === 1 ? '' : 's'}` : '—'}
+            valueColor={ausReceivables && ausReceivables.overdueTotal > 0 ? RD : MUTED} />
+      </G4>
 
       {/* Previous / current / next month cash outlook, side by side */}
       {hasCombined && (
@@ -512,19 +548,16 @@ export function FinanceCard() {
   const totalRevenue     = data?.ausRevenue ?? 0;
   const totalGrossProfit = data?.ausGrossProfit ?? 0;
   const totalOpex        = data?.ausTotalCosts ?? 0;
-  const totalCogs        = data?.ausTotalCogs ?? 0;
   const netProfit         = data?.ausNetProfit ?? data?.ausGrossProfit ?? 0;
-  const lm = data?.plLastMonth;
 
   const grossMarginPct = totalRevenue > 0 ? (totalGrossProfit / totalRevenue) * 100 : undefined;
-  const { data: cac } = useCacKPIs(grossMarginPct, data?.jobBoardAdvertising90d, data?.prevJobBoardAdvertising90d);
+  const { data: cac } = useCacKPIs(grossMarginPct, data?.jobBoardAdvertising90d, data?.prevJobBoardAdvertising90d, data?.audNzdMonthlyRates);
 
   if (!data) return <FinanceSkeleton />;
 
   const cashKpis    = data.cashKpis ?? { openingBalance: 0, closingBalance: 0, closingBalanceActual: 0, avgWeeklyOutflow: 0, openingDate: data.asOf, closingDate: data.asOf };
   const cashFlow    = data.cashFlow ?? [];
   const cashOutlook = data.cashOutlook ?? [];
-  const closingBalance = cashKpis.closingBalanceActual ?? cashKpis.closingBalance;
   const actualWeeks = cashFlow;
   const forecastWeeks = cashOutlook;
   const combined = [
@@ -546,9 +579,9 @@ export function FinanceCard() {
   // and summed separately instead, since they aren't guaranteed cash for any given week.
   const closing = new Date(cashKpis.closingDate).getTime();
   const todayMs = new Date().getTime();
-  // Starts from unpaid invoices already raised in Xero (already NZD), then adds
-  // Airtable-scheduled-but-not-yet-invoiced overdue amounts below.
-  let overdueReceivables = data.overdueXeroInvoices ?? 0;
+  // Current-week expected inflow: overdue Australian Xero invoices (already NZD),
+  // plus Airtable-scheduled-but-not-yet-invoiced overdue amounts added below.
+  let overdueReceivables = data.ausReceivables?.overdueTotal ?? 0;
   const scheduledByWeek = combined.map(() => 0);
   (scheduledInvoices ?? []).forEach(s => {
     const due = new Date(s.dueDate).getTime();
@@ -604,17 +637,17 @@ export function FinanceCard() {
 
   return (
     <div style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
-      <PLSummarySection totalRevenue={totalRevenue} totalGrossProfit={totalGrossProfit} totalOpex={totalOpex} totalCogs={totalCogs} netProfit={netProfit} lm={lm} cac={cac} monthlyTrend={data.monthlyTrend} />
+      <PLSummarySection totalRevenue={totalRevenue} totalGrossProfit={totalGrossProfit} totalOpex={totalOpex} netProfit={netProfit} lastMonthSamePoint={data.lastMonthSamePoint} cac={cac} monthlyTrend={data.monthlyTrend} />
 
       <CashPositionSection
         cashKpis={cashKpis}
-        closingBalance={closingBalance}
         bankAccounts={data.bankAccounts}
+        monthlyTrend={data.monthlyTrend}
+        ausReceivables={data.ausReceivables}
         cashFlowHasDetail={cashFlowHasDetail}
         hasScheduledInvoices={hasScheduledInvoices}
         monthBuckets={monthBuckets}
         hasCombined={combined.length > 0}
-        overdueReceivables={overdueReceivables}
       />
 
       {error && (
