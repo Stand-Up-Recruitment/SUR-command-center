@@ -1,8 +1,8 @@
 // Vercel function: editable Marketing settings (monthly ad budget, posting target).
 // GET  /api/marketing-settings
 // PUT  /api/marketing-settings  { monthlyBudget, postsPerWeek }  — header x-admin-password
-import { supabase } from './_lib/supabase';
-import type { MarketingSettings } from '../src/types';
+import { supabase } from './_lib/supabase.js';
+import type { MarketingSettings } from '../src/types/index.js';
 
 const DEFAULTS: MarketingSettings = { monthlyBudget: null, postsPerWeek: 7 };
 

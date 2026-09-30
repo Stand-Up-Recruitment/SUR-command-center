@@ -2,9 +2,9 @@
 // NZ time (Meta only exposes the current total). Runs once a day at 10:59 UTC =
 // 23:59 NZDT / 22:59 NZST; on the Hobby plan Vercel may fire it anywhere in that hour,
 // so any run from 22:00 NZ on the last day counts.
-import { nzDate, addDays, currentMonthKey } from '../../src/lib/nzTime';
-import { pageConfigured, instagramUserId, instagramFollowers, facebookFollowers } from '../_lib/meta';
-import { supabase, type SnapshotChannel } from '../_lib/supabase';
+import { nzDate, addDays, currentMonthKey } from '../../src/lib/nzTime.js';
+import { pageConfigured, instagramUserId, instagramFollowers, facebookFollowers } from '../_lib/meta.js';
+import { supabase, type SnapshotChannel } from '../_lib/supabase.js';
 
 export async function GET(request: Request): Promise<Response> {
   if (request.headers.get('authorization') !== `Bearer ${process.env.CRON_SECRET}`) {

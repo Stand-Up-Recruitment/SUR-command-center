@@ -1,12 +1,12 @@
 // Vercel function: organic content and audience for one month (NZ time), per post.
 // GET /api/organic?month=YYYY-MM
-import { monthWindow, nzDate, last12Months, toMs, currentMonthKey, type DayRange } from '../src/lib/nzTime';
+import { monthWindow, nzDate, last12Months, toMs, currentMonthKey, type DayRange } from '../src/lib/nzTime.js';
 import {
   pageConfigured, instagramUserId, instagramPosts, instagramFollowers,
   facebookPosts, facebookFollowers, type RawPost,
-} from './_lib/meta';
-import { followerSnapshots, type SnapshotChannel } from './_lib/supabase';
-import type { OrganicChannel, OrganicMonth } from '../src/types';
+} from './_lib/meta.js';
+import { followerSnapshots, type SnapshotChannel } from './_lib/supabase.js';
+import type { OrganicChannel, OrganicMonth } from '../src/types/index.js';
 
 const inRange = (p: RawPost, r: DayRange) => {
   const d = nzDate(p.timestamp);
