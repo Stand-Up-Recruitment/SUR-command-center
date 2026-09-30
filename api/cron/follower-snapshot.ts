@@ -1,6 +1,7 @@
-// Vercel cron: save each channel's follower total at 11:59pm NZ time on the last day
-// of the month (Meta only exposes the current total). Scheduled at 10:59 and 11:59 UTC
-// so one of the two lands on 23:59 NZ in both NZST (+12) and NZDT (+13).
+// Vercel cron: save each channel's follower total late on the last day of the month,
+// NZ time (Meta only exposes the current total). Runs once a day at 10:59 UTC =
+// 23:59 NZDT / 22:59 NZST; on the Hobby plan Vercel may fire it anywhere in that hour,
+// so any run from 22:00 NZ on the last day counts.
 import { nzDate, addDays, currentMonthKey } from '../../src/lib/nzTime';
 import { pageConfigured, instagramUserId, instagramFollowers, facebookFollowers } from '../_lib/meta';
 import { supabase, type SnapshotChannel } from '../_lib/supabase';
@@ -14,7 +15,7 @@ export async function GET(request: Request): Promise<Response> {
   const nzHour = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'Pacific/Auckland', hour: '2-digit', hourCycle: 'h23' }).format(now));
   const today = nzDate(now);
   const isLastDay = addDays(today, 1).slice(8) === '01';
-  if (!force && !(isLastDay && nzHour === 23)) return Response.json({ skipped: true, today, nzHour });
+  if (!force && !(isLastDay && nzHour >= 22)) return Response.json({ skipped: true, today, nzHour });
 
   const db = supabase();
   if (!db || !pageConfigured()) return Response.json({ error: 'Supabase or Meta Page token not configured' }, { status: 502 });
