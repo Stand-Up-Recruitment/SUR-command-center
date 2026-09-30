@@ -355,18 +355,20 @@ export interface XeroFinanceData {
 export type LTGPFrame = '7d' | '30d' | '90d' | '12m' | 'all';
 
 export interface CacKPIs {
-  clientCac: number;
+  // CAC per Signed Client = (client Meta spend + sales time) ÷ ToBs signed.
+  cacPerSignedClient: number;
   placementCac: number;
   hasPrevPeriod: boolean;
-  prevClientCac: number;
+  prevCacPerSignedClient: number;
   prevPlacementCac: number;
 
+  // CAC per Qualified Candidate = candidate Meta spend ÷ qualified candidates.
   // Qualified candidate = Airtable candidate record tagged NZ Citizen with a
   // Trade/Occupation assigned (the existing isCandidateQualified definition),
   // used in place of JobAdder's "qualified"+"citizen" tags (no JobAdder tool
   // can filter candidates by tag in this environment).
-  qualifiedCandidateCac: number;
-  prevQualifiedCandidateCac: number;
+  cacPerQualifiedCandidate: number;
+  prevCacPerQualifiedCandidate: number;
 
   // Unit economics: LTGP and LTGP:CAC
   ltgp: number;
@@ -379,9 +381,76 @@ export interface CacKPIs {
 
   // Last-90-days vs prior-90-days % change for the CAC card deltas (null when
   // the prior period's CAC is 0).
-  clientCacDeltaPct: number | null;
+  cacPerSignedClientDeltaPct: number | null;
   placementCacDeltaPct: number | null;
-  qualifiedCandidateCacDeltaPct: number | null;
+  cacPerQualifiedCandidateDeltaPct: number | null;
+}
+
+// ─── Marketing tab (month view) ───────────────────────────────────────────────
+export interface MetaPaidTotals {
+  totalSpend: number;
+  impressions: number;
+  client: { spend: number; linkClicks: number; leads: number };
+  candidate: { spend: number; linkClicks: number; applications: number };
+}
+
+/** The three acquisition CACs over a trailing-90-day window. */
+export interface AcquisitionCacs {
+  cacPerSignedClient: number;
+  cacPerBookedCall: number;
+  cacPerQualifiedCandidate: number;
+}
+
+export interface HandoffTotals {
+  callsBooked: number;
+  qualifiedCandidates: number;
+  totalCandidates: number;
+  qualRate: number;           // qualified ÷ total candidate leads, as a %
+  costPerBookedCall: number;  // client Meta spend in the window ÷ calls booked
+}
+
+export interface MarketingMonth {
+  paid: { cur: MetaPaidTotals; prev: MetaPaidTotals };
+  cac: { cur: AcquisitionCacs; prev: AcquisitionCacs };
+  handoff: { cur: HandoffTotals; prev: HandoffTotals };
+  spendSeries: { key: string; label: string; client: number; candidate: number }[];
+  handoffSeries: { key: string; label: string; callsBooked: number; qualifiedCandidates: number }[];
+}
+
+export interface OrganicChannel {
+  connected: boolean;
+  posts: number | null;
+  prevPosts: number | null;
+  views: number | null;       // null = not available (e.g. waiting on Page insights)
+  prevViews: number | null;
+  engagement: number | null;
+  prevEngagement: number | null;
+  followers: number | null;
+  prevMonthFollowers: number | null; // month-end snapshot of the previous month
+}
+
+export interface OrganicPost {
+  id: string;
+  channel: 'Instagram' | 'Facebook' | 'Les Instagram';
+  caption: string;
+  date: string;               // ISO timestamp
+  views: number | null;
+  engagement: number;
+  permalink?: string;
+}
+
+export interface OrganicMonth {
+  instagram: OrganicChannel;
+  facebook: OrganicChannel;
+  les: OrganicChannel;
+  topPosts: OrganicPost[];
+  series: { key: string; views: number; followers: number | null }[];
+  error?: string;
+}
+
+export interface MarketingSettings {
+  monthlyBudget: number | null;
+  postsPerWeek: number;
 }
 
 // ─── Shared ───────────────────────────────────────────────────────────────────

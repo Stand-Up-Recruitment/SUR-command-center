@@ -13,8 +13,15 @@ import type {
   ScheduledInvoice,
   RetentionKPIs,
   CacKPIs,
+  AcquisitionCacs,
+  HandoffTotals,
+  MarketingMonth,
 } from '../types';
-import { fetchMetaSpend, fetchMetaSpendByFrame, fetchMetaSpendPrevPeriod, fetchMetaCprByGroup } from './metaAds';
+import {
+  fetchMetaSpend, fetchMetaSpendByFrame, fetchMetaSpendPrevPeriod, fetchMetaCprByGroup,
+  fetchMetaPaidRange, fetchMetaSpendRange, fetchMetaSpendMonthly,
+} from './metaAds';
+import { toMs, trailingDays, last12Months, type MonthWindow } from '../lib/nzTime';
 
 const API_KEY = import.meta.env.VITE_AIRTABLE_API_KEY as string;
 const CLIENTS_BASE_ID = import.meta.env.VITE_AIRTABLE_CLIENTS_BASE_ID as string;
@@ -868,6 +875,66 @@ function median(values: number[]): number {
   return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
 }
 
+type CallBookingFields = {
+  Created?: string;
+  'Meeting Link'?: string;
+  'Call Booked'?: string;
+};
+
+// Calls booked = Client Paid Ads rows with a booked meeting, counted by the date the
+// row was created (the booking), whatever happened after (no-shows still count).
+function countCallsBooked(rows: CallBookingFields[], from: number, to: number) {
+  return rows.filter(r =>
+    Boolean(r['Meeting Link']?.trim() || r['Call Booked']?.trim()) && isInPeriod(r.Created, from, to)
+  ).length;
+}
+
+function countCandidates(rows: CandidateLeadFields[], from: number, to: number) {
+  const inWindow = rows.filter(c => isInPeriod(c.Created, from, to));
+  return { total: inWindow.length, qualified: inWindow.filter(isCandidateQualified).length };
+}
+
+type AcquisitionData = {
+  mainClients: MainClientFields[];      // "Stand Up Recruitment" test record already excluded
+  salesTranscripts: { Created?: string }[];
+  candidates: CandidateLeadFields[];
+  callBookings: CallBookingFields[];
+};
+
+// The one place every acquisition CAC is defined. Each tab reads its CAC from here.
+function acquisitionCacs(
+  d: AcquisitionData,
+  from: number,
+  to: number,
+  meta: { clientSpend: number; candidateSpend: number },
+): AcquisitionCacs & { clientAcquisitionCost: number } {
+  const clientsWon = d.mainClients.filter(c => isInPeriod(c['Signed Date'], from, to)).length;
+  const salesCalls = d.salesTranscripts.filter(t => isInPeriod(t.Created, from, to)).length;
+  const callsBooked = countCallsBooked(d.callBookings, from, to);
+  const { qualified } = countCandidates(d.candidates, from, to);
+  const clientAcquisitionCost = meta.clientSpend + salesCalls * SALES_TIME_COST_PER_CALL;
+  return {
+    clientAcquisitionCost,
+    cacPerSignedClient: clientsWon > 0 ? clientAcquisitionCost / clientsWon : 0,
+    cacPerBookedCall: callsBooked > 0 ? meta.clientSpend / callsBooked : 0,
+    cacPerQualifiedCandidate: qualified > 0 ? meta.candidateSpend / qualified : 0,
+  };
+}
+
+async function fetchAcquisitionData(): Promise<AcquisitionData> {
+  const [mainClients, salesTranscripts, candidates, callBookings] = await Promise.all([
+    fetchAllFromBase<MainClientFields>(CLIENTS_BASE_ID, MAIN_CLIENT_TABLE_ID, {}, ['Signed Date', 'Company Name']),
+    fetchAllFromBase<{ Created?: string }>(CLIENTS_BASE_ID, SALES_TRANSCRIPT_TABLE_ID, {}, ['Created'])
+      .catch(() => [] as { Created?: string }[]),
+    fetchAllFromBase<CandidateLeadFields>(CANDIDATES_BASE_ID, CANDIDATES_TABLE_ID, {}, ['NZ Citizenship Status', 'Trade / Occupation', 'Created']),
+    fetchAllFromBase<CallBookingFields>(CLIENTS_BASE_ID, CLIENTS_TABLE_ID, {}, ['Created', 'Meeting Link', 'Call Booked']),
+  ]);
+  return {
+    mainClients: mainClients.filter(c => c['Company Name'] !== 'Stand Up Recruitment'),
+    salesTranscripts, candidates, callBookings,
+  };
+}
+
 export async function fetchCacKPIs(
   grossMarginPct: number = 0,
   jobBoardAdvertising90d: number = 0,
@@ -876,12 +943,10 @@ export async function fetchCacKPIs(
 ): Promise<CacKPIs> {
   if (!CLIENTS_BASE_ID || !CANDIDATES_BASE_ID) throw new Error('CAC credentials not configured');
 
-  const [allMainClientsRaw, allPlacements, salesTranscripts, allCandidates, metaResult, prevMetaResult] = await Promise.all([
+  const [allMainClientsRaw, allPlacements, acquisition, metaResult, prevMetaResult] = await Promise.all([
     fetchAllWithIdsFromBase<MainClientFields>(CLIENTS_BASE_ID, MAIN_CLIENT_TABLE_ID),
     fetchAllFromBase<PlacementCacFields>(CLIENTS_BASE_ID, PLACEMENTS_TABLE_ID),
-    fetchAllFromBase<{ Created?: string }>(CLIENTS_BASE_ID, SALES_TRANSCRIPT_TABLE_ID, {}, ['Created'])
-      .catch(() => [] as { Created?: string }[]),
-    fetchAllFromBase<CandidateLeadFields>(CANDIDATES_BASE_ID, CANDIDATES_TABLE_ID, {}),
+    fetchAcquisitionData(),
     fetchMetaSpendByFrame('90d').catch(() => ({ candidateSpend: 0, clientSpend: 0 })),
     fetchMetaSpendPrevPeriod('90d').catch(() => null),
   ]);
@@ -894,63 +959,40 @@ export async function fetchCacKPIs(
   const prevEnd = start;
   const prevStart = prevEnd - CAC_WINDOW_DAYS * 86_400_000;
 
-  const clientsWon = allMainClients.filter(c => isInPeriod(c.fields['Signed Date'], start, now)).length;
-  const salesCallsInWindow = salesTranscripts.filter(t => isInPeriod(t.Created, start, now)).length;
-  const salesTimeCost = salesCallsInWindow * SALES_TIME_COST_PER_CALL;
-  const clientTotalAcquisitionCost = metaResult.clientSpend + salesTimeCost;
-  const clientCac = clientsWon > 0 ? clientTotalAcquisitionCost / clientsWon : 0;
+  const cur = acquisitionCacs(acquisition, start, now, metaResult);
+  const cacPerSignedClient = cur.cacPerSignedClient;
+  const cacPerQualifiedCandidate = cur.cacPerQualifiedCandidate;
 
   // Job Board Advertising (Xero Opex account, 100% AUS, trailing 90 days) comes from
   // the n8n Finance webhook's jobBoardAdvertising90d field — its own advertising/
   // ausAdvertising fields are FY-to-date and cover the wrong period for this window.
   const placementsInWindow = allPlacements.filter(p => isPlacementCountedForCac(p, start, now)).length;
   const placementCac = placementsInWindow > 0
-    ? (clientTotalAcquisitionCost + metaResult.candidateSpend + jobBoardAdvertising90d) / placementsInWindow
-    : 0;
-
-  // Qualified candidate = Airtable candidate record with both NZ Citizen status
-  // and a Trade/Occupation assigned (isCandidateQualified), standing in for
-  // JobAdder's "qualified"+"citizen" tags — no JobAdder tool available here can
-  // filter candidates by tag.
-  const qualifiedCandidatesInWindow = allCandidates
-    .filter(c => isInPeriod(c.Created, start, now))
-    .filter(isCandidateQualified).length;
-  const qualifiedCandidateCac = qualifiedCandidatesInWindow > 0
-    ? (metaResult.candidateSpend + jobBoardAdvertising90d) / qualifiedCandidatesInWindow
+    ? (cur.clientAcquisitionCost + metaResult.candidateSpend + jobBoardAdvertising90d) / placementsInWindow
     : 0;
 
   const hasPrevPeriod = prevMetaResult !== null;
-  let prevClientCac = 0;
+  let prevCacPerSignedClient = 0;
   let prevPlacementCac = 0;
-  let prevQualifiedCandidateCac = 0;
+  let prevCacPerQualifiedCandidate = 0;
   if (prevMetaResult) {
-    const prevClientsWon = allMainClients.filter(
-      c => isInPeriod(c.fields['Signed Date'], prevStart, prevEnd)
-    ).length;
-    const prevSalesCalls = salesTranscripts.filter(t => isInPeriod(t.Created, prevStart, prevEnd)).length;
-    const prevClientTotalAcquisitionCost = prevMetaResult.clientSpend + prevSalesCalls * SALES_TIME_COST_PER_CALL;
-    prevClientCac = prevClientsWon > 0 ? prevClientTotalAcquisitionCost / prevClientsWon : 0;
+    const prev = acquisitionCacs(acquisition, prevStart, prevEnd, prevMetaResult);
+    prevCacPerSignedClient = prev.cacPerSignedClient;
+    prevCacPerQualifiedCandidate = prev.cacPerQualifiedCandidate;
 
     const prevPlacementsInWindow = allPlacements.filter(
       p => isPlacementCountedForCac(p, prevStart, prevEnd)
     ).length;
     prevPlacementCac = prevPlacementsInWindow > 0
-      ? (prevClientTotalAcquisitionCost + prevMetaResult.candidateSpend + prevJobBoardAdvertising90d) / prevPlacementsInWindow
-      : 0;
-
-    const prevQualifiedCandidatesInWindow = allCandidates
-      .filter(c => isInPeriod(c.Created, prevStart, prevEnd))
-      .filter(isCandidateQualified).length;
-    prevQualifiedCandidateCac = prevQualifiedCandidatesInWindow > 0
-      ? (prevMetaResult.candidateSpend + prevJobBoardAdvertising90d) / prevQualifiedCandidatesInWindow
+      ? (prev.clientAcquisitionCost + prevMetaResult.candidateSpend + prevJobBoardAdvertising90d) / prevPlacementsInWindow
       : 0;
   }
 
   // ── CAC card deltas: last 90 days vs the prior 90 days, as a % change ──────
   const pctChange = (cur: number, prev: number) => (prev > 0 ? ((cur - prev) / prev) * 100 : null);
-  const clientCacDeltaPct = hasPrevPeriod ? pctChange(clientCac, prevClientCac) : null;
+  const cacPerSignedClientDeltaPct = hasPrevPeriod ? pctChange(cacPerSignedClient, prevCacPerSignedClient) : null;
   const placementCacDeltaPct = hasPrevPeriod ? pctChange(placementCac, prevPlacementCac) : null;
-  const qualifiedCandidateCacDeltaPct = hasPrevPeriod ? pctChange(qualifiedCandidateCac, prevQualifiedCandidateCac) : null;
+  const cacPerQualifiedCandidateDeltaPct = hasPrevPeriod ? pctChange(cacPerQualifiedCandidate, prevCacPerQualifiedCandidate) : null;
 
   // ── LTGP / LTGP:CAC ──────────────────────────────────────────────────────────
   // Cohort clients are joined to their placements via Placements' "Company ID"
@@ -988,17 +1030,17 @@ export async function fetchCacKPIs(
     ? median(placedClientGrossProfits)
     : placedClientGrossProfits.reduce((a, b) => a + b, 0) / (placedClientCount || 1);
   const placementRate = cohortSize > 0 ? placedClientCount / cohortSize : 0;
-  const costPerPlacedClient = placementRate > 0 ? clientCac / placementRate : 0;
+  const costPerPlacedClient = placementRate > 0 ? cacPerSignedClient / placementRate : 0;
   const ltgpToCac = costPerPlacedClient > 0 ? ltgp / costPerPlacedClient : 0;
 
   return {
-    clientCac,
+    cacPerSignedClient,
     placementCac,
     hasPrevPeriod,
-    prevClientCac,
+    prevCacPerSignedClient,
     prevPlacementCac,
-    qualifiedCandidateCac,
-    prevQualifiedCandidateCac,
+    cacPerQualifiedCandidate,
+    prevCacPerQualifiedCandidate,
     ltgp,
     ltgpMethod,
     placementRate,
@@ -1006,8 +1048,67 @@ export async function fetchCacKPIs(
     ltgpToCac,
     cohortSize,
     placedClientCount,
-    clientCacDeltaPct,
+    cacPerSignedClientDeltaPct,
     placementCacDeltaPct,
-    qualifiedCandidateCacDeltaPct,
+    cacPerQualifiedCandidateDeltaPct,
+  };
+}
+
+// ─── Marketing tab (month view) ───────────────────────────────────────────────
+function handoffTotals(d: AcquisitionData, range: { since: string; until: string }, clientSpend: number): HandoffTotals {
+  const { from, to } = toMs(range);
+  const callsBooked = countCallsBooked(d.callBookings, from, to);
+  const { total, qualified } = countCandidates(d.candidates, from, to);
+  return {
+    callsBooked,
+    qualifiedCandidates: qualified,
+    totalCandidates: total,
+    qualRate: total > 0 ? (qualified / total) * 100 : 0,
+    costPerBookedCall: callsBooked > 0 ? clientSpend / callsBooked : 0,
+  };
+}
+
+/**
+ * Everything the Marketing tab needs for one month: paid (Meta-reported), handoff
+ * (our own systems), and the trailing-90 CACs as of the window's last day vs the
+ * same day last month, all via acquisitionCacs, never recalculated here.
+ */
+export async function fetchMarketingMonth(w: MonthWindow): Promise<MarketingMonth> {
+  if (!CLIENTS_BASE_ID || !CANDIDATES_BASE_ID) throw new Error('Marketing credentials not configured');
+  const cacCur = trailingDays(w.cur.until, CAC_WINDOW_DAYS);
+  const cacPrev = trailingDays(w.prev.until, CAC_WINDOW_DAYS);
+  const months = last12Months(w.month, w.cur.until);
+
+  const [data, paidCur, paidPrev, spend90Cur, spend90Prev, monthly] = await Promise.all([
+    fetchAcquisitionData(),
+    fetchMetaPaidRange(w.cur),
+    fetchMetaPaidRange(w.prev),
+    fetchMetaSpendRange(cacCur),
+    fetchMetaSpendRange(cacPrev),
+    fetchMetaSpendMonthly({ since: months[0].since, until: w.cur.until }),
+  ]);
+
+  const cac = (range: { since: string; until: string }, spend: { clientSpend: number; candidateSpend: number }) => {
+    const { from, to } = toMs(range);
+    const { cacPerSignedClient, cacPerBookedCall, cacPerQualifiedCandidate } = acquisitionCacs(data, from, to, spend);
+    return { cacPerSignedClient, cacPerBookedCall, cacPerQualifiedCandidate };
+  };
+
+  return {
+    paid: { cur: paidCur, prev: paidPrev },
+    cac: { cur: cac(cacCur, spend90Cur), prev: cac(cacPrev, spend90Prev) },
+    handoff: {
+      cur: handoffTotals(data, w.cur, paidCur.client.spend),
+      prev: handoffTotals(data, w.prev, paidPrev.client.spend),
+    },
+    spendSeries: months.map(m => ({
+      key: m.key, label: m.label,
+      client: monthly[m.key]?.client ?? 0,
+      candidate: monthly[m.key]?.candidate ?? 0,
+    })),
+    handoffSeries: months.map(m => {
+      const h = handoffTotals(data, m, 0);
+      return { key: m.key, label: m.label, callsBooked: h.callsBooked, qualifiedCandidates: h.qualifiedCandidates };
+    }),
   };
 }

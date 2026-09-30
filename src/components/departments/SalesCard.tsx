@@ -167,10 +167,10 @@ export function SalesCard() {
 
         <div style={{ marginTop: 10, maxWidth: 220 }}>
           {statCard(
-            'Client CAC · Last 30d',
-            cac ? fmtNzd(cac.clientCac) : '—',
-            cac?.clientCac ?? 0,
-            cac?.prevClientCac ?? 0,
+            'CAC per Signed Client · Last 30d',
+            cac ? fmtNzd(cac.cacPerSignedClient) : '—',
+            cac?.cacPerSignedClient ?? 0,
+            cac?.prevCacPerSignedClient ?? 0,
             { invertDirection: true, noWoW: !cac?.hasPrevPeriod }
           )}
         </div>

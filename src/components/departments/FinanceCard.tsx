@@ -281,13 +281,13 @@ function PLSummarySection({ totalRevenue, totalGrossProfit, totalOpex, netProfit
   totalRevenue: number; totalGrossProfit: number; totalOpex: number; netProfit: number;
   lastMonthSamePoint: XeroFinanceData['lastMonthSamePoint'];
   cac: {
-    clientCac: number; prevClientCac: number;
-    qualifiedCandidateCac: number; prevQualifiedCandidateCac: number;
+    cacPerSignedClient: number; prevCacPerSignedClient: number;
+    cacPerQualifiedCandidate: number; prevCacPerQualifiedCandidate: number;
     placementCac: number; prevPlacementCac: number;
     hasPrevPeriod: boolean;
-    clientCacDeltaPct: number | null;
+    cacPerSignedClientDeltaPct: number | null;
     placementCacDeltaPct: number | null;
-    qualifiedCandidateCacDeltaPct: number | null;
+    cacPerQualifiedCandidateDeltaPct: number | null;
     ltgp: number; costPerPlacedClient: number; ltgpToCac: number;
   } | undefined;
   monthlyTrend: XeroFinanceData['monthlyTrend'];
@@ -354,20 +354,20 @@ function PLSummarySection({ totalRevenue, totalGrossProfit, totalOpex, netProfit
       <G4>
         <KPDelta
           accent={RD}
-          label="Client CAC"
-          value={cac ? fmtNZD(cac.clientCac) : '—'}
+          label="CAC per Signed Client"
+          value={cac ? fmtNZD(cac.cacPerSignedClient) : '—'}
           valueColor={RD}
           invert
-          deltaPct={cac?.clientCacDeltaPct != null ? { value: cac.clientCacDeltaPct, label: 'vs prior 90 days' } : null}
+          deltaPct={cac?.cacPerSignedClientDeltaPct != null ? { value: cac.cacPerSignedClientDeltaPct, label: 'vs prior 90 days' } : null}
         />
         <KPDelta
           accent={RD}
-          label="Qualified candidate CAC"
-          value={cac ? fmtNZD(cac.qualifiedCandidateCac) : '—'}
+          label="CAC per Qualified Candidate"
+          value={cac ? fmtNZD(cac.cacPerQualifiedCandidate) : '—'}
           valueColor={RD}
           invert
-          sub="(Candidate Meta spend + Job Board Advertising) ÷ NZ Citizen + Trade/Occupation candidates"
-          deltaPct={cac?.qualifiedCandidateCacDeltaPct != null ? { value: cac.qualifiedCandidateCacDeltaPct, label: 'vs prior 90 days' } : null}
+          sub="Candidate Meta spend ÷ NZ Citizen + Trade/Occupation candidates"
+          deltaPct={cac?.cacPerQualifiedCandidateDeltaPct != null ? { value: cac.cacPerQualifiedCandidateDeltaPct, label: 'vs prior 90 days' } : null}
         />
         <KPDelta
           accent={RD}

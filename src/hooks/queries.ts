@@ -1,4 +1,4 @@
-import { useQuery, keepPreviousData } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import {
   fetchSalesKPIs,
   fetchMarketingKPIs,
@@ -8,13 +8,15 @@ import {
   fetchAusPlacements,
   fetchScheduledInvoices,
   fetchCacKPIs,
+  fetchMarketingMonth,
 } from '../services/airtable';
 import { fetchXeroFinanceData, hasXeroCredentials } from '../services/xero';
 import { fetchMetaSpendByFrame } from '../services/metaAds';
 import { fetchVoiceCallKPIs } from '../services/voiceCalls';
 import { fetchJobAdderStageKPIs, hasJobAdderStageCredentials } from '../services/jobadderStages';
 import { fetchJobAging, hasOpenJobsCredentials } from '../services/jobadderJobs';
-import type { TimeFrame, LTGPFrame } from '../types';
+import { monthWindow } from '../lib/nzTime';
+import type { TimeFrame, LTGPFrame, OrganicMonth, MarketingSettings } from '../types';
 
 const hasAirtableKey    = Boolean(import.meta.env.VITE_AIRTABLE_API_KEY);
 const hasClientsBase    = Boolean(import.meta.env.VITE_AIRTABLE_CLIENTS_BASE_ID);
@@ -138,5 +140,53 @@ export function useCacKPIs(grossMarginPct?: number, jobBoardAdvertising90d?: num
     queryFn: () => fetchCacKPIs(grossMarginPct, jobBoardAdvertising90d, prevJobBoardAdvertising90d, audNzdMonthlyRates),
     enabled: hasCacCredentials,
     placeholderData: keepPreviousData,
+  });
+}
+
+// ─── Marketing tab (month view) ───────────────────────────────────────────────
+export function useMarketingMonth(month: string) {
+  return useQuery({
+    queryKey: ['marketing-month', month],
+    queryFn: () => fetchMarketingMonth(monthWindow(month)),
+    enabled: hasMarketingCredentials,
+    placeholderData: keepPreviousData,
+  });
+}
+
+async function getJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(url, init);
+  const body = await res.json().catch(() => ({ error: `${url} returned ${res.status}` }));
+  if (!res.ok) throw new Error(body.error ?? `${url} returned ${res.status}`);
+  return body as T;
+}
+
+export function useOrganicMonth(month: string) {
+  return useQuery({
+    queryKey: ['marketing-organic', month],
+    queryFn: () => getJson<OrganicMonth>(`/api/organic?month=${month}`),
+    placeholderData: keepPreviousData,
+    staleTime: 15 * 60_000,
+    retry: 1,
+  });
+}
+
+export function useMarketingSettings() {
+  return useQuery({
+    queryKey: ['marketing-settings'],
+    queryFn: () => getJson<MarketingSettings & { error?: string }>('/api/marketing-settings'),
+    retry: 1,
+  });
+}
+
+export function useSaveMarketingSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ settings, adminPassword }: { settings: MarketingSettings; adminPassword: string }) =>
+      getJson<MarketingSettings>('/api/marketing-settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
+        body: JSON.stringify(settings),
+      }),
+    onSuccess: data => qc.setQueryData(['marketing-settings'], data),
   });
 }
