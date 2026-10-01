@@ -233,7 +233,6 @@ export function OverviewPage() {
   const chart = (r?.months ?? trend.map(t => t.month.slice(0, 3))).map((label, i) => {
     const key = label.slice(0, 3).toLowerCase();
     return {
-      label: label[0],
       month: label,
       placements: r ? r.byRecruiter.reduce((n, x) => n + (x.monthlyPlacements[i] ?? 0), 0) : null,
       netProfit: trend.find(t => t.month.slice(0, 3).toLowerCase() === key)?.netProfit ?? null,
@@ -329,13 +328,13 @@ export function OverviewPage() {
             <div style={{ fontSize: 12, color: MUTED, marginBottom: 6 }}>Placements (bars) and net profit (line)</div>
             <ResponsiveContainer width="100%" height={200}>
               <ComposedChart data={chart} margin={{ top: 8, right: 4, left: 4, bottom: 0 }}>
-                <XAxis dataKey="label" tick={{ fontSize: 10, fill: MUTED }} axisLine={false} tickLine={false} />
+                {/* Keyed on the unique month name: single letters repeat (J = Jan/Jun/Jul) and would merge on hover. */}
+                <XAxis dataKey="month" tickFormatter={(m: string) => m[0]} tick={{ fontSize: 10, fill: MUTED }} axisLine={false} tickLine={false} interval={0} />
                 <YAxis yAxisId="p" hide allowDecimals={false} />
                 <YAxis yAxisId="np" hide domain={[(min: number) => Math.min(0, min), (max: number) => Math.max(max, npTarget * 1.1)]} />
                 <Tooltip
                   contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${BORDER}`, background: BG2 }}
                   labelStyle={{ color: TEXT }}
-                  labelFormatter={(_, p) => p?.[0]?.payload?.month ?? ''}
                   formatter={(v, n) => [v == null ? '—' : n === 'Net profit' ? money0(Number(v)) : int(Number(v)), String(n)]}
                 />
                 <ReferenceLine yAxisId="np" y={npTarget} stroke={MUTED} strokeDasharray="4 4" />
