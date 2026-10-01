@@ -1,5 +1,5 @@
 // Palette, formatters and the card colour rule shared by the month-view tabs (Marketing, Sales).
-import { rate, type Rag, type Better, type RagContext } from '../../lib/rag';
+import { rate, rateVsTarget, type Rag, type Better, type RagContext } from '../../lib/rag';
 
 // ─── Palette (shared with the Finance tab) ────────────────────────────────────
 export const NZ     = '#1D9E75';
@@ -22,8 +22,14 @@ export const kShort = (n: number) => (n >= 1000 ? `$${(n / 1000).toFixed(1)}k` :
 export const shortDate = (iso: string) => new Date(iso).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', timeZone: 'Pacific/Auckland' });
 
 // ─── Comparison cards ─────────────────────────────────────────────────────────
-export interface Cmp { label: string; cur: number; prev: number; better: Better; fmt: (n: number) => string; neutral?: boolean; prevWord: string; pts?: boolean }
+export interface Cmp {
+  label: string; cur: number; prev: number; better: Better; fmt: (n: number) => string;
+  neutral?: boolean; prevWord: string; pts?: boolean;
+  // When set, the target decides the colour; `value` is already pro-rata for counts.
+  target?: { value: number; full: number } | null;
+}
 
 export function cmpRag(c: Cmp, ctx: RagContext): Rag {
-  return c.neutral ? 'grey' : rate(c.cur, c.prev, c.better, ctx);
+  if (c.neutral) return 'grey';
+  return c.target ? rateVsTarget(c.cur, c.target.value, c.better, ctx) : rate(c.cur, c.prev, c.better, ctx);
 }

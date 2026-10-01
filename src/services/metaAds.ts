@@ -1,4 +1,4 @@
-import type { LTGPFrame, MetaPaidTotals } from '../types';
+import type { LTGPFrame, MetaPaidTotals, MetaCampaignRow, MetaAdRow } from '../types';
 
 const META_BASE = 'https://graph.facebook.com/v21.0';
 const META_ACCOUNT = 'act_1566498283991021';
@@ -200,7 +200,11 @@ export async function fetchMetaSpendPrevPeriod(frame: LTGPFrame): Promise<{
 // ─── Marketing tab: month windows ─────────────────────────────────────────────
 // Client vs candidate is split by campaign name ("Clients" / "Candidates").
 type Action = { action_type: string; value: string };
-type CampaignRow = { campaign_name: string; spend?: string; impressions?: string; actions?: Action[]; conversions?: Action[]; date_start?: string };
+type CampaignRow = {
+  campaign_name: string; spend?: string; impressions?: string; frequency?: string;
+  actions?: Action[]; conversions?: Action[]; date_start?: string;
+  ad_id?: string; ad_name?: string;
+};
 
 export function campaignGroup(name: string | undefined): 'client' | 'candidate' | null {
   const n = (name ?? '').toLowerCase();
@@ -213,12 +217,12 @@ function actionValue(actions: Action[] | undefined, type: string): number {
   return parseFloat(actions?.find(a => a.action_type === type)?.value ?? '0');
 }
 
-async function fetchCampaignInsights(range: { since: string; until: string }, fields: string, extra = ''): Promise<CampaignRow[]> {
+async function fetchCampaignInsights(range: { since: string; until: string }, fields: string, extra = '', level: 'campaign' | 'ad' = 'campaign'): Promise<CampaignRow[]> {
   const token = import.meta.env.VITE_META_TOKEN as string;
   if (!token) throw new Error('Meta token not configured');
   const rows: CampaignRow[] = [];
   let nextUrl: string | null =
-    `${META_BASE}/${META_ACCOUNT}/insights?level=campaign&fields=${fields}` +
+    `${META_BASE}/${META_ACCOUNT}/insights?level=${level}&fields=${fields}` +
     `&time_range=${encodeURIComponent(JSON.stringify(range))}&limit=500${extra}` +
     `&access_token=${encodeURIComponent(token)}`;
   while (nextUrl) {
@@ -276,6 +280,68 @@ export async function fetchMetaSpendMonthly(range: { since: string; until: strin
     const key = r.date_start.slice(0, 7);
     out[key] ??= { client: 0, candidate: 0 };
     out[key][g] += parseFloat(r.spend ?? '0');
+  }
+  return out;
+}
+
+// ─── Marketing tab: campaigns and ads drill-down ──────────────────────────────
+// Result = leads for client campaigns, applications (submit_application_total,
+// reported under `conversions`) for candidate campaigns.
+function results(r: CampaignRow, group: 'client' | 'candidate') {
+  return group === 'client' ? actionValue(r.actions, 'lead') : actionValue(r.conversions, 'submit_application_total');
+}
+
+const BREAKDOWN_FIELDS = 'campaign_name,spend,impressions,frequency,actions,conversions';
+
+/** Spend and results per campaign this period, with last period's spend alongside. */
+export async function fetchMetaCampaignBreakdown(
+  cur: { since: string; until: string },
+  prev: { since: string; until: string },
+): Promise<MetaCampaignRow[]> {
+  const [curRows, prevRows] = await Promise.all([
+    fetchCampaignInsights(cur, BREAKDOWN_FIELDS),
+    fetchCampaignInsights(prev, 'campaign_name,spend'),
+  ]);
+  const prevSpend = new Map(prevRows.map(r => [r.campaign_name, parseFloat(r.spend ?? '0')]));
+  const out: MetaCampaignRow[] = [];
+  for (const r of curRows) {
+    const group = campaignGroup(r.campaign_name);
+    if (!group) continue;
+    const spend = parseFloat(r.spend ?? '0');
+    const res = results(r, group);
+    out.push({
+      campaign: r.campaign_name, group, spend,
+      prevSpend: prevSpend.get(r.campaign_name) ?? 0,
+      results: res,
+      costPerResult: res > 0 ? spend / res : null,
+      linkClicks: actionValue(r.actions, 'link_click'),
+      frequency: parseFloat(r.frequency ?? '0'),
+    });
+  }
+  // Campaigns that spent last period but nothing this period have "gone quiet" too.
+  for (const r of prevRows) {
+    const group = campaignGroup(r.campaign_name);
+    if (!group || out.some(o => o.campaign === r.campaign_name)) continue;
+    out.push({ campaign: r.campaign_name, group, spend: 0, prevSpend: parseFloat(r.spend ?? '0'), results: 0, costPerResult: null, linkClicks: 0, frequency: 0 });
+  }
+  return out.sort((a, b) => b.spend - a.spend);
+}
+
+/** Per-ad spend, results and frequency (average times each person saw the ad). */
+export async function fetchMetaAdBreakdown(cur: { since: string; until: string }): Promise<MetaAdRow[]> {
+  const rows = await fetchCampaignInsights(cur, `ad_id,ad_name,${BREAKDOWN_FIELDS}`, '', 'ad');
+  const out: MetaAdRow[] = [];
+  for (const r of rows) {
+    const group = campaignGroup(r.campaign_name);
+    if (!group) continue;
+    const spend = parseFloat(r.spend ?? '0');
+    const res = results(r, group);
+    out.push({
+      id: r.ad_id ?? `${r.campaign_name}:${r.ad_name}`,
+      ad: r.ad_name ?? '(unnamed ad)', campaign: r.campaign_name, group, spend,
+      results: res, costPerResult: res > 0 ? spend / res : null,
+      frequency: parseFloat(r.frequency ?? '0'),
+    });
   }
   return out;
 }

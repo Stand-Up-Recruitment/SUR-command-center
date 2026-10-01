@@ -363,10 +363,9 @@ export interface CacKPIs {
   prevPlacementCac: number;
 
   // CAC per Qualified Candidate = candidate Meta spend ÷ qualified candidates.
-  // Qualified candidate = Airtable candidate record tagged NZ Citizen with a
-  // Trade/Occupation assigned (the existing isCandidateQualified definition),
-  // used in place of JobAdder's "qualified"+"citizen" tags (no JobAdder tool
-  // can filter candidates by tag in this environment).
+  // Qualified candidate = Airtable candidate who is an NZ Citizen and whose Category
+  // (from the AI category matcher) is a skilled trade, i.e. not in the editable
+  // non-trade list in the Marketing settings.
   cacPerQualifiedCandidate: number;
   prevCacPerQualifiedCandidate: number;
 
@@ -407,6 +406,7 @@ export interface HandoffTotals {
   totalCandidates: number;
   qualRate: number;           // qualified ÷ total candidate leads, as a %
   costPerBookedCall: number;  // client Meta spend in the window ÷ calls booked
+  costPerQualifiedCandidate: number; // candidate Meta spend in the window ÷ qualified candidates
 }
 
 export interface MarketingMonth {
@@ -414,7 +414,11 @@ export interface MarketingMonth {
   cac: { cur: AcquisitionCacs; prev: AcquisitionCacs };
   handoff: { cur: HandoffTotals; prev: HandoffTotals };
   spendSeries: { key: string; label: string; client: number; candidate: number }[];
-  handoffSeries: { key: string; label: string; callsBooked: number; qualifiedCandidates: number }[];
+  handoffSeries: {
+    key: string; label: string;
+    callsBooked: number; qualifiedCandidates: number;
+    costPerBookedCall: number; costPerQualifiedCandidate: number;
+  }[];
 }
 
 export interface OrganicChannel {
@@ -448,9 +452,40 @@ export interface OrganicMonth {
   error?: string;
 }
 
+export interface MetaCampaignRow {
+  campaign: string;
+  group: 'client' | 'candidate';
+  spend: number;
+  prevSpend: number;            // same span last month
+  results: number;              // leads (client) / applications (candidate)
+  costPerResult: number | null;
+  linkClicks: number;
+  frequency: number;
+}
+
+export interface MetaAdRow {
+  id: string;
+  ad: string;
+  campaign: string;
+  group: 'client' | 'candidate';
+  spend: number;
+  results: number;
+  costPerResult: number | null;
+  frequency: number;            // average times each person saw the ad
+}
+
+export interface MarketingTargets {
+  callsBooked: number | null;               // per month
+  qualifiedCandidates: number | null;       // per month
+  costPerBookedCall: number | null;
+  costPerQualifiedCandidate: number | null;
+}
+
 export interface MarketingSettings {
   monthlyBudget: number | null;
   postsPerWeek: number;
+  targets: MarketingTargets;
+  nonTradeCategories: string[];
 }
 
 // ─── Sales tab (month view) ───────────────────────────────────────────────────

@@ -12,7 +12,7 @@ import {
   fetchSalesMonth,
 } from '../services/airtable';
 import { fetchXeroFinanceData, hasXeroCredentials } from '../services/xero';
-import { fetchMetaSpendByFrame } from '../services/metaAds';
+import { fetchMetaSpendByFrame, fetchMetaCampaignBreakdown, fetchMetaAdBreakdown } from '../services/metaAds';
 import { fetchVoiceCallKPIs } from '../services/voiceCalls';
 import { fetchJobAdderStageKPIs, hasJobAdderStageCredentials } from '../services/jobadderStages';
 import { fetchJobAging, hasOpenJobsCredentials } from '../services/jobadderJobs';
@@ -220,5 +220,19 @@ export function useSaveSalesSettings() {
         body: JSON.stringify(settings),
       }),
     onSuccess: data => qc.setQueryData(['sales-settings'], data),
+  });
+}
+
+/** Campaign table + per-ad rows for the Paid lane drill-down; only fetched once opened. */
+export function useMetaBreakdown(month: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ['marketing-breakdown', month],
+    queryFn: async () => {
+      const w = monthWindow(month);
+      const [campaigns, ads] = await Promise.all([fetchMetaCampaignBreakdown(w.cur, w.prev), fetchMetaAdBreakdown(w.cur)]);
+      return { campaigns, ads };
+    },
+    enabled: enabled && hasMetaCredentials,
+    staleTime: 10 * 60_000,
   });
 }

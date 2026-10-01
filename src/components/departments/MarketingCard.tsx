@@ -5,39 +5,109 @@ import {
 import { Skeleton } from '../shared/Skeleton';
 import { NZ, AM, RD, BG, BG2, BORDER, TEXT, MUTED, RAG_COLOR, money0, money2, int, kShort, shortDate, cmpRag, type Cmp } from '../shared/monthTheme';
 import { Section, SubHead, Grid, Metric, Delta, CmpCard } from '../shared/monthLayout';
-import { useMarketingMonth, useOrganicMonth, useMarketingSettings, useSaveMarketingSettings } from '../../hooks/queries';
+import { useMarketingMonth, useOrganicMonth, useMarketingSettings, useSaveMarketingSettings, useMetaBreakdown } from '../../hooks/queries';
 import { useAuthRole } from '../auth/AuthContext';
 import { monthWindow, recentMonthKeys, currentMonthKey, type MonthWindow } from '../../lib/nzTime';
-import { rate, pctChange, isTooEarly, type Rag, type RagContext } from '../../lib/rag';
+import { rate, pctChange, isTooEarly, proRata, type Rag, type RagContext } from '../../lib/rag';
 import { diagnose, type DiagMetric } from '../../lib/diagnosis';
-import type { MarketingMonth, OrganicChannel, OrganicMonth, MarketingSettings } from '../../types';
+import type { MarketingMonth, OrganicChannel, OrganicMonth, MarketingSettings, MarketingTargets, MetaAdRow } from '../../types';
 
 const CLIENT_BAR = '#8a8a8a';
 
 // ─── Settings panel ───────────────────────────────────────────────────────────
-function SettingsPanel({ settings, onClose }: { settings: MarketingSettings; onClose: () => void }) {
+const TARGET_FIELDS: { key: keyof MarketingTargets; label: string }[] = [
+  { key: 'callsBooked', label: 'Calls booked per month' },
+  { key: 'qualifiedCandidates', label: 'Qualified candidates per month' },
+  { key: 'costPerBookedCall', label: 'Cost per booked call (NZD)' },
+  { key: 'costPerQualifiedCandidate', label: 'Cost per qualified candidate (NZD)' },
+];
+
+const median = (xs: number[]) => {
+  const v = xs.filter(x => x > 0).sort((a, b) => a - b);
+  if (!v.length) return null;
+  const mid = Math.floor(v.length / 2);
+  return v.length % 2 ? v[mid] : (v[mid - 1] + v[mid]) / 2;
+};
+
+/** Starting targets: median of the last 3 full months. */
+function suggestedTargets(m: MarketingMonth): MarketingTargets {
+  const full = m.handoffSeries.filter(h => h.key < currentMonthKey()).slice(-3);
+  const round = (v: number | null, step = 1) => (v == null ? null : Math.round(v / step) * step);
+  return {
+    callsBooked: round(median(full.map(h => h.callsBooked))),
+    qualifiedCandidates: round(median(full.map(h => h.qualifiedCandidates))),
+    costPerBookedCall: round(median(full.map(h => h.costPerBookedCall))),
+    costPerQualifiedCandidate: round(median(full.map(h => h.costPerQualifiedCandidate)), 0.5),
+  };
+}
+
+function SettingsPanel({ settings, suggested, onClose }: { settings: MarketingSettings; suggested: MarketingTargets | null; onClose: () => void }) {
   const save = useSaveMarketingSettings();
-  const [budget, setBudget] = useState(settings.monthlyBudget != null ? String(settings.monthlyBudget) : '');
+  const str = (v: number | null) => (v != null ? String(v) : '');
+  const [budget, setBudget] = useState(str(settings.monthlyBudget));
   const [posts, setPosts] = useState(String(settings.postsPerWeek));
+  const [targets, setTargets] = useState<Record<keyof MarketingTargets, string>>({
+    callsBooked: str(settings.targets.callsBooked),
+    qualifiedCandidates: str(settings.targets.qualifiedCandidates),
+    costPerBookedCall: str(settings.targets.costPerBookedCall),
+    costPerQualifiedCandidate: str(settings.targets.costPerQualifiedCandidate),
+  });
+  const [nonTrade, setNonTrade] = useState(settings.nonTradeCategories.join('\n'));
   const [password, setPassword] = useState('');
   const input = { background: BG, border: `1px solid ${BORDER}`, borderRadius: 6, color: TEXT, padding: '8px 10px', fontSize: 13, width: '100%', boxSizing: 'border-box' as const };
+  const label = { fontSize: 11, color: MUTED };
+  const numOrNull = (v: string) => (v.trim() === '' ? null : Number(v));
 
   const submit = () => {
     save.mutate(
-      { settings: { monthlyBudget: budget.trim() === '' ? null : Number(budget), postsPerWeek: Number(posts) }, adminPassword: password },
+      {
+        settings: {
+          monthlyBudget: numOrNull(budget),
+          postsPerWeek: Number(posts),
+          targets: {
+            callsBooked: numOrNull(targets.callsBooked),
+            qualifiedCandidates: numOrNull(targets.qualifiedCandidates),
+            costPerBookedCall: numOrNull(targets.costPerBookedCall),
+            costPerQualifiedCandidate: numOrNull(targets.costPerQualifiedCandidate),
+          },
+          nonTradeCategories: nonTrade.split('\n').map(c => c.trim()).filter(Boolean),
+        },
+        adminPassword: password,
+      },
       { onSuccess: onClose },
     );
   };
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }} onClick={onClose}>
-      <div style={{ background: BG2, border: `1px solid ${BORDER}`, borderRadius: 12, padding: '1.25rem', width: 340 }} onClick={e => e.stopPropagation()}>
+      <div style={{ background: BG2, border: `1px solid ${BORDER}`, borderRadius: 12, padding: '1.25rem', width: 420, maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
         <div style={{ fontSize: 15, fontWeight: 600, color: TEXT, marginBottom: 14 }}>Marketing settings</div>
-        <label style={{ fontSize: 11, color: MUTED }}>Monthly ad budget (NZD)</label>
+        <label style={label}>Monthly ad budget (NZD)</label>
         <input style={{ ...input, margin: '4px 0 12px' }} type="number" min={0} value={budget} placeholder="Not set" onChange={e => setBudget(e.target.value)} />
-        <label style={{ fontSize: 11, color: MUTED }}>Posting target (posts per week, per channel)</label>
+        <label style={label}>Posting target (posts per week, per channel)</label>
         <input style={{ ...input, margin: '4px 0 12px' }} type="number" min={1} step={1} value={posts} onChange={e => setPosts(e.target.value)} />
-        <label style={{ fontSize: 11, color: MUTED }}>Admin password</label>
+
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '6px 0 8px' }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: TEXT }}>Monthly targets</span>
+          {suggested && (
+            <button
+              onClick={() => setTargets(Object.fromEntries(TARGET_FIELDS.map(f => [f.key, str(suggested[f.key])])) as Record<keyof MarketingTargets, string>)}
+              style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6, border: `1px solid ${BORDER}`, background: 'transparent', color: MUTED, cursor: 'pointer' }}
+            >Use suggestions</button>
+          )}
+        </div>
+        {TARGET_FIELDS.map(f => (
+          <div key={f.key}>
+            <label style={label}>{f.label}{suggested?.[f.key] != null && <> · suggested {suggested[f.key]} (median of last 3 months)</>}</label>
+            <input style={{ ...input, margin: '4px 0 10px' }} type="number" min={0} value={targets[f.key]} placeholder="Not set — compares with last month"
+              onChange={e => setTargets(t => ({ ...t, [f.key]: e.target.value }))} />
+          </div>
+        ))}
+
+        <label style={label}>Categories that are NOT a skilled trade (one per line). Everything else, for an NZ citizen, counts as qualified.</label>
+        <textarea style={{ ...input, margin: '4px 0 12px', height: 120, fontFamily: 'inherit' }} value={nonTrade} onChange={e => setNonTrade(e.target.value)} />
+
+        <label style={label}>Admin password</label>
         <input style={{ ...input, margin: '4px 0 12px' }} type="password" value={password} onChange={e => setPassword(e.target.value)} />
         {save.error && <div style={{ fontSize: 11, color: RD, marginBottom: 10 }}>{save.error.message}</div>}
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
@@ -52,7 +122,7 @@ function SettingsPanel({ settings, onClose }: { settings: MarketingSettings; onC
 }
 
 // ─── Sections ─────────────────────────────────────────────────────────────────
-function PaidSection({ m, w, ctx, budget }: { m: MarketingMonth; w: MonthWindow; ctx: RagContext; budget: number | null }) {
+function PaidSection({ m, w, ctx, budget, month }: { m: MarketingMonth; w: MonthWindow; ctx: RagContext; budget: number | null; month: string }) {
   const { cur, prev } = m.paid;
   const pw = w.prevShortLabel;
   const spend = cur.totalSpend;
@@ -102,7 +172,120 @@ function PaidSection({ m, w, ctx, budget }: { m: MarketingMonth; w: MonthWindow;
           </BarChart>
         </ResponsiveContainer>
       </div>
+
+      <CampaignsAndAds month={month} prevWord={pw} />
     </Section>
+  );
+}
+
+const th = (right?: boolean) => ({ textAlign: right ? 'right' as const : 'left' as const, color: MUTED, fontWeight: 500, padding: '6px 8px', borderBottom: `.5px solid ${BORDER}`, whiteSpace: 'nowrap' as const });
+const td = (right?: boolean) => ({ padding: '7px 8px', color: TEXT, textAlign: right ? 'right' as const : 'left' as const, borderBottom: `.5px solid ${BORDER}` });
+
+/** Ads ranked by cost per result. Ads under $20 spend are left out; spend with no results ranks worst. */
+function rankAds(ads: MetaAdRow[]) {
+  const eligible = ads.filter(a => a.spend >= 20);
+  const cost = (a: MetaAdRow) => a.costPerResult ?? Infinity;
+  const sorted = [...eligible].sort((a, b) => cost(a) - cost(b) || b.spend - a.spend);
+  const best = sorted.filter(a => a.costPerResult != null).slice(0, 5);
+  const worst = [...sorted].reverse().filter(a => !best.includes(a)).slice(0, 5);
+  return { best, worst };
+}
+
+function AdTable({ title, rows, resultWord }: { title: string; rows: MetaAdRow[]; resultWord: string }) {
+  return (
+    <div style={{ background: BG, border: `.5px solid ${BORDER}`, borderRadius: 8, padding: '.75rem .875rem' }}>
+      <div style={{ fontSize: 11, color: MUTED, marginBottom: 6 }}>{title}</div>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+        <thead><tr>
+          <th style={th()}>Ad</th><th style={th(true)}>Spend</th><th style={th(true)}>{resultWord}</th>
+          <th style={th(true)}>Cost each</th><th style={th(true)} title="Average times each person saw the ad">Freq.</th>
+        </tr></thead>
+        <tbody>
+          {rows.length === 0 && <tr><td colSpan={5} style={{ ...td(), color: MUTED }}>No ads with $20+ spend</td></tr>}
+          {rows.map(a => (
+            <tr key={a.id}>
+              <td style={{ ...td(), maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`${a.ad} · ${a.campaign}`}>{a.ad}</td>
+              <td style={td(true)}>{money0(a.spend)}</td>
+              <td style={td(true)}>{int(a.results)}</td>
+              <td style={{ ...td(true), color: a.costPerResult == null ? RD : TEXT }}>{a.costPerResult == null ? '0 results' : money2(a.costPerResult)}</td>
+              <td style={{ ...td(true), color: a.frequency >= 3 ? AM : TEXT }} title={a.frequency >= 3 ? 'Wearing out: people have seen it 3+ times' : undefined}>{a.frequency.toFixed(1)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function CampaignsAndAds({ month, prevWord }: { month: string; prevWord: string }) {
+  const [open, setOpen] = useState(false);
+  const [group, setGroup] = useState<'client' | 'candidate'>('client');
+  const { data, error, isLoading } = useMetaBreakdown(month, open);
+  const ranked = data ? rankAds(data.ads.filter(a => a.group === group)) : null;
+  const resultWord = group === 'client' ? 'Leads' : 'Applications';
+
+  return (
+    <div style={{ marginTop: 10 }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{ width: '100%', textAlign: 'left', background: BG, border: `.5px solid ${BORDER}`, borderRadius: 8, padding: '.75rem 1rem', color: TEXT, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+      >
+        {open ? '▾' : '▸'} Campaigns and ads <span style={{ fontWeight: 400, color: MUTED, fontSize: 11 }}>· which campaign or ad to fix when a card turns amber or red</span>
+      </button>
+      {open && (
+        <div style={{ marginTop: 10 }}>
+          {isLoading && <Skeleton height={120} radius={8} />}
+          {error && <div style={{ fontSize: 11, color: AM }}>⚠ {error.message}</div>}
+          {data && (
+            <>
+              <div style={{ background: BG, border: `.5px solid ${BORDER}`, borderRadius: 8, padding: '.75rem .875rem', marginBottom: 10 }}>
+                <div style={{ fontSize: 11, color: MUTED, marginBottom: 6 }}>Campaigns this month (Meta-reported)</div>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead><tr>
+                    <th style={th()}>Campaign</th><th style={th()}>Type</th><th style={th(true)}>Spend</th><th style={th(true)}>{prevWord} same day</th>
+                    <th style={th(true)}>Results</th><th style={th(true)}>Cost each</th><th style={th(true)}>Clicks</th><th style={th(true)}>Freq.</th>
+                  </tr></thead>
+                  <tbody>
+                    {data.campaigns.map(c => {
+                      const quiet = c.prevSpend > 0 && (c.spend < 50 || c.spend < c.prevSpend * 0.25);
+                      return (
+                        <tr key={c.campaign}>
+                          <td style={td()}>
+                            {c.campaign}
+                            {quiet && <span style={{ marginLeft: 6, fontSize: 10, color: MUTED, border: `1px solid ${BORDER}`, borderRadius: 999, padding: '1px 6px' }}>Gone quiet</span>}
+                          </td>
+                          <td style={{ ...td(), color: MUTED }}>{c.group === 'client' ? 'Client' : 'Candidate'}</td>
+                          <td style={td(true)}>{money0(c.spend)}</td>
+                          <td style={{ ...td(true), color: MUTED }}>{money0(c.prevSpend)}</td>
+                          <td style={td(true)}>{int(c.results)} <span style={{ color: MUTED, fontSize: 10 }}>{c.group === 'client' ? 'leads' : 'apps'}</span></td>
+                          <td style={td(true)}>{c.costPerResult == null ? '—' : money2(c.costPerResult)}</td>
+                          <td style={td(true)}>{int(c.linkClicks)}</td>
+                          <td style={{ ...td(true), color: c.frequency >= 3 ? AM : TEXT }}>{c.frequency ? c.frequency.toFixed(1) : '—'}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
+                {(['client', 'candidate'] as const).map(g => (
+                  <button key={g} onClick={() => setGroup(g)} style={{ fontSize: 11, padding: '4px 10px', borderRadius: 6, border: `.5px solid ${BORDER}`, background: group === g ? '#2a2a2a' : 'transparent', color: group === g ? TEXT : MUTED, cursor: 'pointer' }}>
+                    {g === 'client' ? 'Client ads (cost per lead)' : 'Candidate ads (cost per application)'}
+                  </button>
+                ))}
+              </div>
+              {ranked && (
+                <Grid cols={2}>
+                  <AdTable title="Best 5 ads" rows={ranked.best} resultWord={resultWord} />
+                  <AdTable title="Worst 5 ads" rows={ranked.worst} resultWord={resultWord} />
+                </Grid>
+              )}
+              <div style={{ fontSize: 10, color: MUTED }}>Ranked by cost per result; ads under $20 spend are left out. Freq. = average times each person saw the ad; 3+ (amber) suggests it is wearing out.</div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -128,13 +311,17 @@ function paidCandidateCards(m: MarketingMonth, pw: string): Cmp[] {
   ];
 }
 
-function handoffCards(m: MarketingMonth, pw: string): Cmp[] {
+function handoffCards(m: MarketingMonth, w: MonthWindow, t: MarketingTargets | undefined): Cmp[] {
   const c = m.handoff.cur, p = m.handoff.prev;
-  const same = `Same day ${pw}`;
+  const same = `Same day ${w.prevShortLabel}`;
+  // Count targets are monthly, so they're scaled to the days elapsed; cost targets aren't.
+  const count = (v: number | null | undefined) => (v ? { value: proRata(v, w.dayOfMonth, w.daysInMonth), full: v } : null);
+  const cost = (v: number | null | undefined) => (v ? { value: v, full: v } : null);
   return [
-    { label: 'Calls booked (to sales)', cur: c.callsBooked, prev: p.callsBooked, better: 'up', fmt: int, prevWord: same },
-    { label: 'Cost per booked call (month)', cur: c.costPerBookedCall, prev: p.costPerBookedCall, better: 'down', fmt: money0, prevWord: same },
-    { label: 'Qualified candidates (to recruiters)', cur: c.qualifiedCandidates, prev: p.qualifiedCandidates, better: 'up', fmt: int, prevWord: same },
+    { label: 'Calls booked (to sales)', cur: c.callsBooked, prev: p.callsBooked, better: 'up', fmt: int, prevWord: same, target: count(t?.callsBooked) },
+    { label: 'Cost per booked call (month)', cur: c.costPerBookedCall, prev: p.costPerBookedCall, better: 'down', fmt: money0, prevWord: same, target: cost(t?.costPerBookedCall) },
+    { label: 'Qualified candidates (to recruiters)', cur: c.qualifiedCandidates, prev: p.qualifiedCandidates, better: 'up', fmt: int, prevWord: same, target: count(t?.qualifiedCandidates) },
+    { label: 'Cost per qualified candidate (month)', cur: c.costPerQualifiedCandidate, prev: p.costPerQualifiedCandidate, better: 'down', fmt: money2, prevWord: same, target: cost(t?.costPerQualifiedCandidate) },
     { label: 'Qual rate', cur: c.qualRate, prev: p.qualRate, better: 'up', fmt: n => `${n.toFixed(1)}%`, prevWord: same, pts: true },
   ];
 }
@@ -264,22 +451,24 @@ function OrganicSection({ o, w, ctx, postsPerWeek, error }: { o: OrganicMonth | 
   );
 }
 
-function HandoffSection({ m, w, ctx }: { m: MarketingMonth; w: MonthWindow; ctx: RagContext }) {
+function HandoffSection({ m, w, ctx, targets }: { m: MarketingMonth; w: MonthWindow; ctx: RagContext; targets: MarketingTargets | undefined }) {
   return (
     <Section n={4} title="Handoff: what marketing delivered" sub="Marketing's job ends here. Everything after sits on the Sales and Recruitment tabs.">
-      <Grid cols={4}>
-        {handoffCards(m, w.prevShortLabel).map(c => <CmpCard key={c.label} c={c} ctx={ctx} />)}
+      <Grid cols={5}>
+        {handoffCards(m, w, targets).map(c => <CmpCard key={c.label} c={c} ctx={ctx} />)}
       </Grid>
       <div style={{ background: BG, border: `.5px solid ${BORDER}`, borderRadius: 8, padding: '.875rem 1rem' }}>
         <div style={{ fontSize: 11, color: MUTED, marginBottom: 8 }}>Calls booked and qualified candidates, last 12 months</div>
         <ResponsiveContainer width="100%" height={170}>
-          <LineChart data={m.handoffSeries} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+          <LineChart data={m.handoffSeries} margin={{ top: 8, right: 4, left: 4, bottom: 0 }}>
             <XAxis dataKey="label" tick={{ fontSize: 10, fill: MUTED }} axisLine={false} tickLine={false} />
-            <YAxis hide />
+            {/* Separate scales: calls are tens a month, qualified candidates hundreds. */}
+            <YAxis yAxisId="calls" tick={{ fontSize: 10, fill: TEXT }} axisLine={false} tickLine={false} width={32} allowDecimals={false} />
+            <YAxis yAxisId="qual" orientation="right" tick={{ fontSize: 10, fill: RD }} axisLine={false} tickLine={false} width={40} allowDecimals={false} />
             <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${BORDER}`, background: BG2 }} labelStyle={{ color: TEXT }} />
             <Legend iconType="square" iconSize={8} wrapperStyle={{ fontSize: 10, color: MUTED }} />
-            <Line dataKey="callsBooked" name="Calls booked" stroke={TEXT} strokeWidth={2} dot={false} />
-            <Line dataKey="qualifiedCandidates" name="Qualified candidates" stroke={RD} strokeWidth={2} dot={false} />
+            <Line yAxisId="calls" dataKey="callsBooked" name="Calls booked (left scale)" stroke={TEXT} strokeWidth={2} dot={false} />
+            <Line yAxisId="qual" dataKey="qualifiedCandidates" name="Qualified candidates (right scale)" stroke={RD} strokeWidth={2} dot={false} />
           </LineChart>
         </ResponsiveContainer>
       </div>
@@ -291,7 +480,7 @@ function MarketingSkeleton() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <Skeleton height={48} radius={10} />
-      {[2, 4, 4].map((n, i) => (
+      {[2, 4, 5].map((n, i) => (
         <div key={i} style={{ background: BG2, borderRadius: 12, padding: '1.25rem' }}>
           <Skeleton height={14} width={200} style={{ marginBottom: 14 }} />
           <Grid cols={n}>{Array.from({ length: n }, (_, k) => <Skeleton key={k} height={78} radius={8} />)}</Grid>
@@ -348,12 +537,15 @@ export function MarketingCard() {
   // ── Diagnosis inputs (same colour rule as the cards) ──
   const pw = w.prevShortLabel;
   const [cacCall, cacCand] = cacCards(m);
-  const [calls, costPerCall, qualified, qualRate] = handoffCards(m, pw);
-  const asDiag = (name: string, c: Cmp): DiagMetric => ({ name, rag: cmpRag(c, ctx), pct: pctChange(c.cur, c.prev) });
+  const targets = settings?.targets;
+  const [calls, costPerCall, qualified, costPerQual, qualRate] = handoffCards(m, w, targets);
+  const asDiag = (name: string, c: Cmp): DiagMetric => c.target
+    ? { name, rag: cmpRag(c, ctx), pct: (c.cur / c.target.value - 1) * 100, basis: 'target' }
+    : { name, rag: cmpRag(c, ctx), pct: pctChange(c.cur, c.prev) };
   const target = postsTarget(postsPerWeek, w);
   const postsDiag = (name: string, ch: OrganicChannel | undefined): DiagMetric[] =>
     ch?.connected && ch.posts != null && target > 0
-      ? [{ name, rag: rate(ch.posts, target, 'up', ctx), pct: (ch.posts / target - 1) * 100 }]
+      ? [{ name, rag: rate(ch.posts, target, 'up', ctx), pct: (ch.posts / target - 1) * 100, basis: 'target' as const }]
       : [];
   const [cClicks, cCpc, cLeads, cCpl] = paidClientCards(m, pw);
   const [kClicks, kCpc, kApps, kCpa] = paidCandidateCards(m, pw);
@@ -361,21 +553,23 @@ export function MarketingCard() {
     tooEarly: isTooEarly(ctx),
     marketingMetrics: [
       asDiag('Calls booked', calls),
+      asDiag('Cost per booked call', costPerCall),
       asDiag('Qualified candidates', qualified),
+      asDiag('Cost per qualified candidate', costPerQual),
       asDiag('CAC per booked call', cacCall),
       asDiag('CAC per qualified candidate', cacCand),
-    ],
-    callsBooked: cmpRag(calls, ctx),
-    cacPerSignedClient: rate(m.cac.cur.cacPerSignedClient, m.cac.prev.cacPerSignedClient, 'down', ctx),
-    otherMetrics: [
+      asDiag('Qual rate', qualRate),
       asDiag('Client link clicks', cClicks), asDiag('Client cost per click', cCpc),
       asDiag('Client leads from Meta', cLeads), asDiag('Client cost per lead', cCpl),
       asDiag('Candidate link clicks', kClicks), asDiag('Candidate cost per click', kCpc),
       asDiag('Candidate applications from Meta', kApps), asDiag('Cost per application', kCpa),
-      asDiag('Cost per booked call', costPerCall), asDiag('Qual rate', qualRate),
       ...postsDiag('Instagram posts', organic?.instagram),
       ...postsDiag('Facebook posts', organic?.facebook),
     ],
+    cacPerSignedClient: {
+      rag: rate(m.cac.cur.cacPerSignedClient, m.cac.prev.cacPerSignedClient, 'down', ctx),
+      pct: pctChange(m.cac.cur.cacPerSignedClient, m.cac.prev.cacPerSignedClient),
+    },
   });
   const tone = RAG_COLOR[diagnosis.tone];
 
@@ -394,18 +588,18 @@ export function MarketingCard() {
         </Grid>
       </Section>
 
-      <PaidSection m={m} w={w} ctx={ctx} budget={budget} />
+      <PaidSection m={m} w={w} ctx={ctx} budget={budget} month={month} />
       <OrganicSection o={organic} w={w} ctx={ctx} postsPerWeek={postsPerWeek} error={organicError?.message} />
-      <HandoffSection m={m} w={w} ctx={ctx} />
+      <HandoffSection m={m} w={w} ctx={ctx} targets={targets} />
 
       <div style={{ fontSize: 11, color: MUTED, lineHeight: 1.6 }}>
         Colour rule for every card: green = same or better than last month; amber = up to 20% worse; red = more than 20% worse. "Worse" follows the direction of the number (a cost going up is worse). Colours stay grey for days 1–7 of the month.<br />
-        Overrides: ad spend is red above the monthly budget; posts compare against the pro-rata target of {postsPerWeek} a week per channel.<br />
-        Paid figures are Meta-reported. Handoff figures come from Airtable: calls booked = client leads with a booked meeting, by the date the lead was created; qualified candidate = NZ citizen with a trade.
+        Where a target is set (⚙), the card is coloured against the target instead (pro-rata for monthly counts), and last month is shown in grey for reference. Ad spend is red above the monthly budget; posts compare against the pro-rata target of {postsPerWeek} a week per channel.<br />
+        Paid figures are Meta-reported. Facebook views are organic only (Meta's organic/paid split). Handoff figures come from Airtable: calls booked = client leads with a booked meeting, by booking date (lead-created date where the booking time is unknown); qualified candidate = NZ citizen whose category is a skilled trade.
       </div>
 
       {error && <p style={{ color: AM, fontSize: 12 }}>⚠ Showing last loaded data — {error.message}</p>}
-      {showSettings && settings && <SettingsPanel settings={settings} onClose={() => setShowSettings(false)} />}
+      {showSettings && settings && <SettingsPanel settings={settings} suggested={suggestedTargets(m)} onClose={() => setShowSettings(false)} />}
     </div>
   );
 }

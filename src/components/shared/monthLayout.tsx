@@ -53,9 +53,22 @@ export function Delta({ prefix, prevText, cur, prev, rag, pts }: { prefix: strin
 
 // ─── Comparison card ──────────────────────────────────────────────────────────
 export function CmpCard({ c, ctx }: { c: Cmp; ctx: RagContext }) {
+  const rag = cmpRag(c, ctx);
+  if (c.target) {
+    // Target decides the colour; last month stays as a grey reference line.
+    const color = rag === 'grey' ? MUTED : RAG_COLOR[rag];
+    const proRata = c.target.value !== c.target.full ? ` (pro-rata ${c.fmt(c.target.value)})` : '';
+    return (
+      <Metric label={c.label} value={c.fmt(c.cur)} rag={rag}>
+        Target {c.fmt(c.target.full)}{proRata}{' '}
+        <span style={{ color }}>{c.target.value > 0 ? `${Math.round((c.cur / c.target.value) * 100)}% of target` : ''}</span>
+        <div><Delta prefix={c.prevWord} prevText={c.fmt(c.prev)} cur={c.cur} prev={c.prev} rag="grey" pts={c.pts} /></div>
+      </Metric>
+    );
+  }
   return (
-    <Metric label={c.label} value={c.fmt(c.cur)} rag={cmpRag(c, ctx)}>
-      <Delta prefix={c.prevWord} prevText={c.fmt(c.prev)} cur={c.cur} prev={c.prev} rag={cmpRag(c, ctx)} pts={c.pts} />
+    <Metric label={c.label} value={c.fmt(c.cur)} rag={rag}>
+      <Delta prefix={c.prevWord} prevText={c.fmt(c.prev)} cur={c.cur} prev={c.prev} rag={rag} pts={c.pts} />
     </Metric>
   );
 }

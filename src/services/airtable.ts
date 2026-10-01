@@ -24,6 +24,7 @@ import {
   fetchMetaPaidRange, fetchMetaSpendRange, fetchMetaSpendMonthly,
 } from './metaAds';
 import { toMs, trailingDays, last12Months, nzDate, type MonthWindow, type DayRange } from '../lib/nzTime';
+import { candidateQualifier, DEFAULT_NON_TRADE_CATEGORIES } from '../lib/qualified';
 
 const API_KEY = import.meta.env.VITE_AIRTABLE_API_KEY as string;
 const CLIENTS_BASE_ID = import.meta.env.VITE_AIRTABLE_CLIENTS_BASE_ID as string;
@@ -370,6 +371,7 @@ type ClientLeadFields = {
 type CandidateLeadFields = {
   'NZ Citizenship Status'?: string;
   'Trade / Occupation'?: string;
+  Category?: string;
   UTMs?: string;
   Created?: string;
 };
@@ -421,12 +423,7 @@ function isClientQualified(f: ClientLeadFields) {
   return f.Status === 'Moved to CRM';
 }
 
-function isCandidateQualified(f: CandidateLeadFields) {
-  return (
-    f['NZ Citizenship Status'] === 'NZ Citizen' &&
-    Boolean(f['Trade / Occupation']?.trim())
-  );
-}
+const isCandidateQualified = candidateQualifier(DEFAULT_NON_TRADE_CATEGORIES);
 
 function buildLeadMetric(
   thisRecs: (ClientLeadFields | CandidateLeadFields)[],
@@ -534,7 +531,7 @@ export async function fetchMarketingKPIs(frame: TimeFrame = 'month'): Promise<Ma
 
   const weeklyBudget = budgetRecords[0]?.['Weekly Budget'] ?? 0;
 
-  const candidateMetric = buildLeadMetric(thisCandidates, prevCandidates, isCandidateQualified, spend.thisWeek, spend.prevWeek);
+  const candidateMetric = buildLeadMetric(thisCandidates, prevCandidates, f => isCandidateQualified(f as CandidateLeadFields), spend.thisWeek, spend.prevWeek);
   candidateMetric.cpl = cpr.candidateCpr;
   candidateMetric.prevCpl = cpr.prevCandidateCpr;
 
@@ -881,19 +878,21 @@ type CallBookingFields = {
   Created?: string;
   'Meeting Link'?: string;
   'Call Booked'?: string;
+  'Booked At'?: string;
 };
 
 // Calls booked = Client Paid Ads rows with a booked meeting, counted by the date the
-// row was created (the booking), whatever happened after (no-shows still count).
+// booking was made (Booked At, from Calendly), whatever happened after (no-shows still
+// count). Rows without a Booked At fall back to the date the lead was created.
 function countCallsBooked(rows: CallBookingFields[], from: number, to: number) {
   return rows.filter(r =>
-    Boolean(r['Meeting Link']?.trim() || r['Call Booked']?.trim()) && isInPeriod(r.Created, from, to)
+    Boolean(r['Meeting Link']?.trim() || r['Call Booked']?.trim()) && isInPeriod(r['Booked At'] ?? r.Created, from, to)
   ).length;
 }
 
-function countCandidates(rows: CandidateLeadFields[], from: number, to: number) {
-  const inWindow = rows.filter(c => isInPeriod(c.Created, from, to));
-  return { total: inWindow.length, qualified: inWindow.filter(isCandidateQualified).length };
+function countCandidates(d: AcquisitionData, from: number, to: number) {
+  const inWindow = d.candidates.filter(c => isInPeriod(c.Created, from, to));
+  return { total: inWindow.length, qualified: inWindow.filter(d.isQualified).length };
 }
 
 type AcquisitionData = {
@@ -901,7 +900,19 @@ type AcquisitionData = {
   salesTranscripts: { Created?: string }[];
   candidates: CandidateLeadFields[];
   callBookings: CallBookingFields[];
+  isQualified: (f: CandidateLeadFields) => boolean;
 };
+
+// The non-trade category list lives in the Marketing settings (Supabase, via the API).
+async function fetchNonTradeCategories(): Promise<string[]> {
+  try {
+    const res = await fetch('/api/marketing-settings');
+    const body = res.ok ? await res.json() : null;
+    return Array.isArray(body?.nonTradeCategories) ? body.nonTradeCategories : DEFAULT_NON_TRADE_CATEGORIES;
+  } catch {
+    return DEFAULT_NON_TRADE_CATEGORIES;
+  }
+}
 
 // The one place every acquisition CAC is defined. Each tab reads its CAC from here.
 function acquisitionCacs(
@@ -913,7 +924,7 @@ function acquisitionCacs(
   const clientsWon = d.mainClients.filter(c => isInPeriod(c['Signed Date'], from, to)).length;
   const salesCalls = d.salesTranscripts.filter(t => isInPeriod(t.Created, from, to)).length;
   const callsBooked = countCallsBooked(d.callBookings, from, to);
-  const { qualified } = countCandidates(d.candidates, from, to);
+  const { qualified } = countCandidates(d, from, to);
   const clientAcquisitionCost = meta.clientSpend + salesCalls * SALES_TIME_COST_PER_CALL;
   return {
     clientAcquisitionCost,
@@ -924,16 +935,18 @@ function acquisitionCacs(
 }
 
 async function fetchAcquisitionData(): Promise<AcquisitionData> {
-  const [mainClients, salesTranscripts, candidates, callBookings] = await Promise.all([
+  const [mainClients, salesTranscripts, candidates, callBookings, nonTrade] = await Promise.all([
     fetchAllFromBase<MainClientFields>(CLIENTS_BASE_ID, MAIN_CLIENT_TABLE_ID, {}, ['Signed Date', 'Company Name']),
     fetchAllFromBase<{ Created?: string }>(CLIENTS_BASE_ID, SALES_TRANSCRIPT_TABLE_ID, {}, ['Created'])
       .catch(() => [] as { Created?: string }[]),
-    fetchAllFromBase<CandidateLeadFields>(CANDIDATES_BASE_ID, CANDIDATES_TABLE_ID, {}, ['NZ Citizenship Status', 'Trade / Occupation', 'Created']),
-    fetchAllFromBase<CallBookingFields>(CLIENTS_BASE_ID, CLIENTS_TABLE_ID, {}, ['Created', 'Meeting Link', 'Call Booked']),
+    fetchAllFromBase<CandidateLeadFields>(CANDIDATES_BASE_ID, CANDIDATES_TABLE_ID, {}, ['NZ Citizenship Status', 'Category', 'Created']),
+    fetchAllFromBase<CallBookingFields>(CLIENTS_BASE_ID, CLIENTS_TABLE_ID, {}, ['Created', 'Meeting Link', 'Call Booked', 'Booked At']),
+    fetchNonTradeCategories(),
   ]);
   return {
     mainClients: mainClients.filter(c => c['Company Name'] !== 'Stand Up Recruitment'),
     salesTranscripts, candidates, callBookings,
+    isQualified: candidateQualifier(nonTrade),
   };
 }
 
@@ -1057,16 +1070,21 @@ export async function fetchCacKPIs(
 }
 
 // ─── Marketing tab (month view) ───────────────────────────────────────────────
-function handoffTotals(d: AcquisitionData, range: { since: string; until: string }, clientSpend: number): HandoffTotals {
+function handoffTotals(
+  d: AcquisitionData,
+  range: { since: string; until: string },
+  spend: { client: number; candidate: number },
+): HandoffTotals {
   const { from, to } = toMs(range);
   const callsBooked = countCallsBooked(d.callBookings, from, to);
-  const { total, qualified } = countCandidates(d.candidates, from, to);
+  const { total, qualified } = countCandidates(d, from, to);
   return {
     callsBooked,
     qualifiedCandidates: qualified,
     totalCandidates: total,
     qualRate: total > 0 ? (qualified / total) * 100 : 0,
-    costPerBookedCall: callsBooked > 0 ? clientSpend / callsBooked : 0,
+    costPerBookedCall: callsBooked > 0 ? spend.client / callsBooked : 0,
+    costPerQualifiedCandidate: qualified > 0 ? spend.candidate / qualified : 0,
   };
 }
 
@@ -1100,8 +1118,8 @@ export async function fetchMarketingMonth(w: MonthWindow): Promise<MarketingMont
     paid: { cur: paidCur, prev: paidPrev },
     cac: { cur: cac(cacCur, spend90Cur), prev: cac(cacPrev, spend90Prev) },
     handoff: {
-      cur: handoffTotals(data, w.cur, paidCur.client.spend),
-      prev: handoffTotals(data, w.prev, paidPrev.client.spend),
+      cur: handoffTotals(data, w.cur, { client: paidCur.client.spend, candidate: paidCur.candidate.spend }),
+      prev: handoffTotals(data, w.prev, { client: paidPrev.client.spend, candidate: paidPrev.candidate.spend }),
     },
     spendSeries: months.map(m => ({
       key: m.key, label: m.label,
@@ -1109,8 +1127,13 @@ export async function fetchMarketingMonth(w: MonthWindow): Promise<MarketingMont
       candidate: monthly[m.key]?.candidate ?? 0,
     })),
     handoffSeries: months.map(m => {
-      const h = handoffTotals(data, m, 0);
-      return { key: m.key, label: m.label, callsBooked: h.callsBooked, qualifiedCandidates: h.qualifiedCandidates };
+      const spend = { client: monthly[m.key]?.client ?? 0, candidate: monthly[m.key]?.candidate ?? 0 };
+      const h = handoffTotals(data, m, spend);
+      return {
+        key: m.key, label: m.label,
+        callsBooked: h.callsBooked, qualifiedCandidates: h.qualifiedCandidates,
+        costPerBookedCall: h.costPerBookedCall, costPerQualifiedCandidate: h.costPerQualifiedCandidate,
+      };
     }),
   };
 }
