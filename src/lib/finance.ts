@@ -1,8 +1,8 @@
 // Finance figures shared by the Finance tab and the Overview.
 import type { XeroFinanceData } from '../types';
 import type { MonthWindow } from './nzTime';
-import { isTooEarly } from './rag';
-import { diagnoseFinance, type Diagnosis } from './diagnosis';
+import { isTooEarly } from './rag.js';
+import { diagnoseFinance, type Diagnosis } from './diagnosis.js';
 
 /** Placeholder until set on the Overview (⚙). */
 export const DEFAULT_NET_PROFIT_TARGET = 40000;
