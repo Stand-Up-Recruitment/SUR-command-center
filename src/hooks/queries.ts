@@ -9,6 +9,7 @@ import {
   fetchScheduledInvoices,
   fetchCacKPIs,
   fetchMarketingMonth,
+  fetchSalesMonth,
 } from '../services/airtable';
 import { fetchXeroFinanceData, hasXeroCredentials } from '../services/xero';
 import { fetchMetaSpendByFrame } from '../services/metaAds';
@@ -16,7 +17,7 @@ import { fetchVoiceCallKPIs } from '../services/voiceCalls';
 import { fetchJobAdderStageKPIs, hasJobAdderStageCredentials } from '../services/jobadderStages';
 import { fetchJobAging, hasOpenJobsCredentials } from '../services/jobadderJobs';
 import { monthWindow } from '../lib/nzTime';
-import type { TimeFrame, LTGPFrame, OrganicMonth, MarketingSettings } from '../types';
+import type { TimeFrame, LTGPFrame, OrganicMonth, MarketingSettings, SalesSettings } from '../types';
 
 const hasAirtableKey    = Boolean(import.meta.env.VITE_AIRTABLE_API_KEY);
 const hasClientsBase    = Boolean(import.meta.env.VITE_AIRTABLE_CLIENTS_BASE_ID);
@@ -188,5 +189,36 @@ export function useSaveMarketingSettings() {
         body: JSON.stringify(settings),
       }),
     onSuccess: data => qc.setQueryData(['marketing-settings'], data),
+  });
+}
+
+// ─── Sales tab (month view) ───────────────────────────────────────────────────
+export function useSalesMonth(month: string) {
+  return useQuery({
+    queryKey: ['sales-month', month],
+    queryFn: () => fetchSalesMonth(monthWindow(month)),
+    enabled: hasSalesCredentials,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useSalesSettings() {
+  return useQuery({
+    queryKey: ['sales-settings'],
+    queryFn: () => getJson<SalesSettings & { error?: string }>('/api/sales-settings'),
+    retry: 1,
+  });
+}
+
+export function useSaveSalesSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ settings, adminPassword }: { settings: SalesSettings; adminPassword: string }) =>
+      getJson<SalesSettings>('/api/sales-settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
+        body: JSON.stringify(settings),
+      }),
+    onSuccess: data => qc.setQueryData(['sales-settings'], data),
   });
 }

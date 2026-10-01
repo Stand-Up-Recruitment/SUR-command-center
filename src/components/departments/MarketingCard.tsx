@@ -1,98 +1,18 @@
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import {
   BarChart, Bar, ComposedChart, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, LabelList, Legend,
 } from 'recharts';
 import { Skeleton } from '../shared/Skeleton';
+import { NZ, AM, RD, BG, BG2, BORDER, TEXT, MUTED, RAG_COLOR, money0, money2, int, kShort, shortDate, cmpRag, type Cmp } from '../shared/monthTheme';
+import { Section, SubHead, Grid, Metric, Delta, CmpCard } from '../shared/monthLayout';
 import { useMarketingMonth, useOrganicMonth, useMarketingSettings, useSaveMarketingSettings } from '../../hooks/queries';
 import { useAuthRole } from '../auth/AuthContext';
 import { monthWindow, recentMonthKeys, currentMonthKey, type MonthWindow } from '../../lib/nzTime';
-import { rate, pctChange, isTooEarly, type Rag, type Better, type RagContext } from '../../lib/rag';
+import { rate, pctChange, isTooEarly, type Rag, type RagContext } from '../../lib/rag';
 import { diagnose, type DiagMetric } from '../../lib/diagnosis';
 import type { MarketingMonth, OrganicChannel, OrganicMonth, MarketingSettings } from '../../types';
 
-// ─── Palette (shared with the Finance tab) ────────────────────────────────────
-const NZ     = '#1D9E75';
-const AM     = '#BA7517';
-const RD     = '#D85A30';
-const GREY   = '#5a5a5a';
-const BG     = '#111111';
-const BG2    = '#1a1a1a';
-const BORDER = 'rgba(255,255,255,0.10)';
-const TEXT   = '#f5f5f5';
-const MUTED  = '#a3a3a3';
 const CLIENT_BAR = '#8a8a8a';
-
-const RAG_COLOR: Record<Rag, string> = { green: NZ, amber: AM, red: RD, grey: GREY };
-
-// ─── Formatters ───────────────────────────────────────────────────────────────
-const money0 = (n: number) => `$${Math.round(n).toLocaleString('en-NZ')}`;
-const money2 = (n: number) => `$${n.toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const int = (n: number) => Math.round(n).toLocaleString('en-NZ');
-const kShort = (n: number) => (n >= 1000 ? `$${(n / 1000).toFixed(1)}k` : `$${Math.round(n)}`);
-const shortDate = (iso: string) => new Date(iso).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', timeZone: 'Pacific/Auckland' });
-
-// ─── Layout helpers ───────────────────────────────────────────────────────────
-function Section({ n, title, sub, children }: { n: number; title: string; sub?: string; children: ReactNode }) {
-  return (
-    <div style={{ background: BG2, border: `.5px solid ${BORDER}`, borderRadius: 12, padding: '1.25rem', marginBottom: '.875rem' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: '.875rem' }}>
-        <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#2a2a2a', color: MUTED, fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{n}</div>
-        <span style={{ fontSize: 15, fontWeight: 600, color: TEXT }}>{title}</span>
-        <div style={{ flex: 1 }} />
-        {sub && <span style={{ fontSize: 11, color: MUTED, textAlign: 'right' }}>{sub}</span>}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function SubHead({ children }: { children: ReactNode }) {
-  return <div style={{ fontSize: 11, fontWeight: 600, color: MUTED, margin: '.75rem 0 .5rem' }}>{children}</div>;
-}
-
-function Grid({ cols, children }: { cols: number | string; children: ReactNode }) {
-  return (
-    <div style={{ display: 'grid', gridTemplateColumns: typeof cols === 'number' ? `repeat(${cols}, minmax(0,1fr))` : cols, gap: 10, marginBottom: 10 }}>
-      {children}
-    </div>
-  );
-}
-
-function Metric({ label, value, rag, children, muted }: { label: string; value?: string; rag: Rag; children?: ReactNode; muted?: boolean }) {
-  return (
-    <div style={{ background: BG, border: `.5px solid ${BORDER}`, borderLeft: `3px solid ${RAG_COLOR[rag]}`, borderRadius: 8, padding: '.875rem 1rem', minHeight: 78 }}>
-      <div style={{ fontSize: 11, color: MUTED, marginBottom: 6 }}>{label}</div>
-      {value != null && <div style={{ fontSize: 24, fontWeight: 600, color: muted ? MUTED : TEXT, lineHeight: 1.1, marginBottom: 6 }}>{value}</div>}
-      <div style={{ fontSize: 11, color: MUTED, lineHeight: 1.5 }}>{children}</div>
-    </div>
-  );
-}
-
-/** "Aug $5,522 ▼ 14.5%" — the arrow/percent takes the card's colour (muted when grey). */
-function Delta({ prefix, prevText, cur, prev, rag, pts }: { prefix: string; prevText: string; cur: number; prev: number; rag: Rag; pts?: boolean }) {
-  const color = rag === 'grey' ? MUTED : RAG_COLOR[rag];
-  if (pts) {
-    const d = cur - prev;
-    return <>{prefix} {prevText} <span style={{ color }}>{d >= 0 ? '▲' : '▼'} {Math.abs(d).toFixed(1)} pts</span></>;
-  }
-  const pct = pctChange(cur, prev);
-  return <>{prefix} {prevText}{pct != null && <span style={{ color }}> {pct >= 0 ? '▲' : '▼'} {Math.abs(pct).toFixed(1)}%</span>}</>;
-}
-
-// ─── Card builders ────────────────────────────────────────────────────────────
-interface Cmp { label: string; cur: number; prev: number; better: Better; fmt: (n: number) => string; neutral?: boolean; prevWord: string; pts?: boolean }
-
-function cmpRag(c: Cmp, ctx: RagContext): Rag {
-  return c.neutral ? 'grey' : rate(c.cur, c.prev, c.better, ctx);
-}
-
-function CmpCard({ c, ctx }: { c: Cmp; ctx: RagContext }) {
-  return (
-    <Metric label={c.label} value={c.fmt(c.cur)} rag={cmpRag(c, ctx)}>
-      <Delta prefix={c.prevWord} prevText={c.fmt(c.prev)} cur={c.cur} prev={c.prev} rag={cmpRag(c, ctx)} pts={c.pts} />
-    </Metric>
-  );
-}
 
 // ─── Settings panel ───────────────────────────────────────────────────────────
 function SettingsPanel({ settings, onClose }: { settings: MarketingSettings; onClose: () => void }) {

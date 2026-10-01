@@ -16,12 +16,14 @@ import type {
   AcquisitionCacs,
   HandoffTotals,
   MarketingMonth,
+  SalesMonth,
+  SalesFunnel,
 } from '../types';
 import {
   fetchMetaSpend, fetchMetaSpendByFrame, fetchMetaSpendPrevPeriod, fetchMetaCprByGroup,
   fetchMetaPaidRange, fetchMetaSpendRange, fetchMetaSpendMonthly,
 } from './metaAds';
-import { toMs, trailingDays, last12Months, type MonthWindow } from '../lib/nzTime';
+import { toMs, trailingDays, last12Months, nzDate, type MonthWindow, type DayRange } from '../lib/nzTime';
 
 const API_KEY = import.meta.env.VITE_AIRTABLE_API_KEY as string;
 const CLIENTS_BASE_ID = import.meta.env.VITE_AIRTABLE_CLIENTS_BASE_ID as string;
@@ -1109,6 +1111,199 @@ export async function fetchMarketingMonth(w: MonthWindow): Promise<MarketingMont
     handoffSeries: months.map(m => {
       const h = handoffTotals(data, m, 0);
       return { key: m.key, label: m.label, callsBooked: h.callsBooked, qualifiedCandidates: h.qualifiedCandidates };
+    }),
+  };
+}
+
+// ─── Sales tab (month view) ───────────────────────────────────────────────────
+type SalesCallFields = {
+  Status?: string; 'Call Booked'?: string; 'Company Name'?: string;
+  Trade?: string; Location?: string; Source?: string; Salesperson?: unknown;
+};
+type SalesTobFields = {
+  'Company Name'?: string; 'TOB Status'?: string; 'Sent Date'?: string; 'Signed Date'?: string; Salesperson?: unknown;
+};
+
+const NO_TOB_OUTCOMES = ['Closed', 'No Show', 'Not a Fit', 'Waitlist'];
+const SIGNED_TOB = ['Moved To Main Client', 'Signed'];
+const STALE_DAYS = 14;
+const DEFAULT_SALESPERSON = 'Les';
+
+// Requests the not-yet-created Salesperson field, and drops it if Airtable doesn't know it.
+async function fetchWithOptionalSalesperson<T>(tableId: string, fields: string[]): Promise<T[]> {
+  try {
+    return await fetchAllFromBase<T>(CLIENTS_BASE_ID, tableId, {}, [...fields, 'Salesperson']);
+  } catch (e) {
+    if (!/unknown field/i.test((e as Error).message)) throw e;
+    return fetchAllFromBase<T>(CLIENTS_BASE_ID, tableId, {}, fields);
+  }
+}
+
+/** NZ calendar day of a call: ISO datetimes, or older D/M/YYYY text (day first). */
+function callDay(v?: string): string | null {
+  if (!v) return null;
+  const dmy = v.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (dmy) return `${dmy[3]}-${dmy[2].padStart(2, '0')}-${dmy[1].padStart(2, '0')}`;
+  const t = Date.parse(v);
+  return Number.isNaN(t) ? null : nzDate(t);
+}
+
+const inDays = (day: string | null | undefined, r: DayRange) => Boolean(day) && day! >= r.since && day! <= r.until;
+const daysBetween = (from: string, to: string) => Math.round((Date.parse(to) - Date.parse(from)) / 86_400_000);
+
+// Duplicate CRM companies ("Formtech Construction" twice) count once.
+const companyKey = (name: string | undefined, fallback: string) =>
+  (name ?? '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\b(pty|ltd|limited|proprietary)\b/g, ' ').replace(/\s+/g, ' ').trim() || fallback;
+
+const salespersonOf = (v: unknown): string => {
+  const name = typeof v === 'object' && v !== null ? (v as { name?: string }).name : v;
+  return typeof name === 'string' && name.trim() ? name.trim() : DEFAULT_SALESPERSON;
+};
+
+function uniqueByCompany<T extends { 'Company Name'?: string }>(rows: T[]): T[] {
+  const seen = new Set<string>();
+  return rows.filter((r, i) => {
+    const k = companyKey(r['Company Name'], `#${i}`);
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+}
+
+/**
+ * Everything the Sales tab needs for one month: booked call → signed ToB, in NZ days.
+ * Calls come from Client Paid Ads (paid source, by call date); ToBs from the CRM (all
+ * sources). Open ToBs are a snapshot as of today whatever month is selected.
+ */
+export async function fetchSalesMonth(w: MonthWindow): Promise<SalesMonth> {
+  if (!CLIENTS_BASE_ID) throw new Error('Sales credentials not configured');
+  const cacCur = trailingDays(w.cur.until, CAC_WINDOW_DAYS);
+  const cacPrev = trailingDays(w.prev.until, CAC_WINDOW_DAYS);
+
+  const [callRows, tobRows, cac] = await Promise.all([
+    fetchWithOptionalSalesperson<SalesCallFields>(CLIENTS_TABLE_ID, ['Status', 'Call Booked', 'Company Name', 'Trade', 'Location', 'Source']),
+    fetchWithOptionalSalesperson<SalesTobFields>(CRM_TABLE_ID, ['Company Name', 'TOB Status', 'Sent Date', 'Signed Date']),
+    // CAC per Signed Client is read from the shared acquisitionCacs, never recalculated here.
+    (CANDIDATES_BASE_ID
+      ? Promise.all([fetchAcquisitionData(), fetchMetaSpendRange(cacCur), fetchMetaSpendRange(cacPrev)]).then(([data, sCur, sPrev]) => {
+          const at = (r: DayRange, s: { clientSpend: number; candidateSpend: number }) => {
+            const { from, to } = toMs(r);
+            return acquisitionCacs(data, from, to, s).cacPerSignedClient;
+          };
+          return { cur: at(cacCur, sCur), prev: at(cacPrev, sPrev) };
+        })
+      : Promise.resolve(null)
+    ).catch(() => null),
+  ]);
+
+  // Client Paid Ads also holds a few referral / DM leads; only paid-ad calls count (blank = paid).
+  const calls = callRows
+    .filter(r => !r.Source || r.Source === 'Paid Ads')
+    .map(r => ({ ...r, day: callDay(r['Call Booked']), who: salespersonOf(r.Salesperson) }))
+    .filter(r => r.day);
+  const tobs = tobRows.map(r => ({
+    ...r,
+    sentDay: r['Sent Date'] ? nzDate(r['Sent Date']) : null,
+    who: salespersonOf(r.Salesperson),
+  }));
+
+  // An outcome only counts as "recorded" once it shows up in this or last month's calls.
+  const recentCalls = calls.filter(c => inDays(c.day, { since: w.prev.since, until: w.cur.until }));
+  const tracked = (status: string) => recentCalls.some(c => c.Status === status);
+
+  const funnel = (r: DayRange, who?: string): SalesFunnel => {
+    const inCalls = calls.filter(c => inDays(c.day, r) && (!who || c.who === who));
+    const count = (status: string) => inCalls.filter(c => c.Status === status).length;
+    const outcome = (status: string) => (tracked(status) ? count(status) : null);
+    const noShow = outcome('No Show');
+    const mine = who ? tobs.filter(t => t.who === who) : tobs;
+    return {
+      callsBooked: inCalls.length,
+      noShow,
+      notFit: outcome('Not a Fit'),
+      waitlist: outcome('Waitlist'),
+      callsHeld: noShow == null ? null : inCalls.length - noShow,
+      closedNoToB: inCalls.filter(c => NO_TOB_OUTCOMES.includes(c.Status ?? '')).length,
+      paidTobs: count('Moved to CRM'),
+      tobsSent: uniqueByCompany(mine.filter(t => inDays(t.sentDay, r))).length,
+      signed: uniqueByCompany(mine.filter(t => SIGNED_TOB.includes(t['TOB Status'] ?? '') && inDays(t['Signed Date'], r))).length,
+    };
+  };
+
+  // ── Open ToBs right now (one per company, the latest one sent) ──
+  const today = nzDate(Date.now());
+  const latestOpen = new Map<string, (typeof tobs)[number]>();
+  tobs.forEach((t, i) => {
+    const status = t['TOB Status'];
+    if (!status || status === 'Closed' || SIGNED_TOB.includes(status) || !t.sentDay) return;
+    const k = companyKey(t['Company Name'], `#${i}`);
+    const prev = latestOpen.get(k);
+    if (!prev || t.sentDay > prev.sentDay!) latestOpen.set(k, t);
+  });
+  const open = [...latestOpen.values()].map(t => ({ ...t, days: daysBetween(t.sentDay!, today) }));
+  // "Waiting" clients have told us when they'll be back, so they're never stale.
+  const isStale = (t: (typeof open)[number]) => t['TOB Status'] !== 'Waiting' && t.days > STALE_DAYS;
+  const stage = (s: string) => open.filter(t => t['TOB Status'] === s).length;
+
+  // ── By salesperson ──
+  const names = new Set([DEFAULT_SALESPERSON]);
+  calls.filter(c => inDays(c.day, w.cur)).forEach(c => names.add(c.who));
+  tobs.filter(t => inDays(t.sentDay, w.cur)).forEach(t => names.add(t.who));
+  open.forEach(t => names.add(t.who));
+  const salespeople = [...names].map(name => {
+    const f = funnel(w.cur, name);
+    const mine = open.filter(t => t.who === name);
+    return { name, calls: f.callsBooked, noShow: f.noShow, sent: f.tobsSent, signed: f.signed, open: mine.length, stale: mine.filter(isStale).length };
+  });
+
+  // ── Time to sign, for signings last month and this month ──
+  const signWindow = { since: w.prev.since, until: w.cur.until };
+  const signDays = uniqueByCompany(tobs.filter(t => SIGNED_TOB.includes(t['TOB Status'] ?? '') && inDays(t['Signed Date'], signWindow) && t.sentDay))
+    .map(t => Math.max(0, daysBetween(t.sentDay!, t['Signed Date']!)));
+
+  // ── Waitlist: clients currently waiting for candidates, by trade and town ──
+  const waiting = callRows.filter(r => r.Status === 'Waitlist');
+  const byTradeTown = new Map<string, { trade: string; town: string; count: number }>();
+  waiting.forEach(r => {
+    const trade = r.Trade?.trim() || 'Unknown trade';
+    const town = r.Location?.trim() || 'Unknown town';
+    const k = `${trade.toLowerCase()}|${town.toLowerCase()}`;
+    const row = byTradeTown.get(k) ?? { trade, town, count: 0 };
+    row.count++;
+    byTradeTown.set(k, row);
+  });
+
+  return {
+    cur: funnel(w.cur),
+    prev: funnel(w.prev),
+    salespeople,
+    open: {
+      total: open.length,
+      stages: {
+        sent: stage('Sent') + stage('Sending') + stage('Response'),
+        waiting: stage('Waiting'),
+        fu1: stage('Follow Up #1'),
+        fu2: stage('Follow Up #2'),
+        fu3: stage('Follow Up #3') + stage('Follow Up #4'),
+      },
+      stale: open.filter(isStale).length,
+      oldest: open.filter(t => t['TOB Status'] !== 'Waiting').sort((a, b) => b.days - a.days).slice(0, 5)
+        .map(t => ({ company: t['Company Name']?.trim() || '(no name)', stage: t['TOB Status']!, days: t.days })),
+    },
+    timeToSign: {
+      label: `${w.prevShortLabel}–${w.shortLabel}`,
+      total: signDays.length,
+      median: median(signDays),
+      within7: signDays.filter(d => d <= 7).length,
+      max: signDays.length ? Math.max(...signDays) : 0,
+    },
+    waitlist: waiting.length
+      ? { count: waiting.length, rows: [...byTradeTown.values()].sort((a, b) => b.count - a.count) }
+      : null,
+    cac,
+    series: last12Months(w.month, w.cur.until).map(m => {
+      const f = funnel(m);
+      return { key: m.key, label: m.label, signed: f.signed, sent: f.tobsSent, signRate: f.tobsSent > 0 ? (f.signed / f.tobsSent) * 100 : null };
     }),
   };
 }

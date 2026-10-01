@@ -453,6 +453,52 @@ export interface MarketingSettings {
   postsPerWeek: number;
 }
 
+// ─── Sales tab (month view) ───────────────────────────────────────────────────
+export interface SalesSettings {
+  targetPerSalesperson: number;
+}
+
+/** One window of the booked-call → signed-ToB funnel. Call outcomes are null until they're recorded in Airtable. */
+export interface SalesFunnel {
+  callsBooked: number;    // Client Paid Ads (paid source), by call date
+  noShow: number | null;
+  notFit: number | null;
+  waitlist: number | null;
+  callsHeld: number | null;
+  closedNoToB: number;    // calls whose outcome is Closed / No Show / Not a Fit / Waitlist
+  paidTobs: number;       // calls marked "Moved to CRM"
+  tobsSent: number;       // CRM, all sources
+  signed: number;
+}
+
+export interface SalespersonRow {
+  name: string;
+  calls: number;
+  noShow: number | null;
+  sent: number;
+  signed: number;
+  open: number;
+  stale: number;
+}
+
+export interface OpenTob { company: string; stage: string; days: number }
+
+export interface SalesMonth {
+  cur: SalesFunnel;
+  prev: SalesFunnel;
+  salespeople: SalespersonRow[];
+  open: {
+    total: number;
+    stages: { sent: number; waiting: number; fu1: number; fu2: number; fu3: number };
+    stale: number;
+    oldest: OpenTob[];
+  };
+  timeToSign: { label: string; total: number; median: number; within7: number; max: number };
+  waitlist: { count: number; rows: { trade: string; town: string; count: number }[] } | null;
+  cac: { cur: number; prev: number } | null;   // CAC per Signed Client, trailing 90 days, from acquisitionCacs
+  series: { key: string; label: string; signed: number; sent: number; signRate: number | null }[];
+}
+
 // ─── Shared ───────────────────────────────────────────────────────────────────
 export type DepartmentStatus = 'on-track' | 'at-risk' | 'off-track' | 'no-data';
 export type TimeFrame = 'day' | 'week' | 'month' | 'year';

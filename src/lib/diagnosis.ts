@@ -66,3 +66,42 @@ export function diagnose(input: {
   }
   return { state: 'healthy', badge: 'Healthy', tone: 'green', text: 'No marketing problem. Everything at or better than last month.' };
 }
+
+// ─── Sales tab ────────────────────────────────────────────────────────────────
+export interface SalesDiagMetric extends DiagMetric {
+  group: 'sales' | 'upstream' | 'supply';
+  section: number;       // which page section to look at
+  phrase?: string;       // overrides "X down 12% on last month"
+}
+
+const SALES_GROUPS = [
+  { group: 'sales', badge: 'Sales problem', lead: 'Sales problem.' },
+  { group: 'upstream', badge: 'Upstream', lead: 'Upstream: marketing is sending fewer or weaker calls.' },
+  { group: 'supply', badge: 'Candidate supply', lead: 'Candidate supply: more clients are waiting for candidates.' },
+] as const;
+
+/**
+ * Checked in order: sales problem (show rate, sign rate or stale ToBs amber/red), upstream
+ * (calls booked down or Not a Fit share up), candidate supply (Waitlist share up), else Healthy.
+ * Every amber and red metric is named, with the section to look at.
+ */
+export function diagnoseSales(input: { tooEarly: boolean; lead: string; metrics: SalesDiagMetric[]; note?: string }): Diagnosis {
+  if (input.tooEarly) {
+    return { state: 'early', badge: 'Too early', tone: 'grey', text: 'Too early in the month to call. Colours switch on from day 8.' };
+  }
+  const flagged = input.metrics.filter(m => m.rag === 'amber' || m.rag === 'red');
+  const first = SALES_GROUPS.find(g => flagged.some(m => m.group === g.group));
+  if (!first) {
+    return { state: 'healthy', badge: 'Healthy', tone: 'green', text: `${input.lead} Healthy: everything at or better than last month.` };
+  }
+  const tone: Rag = flagged.some(m => m.group === first.group && m.rag === 'red') ? 'red' : 'amber';
+  const parts = flagged.map(m => `${m.phrase ?? `${describe([m])} on last month`}, ${m.rag}.`);
+  const sections = [...new Set(flagged.map(m => m.section))].sort((a, b) => a - b);
+  const see = `See section${sections.length > 1 ? 's' : ''} ${sections.length > 1 ? `${sections.slice(0, -1).join(', ')} and ${sections[sections.length - 1]}` : sections[0]}.`;
+  return {
+    state: 'watch',
+    badge: first.badge,
+    tone,
+    text: [input.lead, first.lead, ...parts, input.note, see].filter(Boolean).join(' '),
+  };
+}
