@@ -2,11 +2,15 @@ import { useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { TimeFramePicker } from '../shared/TimeFramePicker';
 import { Skeleton } from '../shared/Skeleton';
-import { useRecruiterKPIs, useJobAging, useVoiceCallKPIs, useJobAdderStageKPIs } from '../../hooks/queries';
+import {
+  useRecruiterKPIs, useJobAging, useVoiceCallKPIs, useJobAdderStageKPIs, useRecruitmentSettings, useSaveRecruitmentSettings,
+} from '../../hooks/queries';
 import { timeBoundaries } from '../../services/airtable';
 import { COLORS, CARD_STYLE } from '../../styles/tokens';
 import { PlacementsTrendChart } from '../shared/PlacementsTrendChart';
-import type { DepartmentStatus, RecruiterStat, RollingRates, TimeFrame } from '../../types';
+import { useAuthRole } from '../auth/AuthContext';
+import { DEFAULT_RECRUITMENT_SETTINGS, hiringTrigger, type HiringState } from '../../lib/recruitment';
+import type { DepartmentStatus, RecruiterStat, RecruitmentSettings, RollingRates, TimeFrame } from '../../types';
 
 // Breakeven cost model — update these when Les's costs change (same pattern as
 // RECRUITER_COUNT in services/airtable.ts's LTGP calc).
@@ -95,6 +99,89 @@ function RecruiterSkeleton() {
   );
 }
 
+const HIRING_STYLE: Record<HiringState, { bg: string; border: string; text: string }> = {
+  'hire-now':  { bg: COLORS.dangerBg, border: COLORS.danger, text: COLORS.danger },
+  'hire-soon': { bg: COLORS.warningBg, border: COLORS.warning, text: COLORS.warning },
+  'ok':        { bg: COLORS.successBg, border: COLORS.success, text: COLORS.success },
+  'no-data':   { bg: COLORS.bgSubtle, border: COLORS.border, text: COLORS.textMuted },
+};
+
+const SIX_MONTHS_MS = 182 * 86_400_000;
+
+function RecruitmentSettingsPanel({ settings, onClose }: { settings: RecruitmentSettings; onClose: () => void }) {
+  const save = useSaveRecruitmentSettings();
+  const [maxJobs, setMaxJobs] = useState(String(settings.maxActiveJobs));
+  const [ramp, setRamp] = useState(String(settings.rampWeeks));
+  const [buffer, setBuffer] = useState(String(settings.bufferWeeks));
+  const [recruiters, setRecruiters] = useState(settings.recruiters.map(r => ({ name: r.name, startDate: r.startDate ?? '' })));
+  const [password, setPassword] = useState('');
+  const input: CSSProperties = { background: COLORS.bgSubtle, border: `1px solid ${COLORS.border}`, borderRadius: 6, color: COLORS.textPrimary, padding: '8px 10px', fontSize: 13, width: '100%', boxSizing: 'border-box', colorScheme: 'dark' };
+  const label: CSSProperties = { fontSize: 11, color: COLORS.textMuted };
+  const smallButton: CSSProperties = { fontSize: 12, padding: '6px 12px', borderRadius: 6, border: `1px solid ${COLORS.border}`, background: 'transparent', color: COLORS.textSecondary, cursor: 'pointer' };
+  const setRecruiter = (i: number, patch: Partial<{ name: string; startDate: string }>) =>
+    setRecruiters(rs => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+
+  const submit = () => {
+    save.mutate(
+      {
+        settings: {
+          maxActiveJobs: Number(maxJobs),
+          rampWeeks: Number(ramp),
+          bufferWeeks: Number(buffer),
+          recruiters: recruiters
+            .filter(r => r.name.trim())
+            .map(r => ({ name: r.name.trim(), startDate: r.startDate || null })),
+        },
+        adminPassword: password,
+      },
+      { onSuccess: onClose },
+    );
+  };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }} onClick={onClose}>
+      <div style={{ background: COLORS.bgCard, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: '1.25rem', width: 440, maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+        <div style={{ fontSize: 15, fontWeight: 600, color: COLORS.textPrimary, marginBottom: 14 }}>Recruitment settings</div>
+        <label style={label}>Max active jobs per recruiter</label>
+        <input style={{ ...input, margin: '4px 0 12px' }} type="number" min={1} step={1} value={maxJobs} onChange={e => setMaxJobs(e.target.value)} />
+        <div style={{ display: 'flex', gap: 12 }}>
+          <div style={{ flex: 1 }}>
+            <label style={label}>Ramp (weeks)</label>
+            <input style={{ ...input, margin: '4px 0 12px' }} type="number" min={0} step={1} value={ramp} onChange={e => setRamp(e.target.value)} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <label style={label}>Buffer (weeks)</label>
+            <input style={{ ...input, margin: '4px 0 12px' }} type="number" min={0} step={1} value={buffer} onChange={e => setBuffer(e.target.value)} />
+          </div>
+        </div>
+
+        <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.textPrimary, margin: '6px 0 4px' }}>Recruiters</div>
+        <div style={{ ...label, marginBottom: 8 }}>
+          Sets headcount for job slots. Name must match their JobAdder first name. Start date shows for their first 6 months.
+        </div>
+        {recruiters.map((r, i) => (
+          <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+            <input style={{ ...input, flex: 1 }} value={r.name} placeholder="Name" onChange={e => setRecruiter(i, { name: e.target.value })} />
+            <input style={{ ...input, width: 150 }} type="date" value={r.startDate} onChange={e => setRecruiter(i, { startDate: e.target.value })} />
+            <button title="Remove" onClick={() => setRecruiters(rs => rs.filter((_, j) => j !== i))} style={smallButton}>✕</button>
+          </div>
+        ))}
+        <button onClick={() => setRecruiters(rs => [...rs, { name: '', startDate: '' }])} style={{ ...smallButton, marginBottom: 14 }}>+ Add recruiter</button>
+
+        <div><label style={label}>Admin password</label></div>
+        <input style={{ ...input, margin: '4px 0 12px' }} type="password" value={password} onChange={e => setPassword(e.target.value)} />
+        {save.error && <div style={{ fontSize: 11, color: COLORS.danger, marginBottom: 10 }}>{save.error.message}</div>}
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button onClick={onClose} style={smallButton}>Cancel</button>
+          <button onClick={submit} disabled={save.isPending} style={{ ...smallButton, border: 'none', background: COLORS.accent, color: COLORS.textPrimary }}>
+            {save.isPending ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const TIMEFRAME_OPTIONS: { value: TimeFrame; label: string }[] = [
   { value: 'week', label: 'Weekly' },
   { value: 'month', label: 'Monthly' },
@@ -107,8 +194,11 @@ export function RecruiterCard() {
   const { data: jobAgingData } = useJobAging();
   const { data: voiceCallData } = useVoiceCallKPIs(frame);
   const { data: jobAdderStageData } = useJobAdderStageKPIs(frame);
+  const { data: settingsData, error: settingsError, isLoading: settingsLoading } = useRecruitmentSettings();
+  const role = useAuthRole();
+  const [showSettings, setShowSettings] = useState(false);
 
-  if (isLoading) return <RecruiterSkeleton />;
+  if (isLoading || settingsLoading) return <RecruiterSkeleton />;
   if (!data) return null;
 
   const periodLabel = frame === 'week' ? 'week' : 'month';
@@ -204,6 +294,22 @@ export function RecruiterCard() {
   const teamInternalNeeded = displayRecruiters.reduce((s, r) => s + targetsFor(r.name).internal, 0);
   const teamInternalTarget = internalTarget * liveHeadcount;
   const unassignedJobs = jobAgingData?.unassigned;
+
+  // Hiring trigger + per-recruiter job cap. Falls back to the default settings if the API is down.
+  const recruitment = settingsData ?? DEFAULT_RECRUITMENT_SETTINGS;
+  const settingsWarning = settingsError?.message ?? settingsData?.error;
+  const maxJobs = recruitment.maxActiveJobs;
+  const hiring = jobAgingData ? hiringTrigger(jobAgingData, recruitment) : null;
+  // Green under max − 2 · amber max − 2 to max − 1 · red at max (full).
+  const loadColor = (jobs: number) =>
+    jobs >= maxJobs ? COLORS.danger : jobs >= maxJobs - 2 ? COLORS.warning : COLORS.success;
+  const startedLabel = (name: string) => {
+    const startDate = recruitment.recruiters.find(r => firstName(r.name) === firstName(name))?.startDate;
+    if (!startDate) return null;
+    const started = new Date(`${startDate}T00:00:00`);
+    if (now - started.getTime() > SIX_MONTHS_MS) return null;
+    return `started ${started.toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+  };
 
   // Straight-line projection to period end from days elapsed so far (today counts).
   const periodDays = frame === 'week'
@@ -340,6 +446,9 @@ export function RecruiterCard() {
               animation: 'spin 0.7s linear infinite',
             }} />
           )}
+          {role === 'admin' && (
+            <button onClick={() => setShowSettings(true)} title="Recruitment settings" style={{ background: COLORS.bgCard, color: COLORS.textMuted, border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: '7px 10px', fontSize: 14, cursor: 'pointer' }}>⚙</button>
+          )}
           <TimeFramePicker value={frame} onChange={setFrame} options={TIMEFRAME_OPTIONS} />
         </div>
       </div>
@@ -362,6 +471,44 @@ export function RecruiterCard() {
           {pct(data.placements, teamPlacementTarget)}%
         </div>
       </div>
+
+      {/* Hiring trigger */}
+      {hiring && (() => {
+        const s = HIRING_STYLE[hiring.state];
+        const full = hiring.activeJobs >= hiring.slots;
+        const title =
+          full ? 'Hire now · team full'
+          : hiring.state === 'no-data' ? 'Hiring trigger · growth data unavailable'
+          : hiring.weeksUntilFull === null ? 'Capacity OK'
+          : `${hiring.state === 'hire-now' ? 'Hire now' : hiring.state === 'hire-soon' ? 'Hire soon' : 'Capacity OK'} · ${hiring.weeksUntilFull.toFixed(1)} weeks until full`;
+        const g = hiring.growthPerWeek;
+        const growthText =
+          g === null ? 'Jobs opened/closed not available yet.'
+          : g > 0 ? `Jobs growing by ${g.toFixed(1)} a week.`
+          : g < 0 ? `Jobs falling by ${Math.abs(g).toFixed(1)} a week.`
+          : 'Jobs flat.';
+        const over = hiring.activeJobs - hiring.slots;
+        return (
+          <div style={{
+            borderRadius: 12, padding: '16px 22px', background: s.bg, border: `1px solid ${s.border}`,
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap',
+          }}>
+            <div>
+              <div style={{ fontSize: 16, fontWeight: 800, color: s.text }}>{title}</div>
+              <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 4 }}>
+                {hiring.activeJobs} of {hiring.slots} job slots used{over > 0 && ` (${over} over)`}. {growthText}
+              </div>
+            </div>
+            <div style={{ fontSize: 12, color: COLORS.textMuted, textAlign: 'right' }}>
+              Hire now at ≤ {hiring.hireNowAt} wks ({recruitment.rampWeeks} ramp + {recruitment.bufferWeeks} buffer)<br />
+              {recruitment.recruiters.length} recruiters × {maxJobs} jobs · growth = avg net jobs/week, last 4 weeks
+            </div>
+          </div>
+        );
+      })()}
+      {settingsWarning && (
+        <p style={{ color: COLORS.warning, fontSize: 12, margin: 0 }}>⚠ Recruitment settings — {settingsWarning} (using defaults)</p>
+      )}
 
       {/* Funnel KPI tiles */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr auto 1fr 1fr', gap: 12 }}>
@@ -405,7 +552,7 @@ export function RecruiterCard() {
             <span style={{ fontSize: 12, color: COLORS.textMuted }}>Tap a recruiter for activity detail</span>
           </div>
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 960 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1040 }}>
               <thead>
                 <tr style={{ borderBottom: `1px solid ${COLORS.border}` }}>
                   <th style={{ ...th, paddingLeft: 18 }}>Recruiter</th>
@@ -415,6 +562,7 @@ export function RecruiterCard() {
                   <th style={th}>Client → contract</th>
                   <th style={th}>Placements</th>
                   <th style={th}>Fall-through</th>
+                  <th style={th}>Active jobs / {maxJobs}</th>
                   <th style={{ ...th, width: '22%' }}>Open jobs</th>
                   <th style={{ ...th, paddingRight: 18 }}>Last {periodLabel}</th>
                 </tr>
@@ -445,6 +593,9 @@ export function RecruiterCard() {
                     >
                       <td style={{ ...td, paddingLeft: 18, fontSize: 16, fontWeight: 800 }}>
                         {r.name} <span style={{ fontSize: 10, color: COLORS.textMuted }}>{isOpen ? '▾' : '▸'}</span>
+                        {startedLabel(r.name) && (
+                          <div style={{ fontSize: 11, fontWeight: 400, color: COLORS.textMuted, marginTop: 2 }}>{startedLabel(r.name)}</div>
+                        )}
                       </td>
                       <td style={td}>{cellValue(r.internalInterviews, internalTarget, rInternalColor)}</td>
                       <td style={pctCell}>{pct(r.clientInterviews, r.internalInterviews)}%</td>
@@ -452,6 +603,7 @@ export function RecruiterCard() {
                       <td style={pctCell}>{pct(r.placements, r.clientInterviews)}%</td>
                       <td style={td}>{cellValue(r.placements, fmtTarget(t.placement), rPlacementColor)}</td>
                       <td style={{ ...pctCell, color: r.fallThroughRate === 0 ? COLORS.success : COLORS.danger }}>{r.fallThroughRate}%</td>
+                      <td style={td}>{cellValue(aging.totalOpenJobs, maxJobs, loadColor(aging.totalOpenJobs))}</td>
                       <td style={td}>
                         {stackedBar(aging.fresh, aging.ageing, aging.stale)}
                         <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 6 }}>
@@ -462,7 +614,7 @@ export function RecruiterCard() {
                       <td style={{ ...td, paddingRight: 18, fontFamily: MONO, color: COLORS.textSecondary }}>{r.prevPlacements}</td>
                     </tr>,
                     <tr key={`${r.name}-wit`} style={{ borderBottom: isOpen ? undefined : `1px solid ${COLORS.border}` }}>
-                      <td colSpan={9} style={{ padding: '0 18px 14px' }}>
+                      <td colSpan={10} style={{ padding: '0 18px 14px' }}>
                         <div style={{
                           background: WIT_BG, borderRadius: 8, padding: '10px 14px',
                           display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap',
@@ -478,7 +630,7 @@ export function RecruiterCard() {
                     </tr>,
                     isOpen && (
                       <tr key={`${r.name}-detail`} style={{ borderBottom: `1px solid ${COLORS.border}`, background: COLORS.bgSubtle }}>
-                        <td colSpan={9} style={{ padding: '16px 18px' }}>
+                        <td colSpan={10} style={{ padding: '16px 18px' }}>
                           <div style={{ display: 'flex', gap: 16 }}>
                             {miniStat(r.phoneInterviews, 'Manual calls')}
                             {miniStat(rManualBooked ?? '—', 'Internals manually booked')}
@@ -494,8 +646,12 @@ export function RecruiterCard() {
                 })}
                 {unassignedJobs && unassignedJobs.totalOpenJobs > 0 && (
                   <tr style={{ borderBottom: `1px solid ${COLORS.border}` }}>
-                    <td style={{ ...td, paddingLeft: 18, fontSize: 16, fontWeight: 800, color: COLORS.textSecondary }}>Unassigned</td>
+                    <td style={{ ...td, paddingLeft: 18, fontSize: 16, fontWeight: 800, color: COLORS.textSecondary }}>
+                      Unassigned
+                      <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.danger, marginTop: 2 }}>⚠ Gap: no owner in JobAdder</div>
+                    </td>
                     {[0, 1, 2, 3, 4, 5].map(i => <td key={i} style={{ ...td, color: COLORS.textMuted }}>—</td>)}
+                    <td style={td}>{cellValue(unassignedJobs.totalOpenJobs, '—', COLORS.danger)}</td>
                     <td style={td}>
                       {stackedBar(unassignedJobs.fresh, unassignedJobs.ageing, unassignedJobs.stale)}
                       <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 6 }}>
@@ -506,8 +662,22 @@ export function RecruiterCard() {
                     <td style={{ ...td, paddingRight: 18, color: COLORS.textMuted }}>—</td>
                   </tr>
                 )}
+                {hiring && (
+                  <tr style={{ borderBottom: `1px solid ${COLORS.border}`, background: COLORS.bgSubtle }}>
+                    <td style={{ ...td, paddingLeft: 18, fontSize: 16, fontWeight: 800 }}>
+                      Team
+                      <div style={{ fontSize: 11, fontWeight: 400, color: COLORS.textMuted, marginTop: 2 }}>
+                        {recruitment.recruiters.length} recruiters{unassignedJobs?.totalOpenJobs ? ' + unassigned' : ''}
+                      </div>
+                    </td>
+                    {[0, 1, 2, 3, 4, 5].map(i => <td key={i} style={{ ...td, color: COLORS.textMuted }}>—</td>)}
+                    <td style={td}>{cellValue(hiring.activeJobs, hiring.slots, hiring.state === 'no-data' ? COLORS.textPrimary : HIRING_STYLE[hiring.state].text)}</td>
+                    <td style={{ ...td, color: COLORS.textMuted }}>—</td>
+                    <td style={{ ...td, paddingRight: 18, color: COLORS.textMuted }}>—</td>
+                  </tr>
+                )}
                 <tr>
-                  <td colSpan={9} style={{ padding: '14px 18px 4px' }}>
+                  <td colSpan={10} style={{ padding: '14px 18px 4px' }}>
                     <div style={{ background: WIT_BG, border: `1px solid ${WIT_BORDER}`, borderRadius: 8, padding: '12px 14px' }}>
                       <span style={{ fontSize: 13, fontWeight: 700, color: WIT_TEXT }}>
                         ◎ TEAM – What it takes: {teamInternalNeeded} internal · {teamClientTarget} client interviews for {fmtTarget(teamPlacementTarget)} placements
@@ -523,6 +693,10 @@ export function RecruiterCard() {
             <strong style={{ color: COLORS.success }}>Green</strong> at or above target ·{' '}
             <strong style={{ color: COLORS.warning }}>Orange</strong> below target, above breakeven (activity 75–99%) ·{' '}
             <strong style={{ color: COLORS.danger }}>Red</strong> below breakeven (activity under 75%)
+            <br />
+            Active jobs: <strong style={{ color: COLORS.success }}>green</strong> under {maxJobs - 2} ·{' '}
+            <strong style={{ color: COLORS.warning }}>amber</strong> {maxJobs - 2}–{maxJobs - 1} ·{' '}
+            <strong style={{ color: COLORS.danger }}>red</strong> at {maxJobs} (full)
           </div>
         </div>
       )}
@@ -551,6 +725,7 @@ export function RecruiterCard() {
       {error && (
         <p style={{ color: COLORS.warning, fontSize: 12, margin: 0 }}>⚠ Connection error — {error?.message}</p>
       )}
+      {showSettings && <RecruitmentSettingsPanel settings={recruitment} onClose={() => setShowSettings(false)} />}
     </div>
   );
 }

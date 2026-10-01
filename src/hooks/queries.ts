@@ -17,7 +17,7 @@ import { fetchVoiceCallKPIs } from '../services/voiceCalls';
 import { fetchJobAdderStageKPIs, hasJobAdderStageCredentials } from '../services/jobadderStages';
 import { fetchJobAging, hasOpenJobsCredentials } from '../services/jobadderJobs';
 import { monthWindow } from '../lib/nzTime';
-import type { TimeFrame, LTGPFrame, OrganicMonth, MarketingSettings, SalesSettings } from '../types';
+import type { TimeFrame, LTGPFrame, OrganicMonth, MarketingSettings, SalesSettings, RecruitmentSettings } from '../types';
 
 const hasAirtableKey    = Boolean(import.meta.env.VITE_AIRTABLE_API_KEY);
 const hasClientsBase    = Boolean(import.meta.env.VITE_AIRTABLE_CLIENTS_BASE_ID);
@@ -220,6 +220,27 @@ export function useSaveSalesSettings() {
         body: JSON.stringify(settings),
       }),
     onSuccess: data => qc.setQueryData(['sales-settings'], data),
+  });
+}
+
+export function useRecruitmentSettings() {
+  return useQuery({
+    queryKey: ['recruitment-settings'],
+    queryFn: () => getJson<RecruitmentSettings & { error?: string }>('/api/recruitment-settings'),
+    retry: 1,
+  });
+}
+
+export function useSaveRecruitmentSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ settings, adminPassword }: { settings: RecruitmentSettings; adminPassword: string }) =>
+      getJson<RecruitmentSettings>('/api/recruitment-settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
+        body: JSON.stringify(settings),
+      }),
+    onSuccess: data => qc.setQueryData(['recruitment-settings'], data),
   });
 }
 

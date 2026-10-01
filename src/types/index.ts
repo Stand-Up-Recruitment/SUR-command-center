@@ -125,6 +125,10 @@ export interface JobAgingStat {
   stale: number;   // open 36+ days
 }
 
+// Jobs opened / closed over the last 28 days, any status. JobAdder has no close date, so
+// "closed" = now inactive with updatedAt in the window.
+export interface JobFlow { opened: number; closed: number }
+
 export interface JobAgingKPIs {
   totalOpenJobs: number;
   fresh: number;
@@ -133,6 +137,8 @@ export interface JobAgingKPIs {
   // Active jobs with no owner — optional until the n8n workflow change is live.
   unassigned?: Omit<JobAgingStat, 'name'>;
   byRecruiter: JobAgingStat[];
+  // Optional until the n8n workflow change is live.
+  growth28?: { byOwner: (JobFlow & { name: string })[]; unassigned: JobFlow };
 }
 
 // ─── Marketing ────────────────────────────────────────────────────────────────
@@ -486,6 +492,14 @@ export interface MarketingSettings {
   postsPerWeek: number;
   targets: MarketingTargets;
   nonTradeCategories: string[];
+}
+
+// ─── Recruitment ──────────────────────────────────────────────────────────────
+export interface RecruitmentSettings {
+  maxActiveJobs: number;  // per recruiter
+  rampWeeks: number;
+  bufferWeeks: number;
+  recruiters: { name: string; startDate: string | null }[];  // headcount for capacity; startDate YYYY-MM-DD
 }
 
 // ─── Sales tab (month view) ───────────────────────────────────────────────────
