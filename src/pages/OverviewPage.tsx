@@ -215,7 +215,7 @@ export function OverviewPage() {
     name: 'Finance', path: '/finance', loading: fin.isLoading, currentOnly: true,
     diagnosis: f?.diagnosis ?? null,
     numbers: [
-      { label: 'Net profit', value: f?.netProfitMtd != null ? k(f.netProfitMtd) : '—', suffix: `/ ${k(npTarget)}` },
+      { label: 'Net profit', value: f?.netProfitMtd != null ? k(f.netProfitMtd) : '—', suffix: `/ ${k(npTarget)} a month` },
       { label: 'Cash runway', value: f?.runwayWeeks != null ? f.runwayWeeks.toFixed(0) : '—', suffix: 'weeks' },
     ],
   };
@@ -288,8 +288,8 @@ export function OverviewPage() {
             <b style={{ color: TEXT }}>
               {pace ? `${pace.projected} of ${fmtTarget(pace.target)} placements` : '— placements'}
               {' · '}
-              {f?.projectedNetProfit != null ? `${k(f.projectedNetProfit)} of ${k(npTarget)}` : `— of ${k(npTarget)}`}
-            </b>{' '}net profit
+              {f?.projectedNetProfit != null ? k(f.projectedNetProfit) : '—'}
+            </b> net profit of <b style={{ color: TEXT }}>{k(npTarget)} a month</b>
           </span>
         </div>
       </div>
@@ -345,7 +345,7 @@ export function OverviewPage() {
             <div style={{ display: 'flex', gap: 14, fontSize: 11, color: MUTED, marginTop: 6 }}>
               <span><span style={{ display: 'inline-block', width: 9, height: 9, background: RD, marginRight: 5 }} />Placements</span>
               <span><span style={{ display: 'inline-block', width: 9, height: 9, background: TEXT, marginRight: 5 }} />Net profit</span>
-              <span><span style={{ display: 'inline-block', width: 9, height: 9, border: `1px dashed ${MUTED}`, marginRight: 5 }} />{k(npTarget)} target</span>
+              <span><span style={{ display: 'inline-block', width: 9, height: 9, border: `1px dashed ${MUTED}`, marginRight: 5 }} />{k(npTarget)} a month target</span>
             </div>
           </div>
         </Panel>

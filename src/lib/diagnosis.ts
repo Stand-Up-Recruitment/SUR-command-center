@@ -243,7 +243,7 @@ export function diagnoseFinance(input: {
   const k = (n: number) => `$${Math.round(n / 1000)}k`;
   const npRag: Rag = tooEarly || np == null || target <= 0 ? 'grey' : np < target * 0.75 ? 'red' : np < target ? 'amber' : 'green';
   const rwRag: Rag = rw == null ? 'grey' : rw < 4 ? 'red' : rw < 8 ? 'amber' : 'green';
-  const npText = np != null ? `Net profit on pace for ${k(np)} of ${k(target)}` : '';
+  const npText = np != null ? `Net profit on pace for ${k(np)} of ${k(target)} a month` : '';
   const rwText = rw != null ? `Cash covers ${rw.toFixed(0)} weeks of costs` : '';
   const items = flaggedFirst([{ rag: npRag, text: npText }, { rag: rwRag, text: rwText }]).map(c => ({ rag: c.rag, text: c.text }));
 
