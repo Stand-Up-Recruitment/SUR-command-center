@@ -168,32 +168,6 @@ export interface MarketingKPIs {
   weeklyBudget: number;
 }
 
-// ─── Revenue ──────────────────────────────────────────────────────────────────
-export interface RevenueKPIs {
-  // Placements
-  placements: number;
-  prevPlacements: number;
-  // First payment flow
-  firstInvoiced: number;
-  prevFirstInvoiced: number;
-  firstCollected: number;
-  prevFirstCollected: number;
-  firstCollectedAmount: number;
-  // Second payment
-  pendingSecond: number;           // snapshot: candidates started, 2nd invoice not yet sent
-  secondCollected: number;
-  prevSecondCollected: number;
-  secondCollectedAmount: number;
-  // Totals
-  totalRevenue: number;
-  prevTotalRevenue: number;
-  // CAC (0 if data unavailable)
-  cac: number;
-  prevCac: number;
-  adSpend: number;
-  clientsClosed: number;
-}
-
 // ─── Retention ────────────────────────────────────────────────────────────────
 export interface RetentionKPIs {
   activeInWindow: number;
@@ -500,6 +474,15 @@ export interface RecruitmentSettings {
   rampWeeks: number;
   bufferWeeks: number;
   recruiters: { name: string; startDate: string | null }[];  // headcount for capacity; startDate YYYY-MM-DD
+}
+
+// ─── Overview ─────────────────────────────────────────────────────────────────
+export interface OverviewSettings {
+  netProfitTarget: number;       // NZD per month
+  constraintHeadline: string;    // e.g. "Candidate supply"
+  constraintDetail: string;      // e.g. "Short on: electricians, carpenters"
+  confirmedBy: string;
+  confirmedAt: string | null;    // YYYY-MM-DD, set by the API when the constraint changes
 }
 
 // ─── Sales tab (month view) ───────────────────────────────────────────────────

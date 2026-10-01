@@ -5,7 +5,6 @@ import type {
   RecruiterStat,
   RollingRates,
   MarketingKPIs,
-  RevenueKPIs,
   LeadMetric,
   ChannelRow,
   TimeFrame,
@@ -541,112 +540,6 @@ export async function fetchMarketingKPIs(frame: TimeFrame = 'month'): Promise<Ma
     channels: buildChannels(thisClients, thisCandidates, spend.thisWeek),
     spend,
     weeklyBudget,
-  };
-}
-
-// ─── Revenue ──────────────────────────────────────────────────────────────────
-type PlacementFields = {
-  'Created Date'?: string;
-  'Candidate Start Date'?: string;
-};
-
-type InstalmentFields = {
-  'Installments #'?: number;
-  'Sent Date'?: string;
-  'Invoice Amount'?: number;
-  Status?: string;
-  Placements?: string[];
-};
-
-export async function fetchRevenueKPIs(frame: TimeFrame = 'month'): Promise<RevenueKPIs> {
-  if (!CLIENTS_BASE_ID) throw new Error('Revenue credentials not configured');
-
-  const b = timeBoundaries(frame);
-  const today = Date.now();
-
-  const [allPlacements, allInstalments, spend, salesData] = await Promise.all([
-    fetchAllWithIdsFromBase<PlacementFields>(CLIENTS_BASE_ID, PLACEMENTS_TABLE_ID),
-    fetchAllWithIdsFromBase<InstalmentFields>(CLIENTS_BASE_ID, INSTALMENTS_TABLE_ID),
-    fetchMetaSpend().catch(() => ({ thisWeek: 0, prevWeek: 0 })),
-    fetchSalesKPIs(frame).catch(() => null),
-  ]);
-
-  // Build placement lookup
-  const placementMap = new Map(allPlacements.map(p => [p.id, p.fields]));
-
-  // Group instalments by placement ID, sorted by Installments # ascending
-  const byPlacement = new Map<string, typeof allInstalments>();
-  for (const inst of allInstalments) {
-    const pid = inst.fields.Placements?.[0];
-    if (!pid) continue;
-    if (!byPlacement.has(pid)) byPlacement.set(pid, []);
-    byPlacement.get(pid)!.push(inst);
-  }
-  for (const insts of byPlacement.values()) {
-    insts.sort((a, b) => (a.fields['Installments #'] ?? 0) - (b.fields['Installments #'] ?? 0));
-  }
-
-  const firstInstalments: InstalmentFields[] = [];
-  const secondInstalments: InstalmentFields[] = [];
-  let pendingSecond = 0;
-
-  for (const [pid, insts] of byPlacement) {
-    if (insts[0]) firstInstalments.push(insts[0].fields);
-    if (insts[1]) {
-      secondInstalments.push(insts[1].fields);
-      if (insts[1].fields.Status === 'Scheduled') {
-        const pf = placementMap.get(pid);
-        const start = pf?.['Candidate Start Date'];
-        if (start && new Date(start).getTime() <= today) pendingSecond++;
-      }
-    }
-  }
-
-  const wasInvoiced = (f: InstalmentFields) =>
-    ['Sent', 'Wait', 'Paid'].includes(f.Status ?? '');
-
-  const firstInvoiced     = firstInstalments.filter(f => wasInvoiced(f) && isInPeriod(f['Sent Date'], b.start, b.now)).length;
-  const prevFirstInvoiced = firstInstalments.filter(f => wasInvoiced(f) && isInPeriod(f['Sent Date'], b.prevStart, b.prevEnd)).length;
-
-  const firstPaid     = firstInstalments.filter(f => f.Status === 'Paid' && isInPeriod(f['Sent Date'], b.start, b.now));
-  const prevFirstPaid = firstInstalments.filter(f => f.Status === 'Paid' && isInPeriod(f['Sent Date'], b.prevStart, b.prevEnd));
-
-  const secondPaid     = secondInstalments.filter(f => f.Status === 'Paid' && isInPeriod(f['Sent Date'], b.start, b.now));
-  const prevSecondPaid = secondInstalments.filter(f => f.Status === 'Paid' && isInPeriod(f['Sent Date'], b.prevStart, b.prevEnd));
-
-  const sum = (arr: InstalmentFields[]) => arr.reduce((s, f) => s + (f['Invoice Amount'] ?? 0), 0);
-
-  const firstCollectedAmount  = sum(firstPaid);
-  const secondCollectedAmount = sum(secondPaid);
-  const totalRevenue          = firstCollectedAmount + secondCollectedAmount;
-  const prevTotalRevenue      = sum(prevFirstPaid) + sum(prevSecondPaid);
-
-  const placements_    = allPlacements.filter(p => isInPeriod(p.fields['Created Date'], b.start, b.now)).length;
-  const prevPlacements = allPlacements.filter(p => isInPeriod(p.fields['Created Date'], b.prevStart, b.prevEnd)).length;
-
-  const clientsClosed = salesData?.closedClients ?? 0;
-  const prevClientsClosed = salesData?.prevClosedClients ?? 0;
-  const cac     = clientsClosed > 0 ? Math.round(spend.thisWeek / clientsClosed) : 0;
-  const prevCac = prevClientsClosed > 0 ? Math.round(spend.prevWeek / prevClientsClosed) : 0;
-
-  return {
-    placements: placements_,
-    prevPlacements,
-    firstInvoiced,
-    prevFirstInvoiced,
-    firstCollected: firstPaid.length,
-    prevFirstCollected: prevFirstPaid.length,
-    firstCollectedAmount,
-    pendingSecond,
-    secondCollected: secondPaid.length,
-    prevSecondCollected: prevSecondPaid.length,
-    secondCollectedAmount,
-    totalRevenue,
-    prevTotalRevenue,
-    cac,
-    prevCac,
-    adSpend: Math.round(spend.thisWeek),
-    clientsClosed,
   };
 }
 

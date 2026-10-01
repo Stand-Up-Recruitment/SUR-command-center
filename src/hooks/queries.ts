@@ -1,9 +1,6 @@
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import {
-  fetchSalesKPIs,
-  fetchMarketingKPIs,
   fetchRecruiterKPIs,
-  fetchRevenueKPIs,
   fetchRetentionKPIs,
   fetchAusPlacements,
   fetchScheduledInvoices,
@@ -17,7 +14,7 @@ import { fetchVoiceCallKPIs } from '../services/voiceCalls';
 import { fetchJobAdderStageKPIs, hasJobAdderStageCredentials } from '../services/jobadderStages';
 import { fetchJobAging, hasOpenJobsCredentials } from '../services/jobadderJobs';
 import { monthWindow } from '../lib/nzTime';
-import type { TimeFrame, LTGPFrame, OrganicMonth, MarketingSettings, SalesSettings, RecruitmentSettings } from '../types';
+import type { TimeFrame, LTGPFrame, OrganicMonth, MarketingSettings, SalesSettings, RecruitmentSettings, OverviewSettings } from '../types';
 
 const hasAirtableKey    = Boolean(import.meta.env.VITE_AIRTABLE_API_KEY);
 const hasClientsBase    = Boolean(import.meta.env.VITE_AIRTABLE_CLIENTS_BASE_ID);
@@ -26,26 +23,7 @@ const hasCandidatesBase = Boolean(import.meta.env.VITE_AIRTABLE_CANDIDATES_BASE_
 export const hasSalesCredentials      = hasAirtableKey && hasClientsBase;
 export const hasMarketingCredentials  = hasAirtableKey && hasClientsBase && hasCandidatesBase && Boolean(import.meta.env.VITE_META_TOKEN);
 export const hasRecruitCredentials    = hasAirtableKey && hasCandidatesBase && hasClientsBase;
-export const hasRevenueCredentials    = hasAirtableKey && hasClientsBase;
 export const hasRetentionCredentials  = hasAirtableKey && hasClientsBase;
-
-export function useSalesKPIs(frame: TimeFrame = 'month') {
-  return useQuery({
-    queryKey: ['sales', frame],
-    queryFn: () => fetchSalesKPIs(frame),
-    enabled: hasSalesCredentials,
-    placeholderData: keepPreviousData,
-  });
-}
-
-export function useMarketingKPIs(frame: TimeFrame = 'month') {
-  return useQuery({
-    queryKey: ['marketing', frame],
-    queryFn: () => fetchMarketingKPIs(frame),
-    enabled: hasMarketingCredentials,
-    placeholderData: keepPreviousData,
-  });
-}
 
 export function useRecruiterKPIs(frame: TimeFrame = 'month') {
   return useQuery({
@@ -80,15 +58,6 @@ export function useJobAging() {
     queryKey: ['job-aging'],
     queryFn: fetchJobAging,
     enabled: hasOpenJobsCredentials,
-  });
-}
-
-export function useRevenueKPIs(frame: TimeFrame = 'month') {
-  return useQuery({
-    queryKey: ['revenue', frame],
-    queryFn: () => fetchRevenueKPIs(frame),
-    enabled: hasRevenueCredentials,
-    placeholderData: keepPreviousData,
   });
 }
 
@@ -241,6 +210,28 @@ export function useSaveRecruitmentSettings() {
         body: JSON.stringify(settings),
       }),
     onSuccess: data => qc.setQueryData(['recruitment-settings'], data),
+  });
+}
+
+// ─── Overview ─────────────────────────────────────────────────────────────────
+export function useOverviewSettings() {
+  return useQuery({
+    queryKey: ['overview-settings'],
+    queryFn: () => getJson<OverviewSettings & { error?: string }>('/api/overview-settings'),
+    retry: 1,
+  });
+}
+
+export function useSaveOverviewSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ settings, adminPassword }: { settings: Omit<OverviewSettings, 'confirmedAt'>; adminPassword: string }) =>
+      getJson<OverviewSettings>('/api/overview-settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
+        body: JSON.stringify(settings),
+      }),
+    onSuccess: data => qc.setQueryData(['overview-settings'], data),
   });
 }
 

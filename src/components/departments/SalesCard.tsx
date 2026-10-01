@@ -3,22 +3,18 @@ import {
   ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, LabelList, Legend, ReferenceLine,
 } from 'recharts';
 import { Skeleton } from '../shared/Skeleton';
-import { NZ, AM, RD, BG, BG2, BORDER, TEXT, MUTED, RAG_COLOR, money0, int, cmpRag, type Cmp } from '../shared/monthTheme';
+import { NZ, AM, RD, BG, BG2, BORDER, TEXT, MUTED, RAG_COLOR, money0, int, type Cmp } from '../shared/monthTheme';
 import { Section, Grid, Metric, Delta, CmpCard } from '../shared/monthLayout';
 import { useSalesMonth, useSalesSettings, useSaveSalesSettings } from '../../hooks/queries';
 import { useAuthRole } from '../auth/AuthContext';
 import { monthWindow, recentMonthKeys, currentMonthKey, type MonthWindow } from '../../lib/nzTime';
-import { rate, pctChange, isTooEarly, type Rag, type RagContext } from '../../lib/rag';
-import { diagnoseSales, type SalesDiagMetric } from '../../lib/diagnosis';
-import type { SalesFunnel, SalesMonth, SalesSettings } from '../../types';
+import { rate, type Rag, type RagContext } from '../../lib/rag';
+import {
+  STALE_DAYS, DEFAULT_TARGET_PER_SALESPERSON, ratio, signRate, showRate, share, staleRag, targetsFor, callsCmpFor, salesDiagnosis, type Targets,
+} from './salesMetrics';
+import type { SalesMonth, SalesSettings } from '../../types';
 
-const STALE_DAYS = 14;
 const pct0 = (n: number) => `${Math.round(n)}%`;
-const ratio = (a: number, b: number) => (b > 0 ? (a / b) * 100 : null);
-const signRate = (f: SalesFunnel) => ratio(f.signed, f.tobsSent);
-const showRate = (f: SalesFunnel) => (f.noShow == null ? null : ratio(f.callsBooked - f.noShow, f.callsBooked));
-const share = (n: number | null, f: SalesFunnel) => (n == null ? null : ratio(n, f.callsBooked));
-const staleRag = (n: number): Rag => (n === 0 ? 'green' : n <= 5 ? 'amber' : 'red');
 const ragText = (rag: Rag) => (rag === 'grey' ? TEXT : RAG_COLOR[rag]);
 
 // ─── Settings panel ───────────────────────────────────────────────────────────
@@ -88,13 +84,6 @@ function Table({ head, rows, align }: { head: string[]; rows: ReactNode[][]; ali
 }
 
 // ─── Sections ─────────────────────────────────────────────────────────────────
-interface Targets { perPerson: number; full: number; proRata: number; perPersonProRata: number }
-
-function targetsFor(m: SalesMonth, w: MonthWindow, perPerson: number): Targets {
-  const elapsed = w.isCurrent ? w.dayOfMonth / w.daysInMonth : 1;
-  const full = perPerson * m.salespeople.length;
-  return { perPerson, full, proRata: full * elapsed, perPersonProRata: perPerson * elapsed };
-}
 
 function ConvertingSection({ m, w, ctx, t, signedRag }: { m: SalesMonth; w: MonthWindow; ctx: RagContext; t: Targets; signedRag: Rag }) {
   const { cur, prev } = m;
@@ -308,7 +297,7 @@ export function SalesCard() {
 
   const { data: m, error, isLoading, isFetching } = useSalesMonth(month);
   const { data: settings } = useSalesSettings();
-  const perPerson = settings?.targetPerSalesperson ?? 10;
+  const perPerson = settings?.targetPerSalesperson ?? DEFAULT_TARGET_PER_SALESPERSON;
 
   const header = (
     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1rem' }}>
@@ -346,31 +335,11 @@ export function SalesCard() {
   const same = w.isCurrent ? `Same day ${pw}` : pw;
   // ToBs signed is coloured against the pro-rata target, not last month.
   const signedRag = rate(cur.signed, t.proRata, 'up', ctx);
-  const callsCmp: Cmp = { label: 'Calls booked', cur: cur.callsBooked, prev: prev.callsBooked, better: 'up', fmt: int, prevWord: same };
+  const callsCmp = callsCmpFor(m, w);
   const sentCmp: Cmp = { label: 'ToBs sent', cur: cur.tobsSent, prev: prev.tobsSent, better: 'up', fmt: int, prevWord: same };
 
-  // ── Diagnosis inputs (same colour rule as the cards) ──
-  const metric = (name: string, c: number | null, p: number | null, better: 'up' | 'down', group: SalesDiagMetric['group'], section: number): SalesDiagMetric[] =>
-    c == null ? [] : [{ name, rag: rate(c, p, better, ctx), pct: p == null ? null : pctChange(c, p), group, section }];
-  const tts = m.timeToSign;
-  const diagnosis = diagnoseSales({
-    tooEarly: isTooEarly(ctx),
-    lead: `Signings ${cur.signed >= t.proRata ? 'on target' : 'behind target'} (${cur.signed} of ${Math.round(t.proRata)}).`,
-    metrics: [
-      ...metric('Show rate', showRate(cur), showRate(prev), 'up', 'sales', 2),
-      ...metric('Sign rate', signRate(cur), signRate(prev), 'up', 'sales', 1),
-      { name: 'Stale ToBs', rag: staleRag(m.open.stale), pct: null, group: 'sales', section: 4,
-        phrase: `${m.open.stale} ToB${m.open.stale === 1 ? ' has' : 's have'} sat unsigned for over ${STALE_DAYS} days` },
-      { name: 'Calls booked', rag: cmpRag(callsCmp, ctx), pct: pctChange(cur.callsBooked, prev.callsBooked), group: 'upstream', section: 2 },
-      ...metric('Not a Fit share', share(cur.notFit, cur), share(prev.notFit, prev), 'down', 'upstream', 2),
-      ...metric('Waitlist share', share(cur.waitlist, cur), share(prev.waitlist, prev), 'down', 'supply', 5),
-    ],
-    note: m.open.stale > 0 && tts.total > 0
-      ? tts.max <= STALE_DAYS
-        ? `No client in ${tts.label} took longer than ${STALE_DAYS} days to sign.`
-        : `Median time to sign in ${tts.label} was ${tts.median} days.`
-      : undefined,
-  });
+  // ── Diagnosis (shared with the Overview) ──
+  const diagnosis = salesDiagnosis(m, w, perPerson);
   const tone = RAG_COLOR[diagnosis.tone];
 
   return (

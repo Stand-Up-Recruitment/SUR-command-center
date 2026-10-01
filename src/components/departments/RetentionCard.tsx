@@ -3,6 +3,8 @@ import { WoWBadge } from '../shared/WoWBadge';
 import { Skeleton } from '../shared/Skeleton';
 import { useRetentionKPIs } from '../../hooks/queries';
 import { COLORS, CARD_STYLE } from '../../styles/tokens';
+import { diagnoseRetention } from '../../lib/diagnosis';
+import { DiagnosisTile } from '../shared/DiagnosisTile';
 import type { DepartmentStatus } from '../../types';
 
 function RetentionSkeleton() {
@@ -46,9 +48,10 @@ export function RetentionCard() {
 
   if (!data) return <RetentionSkeleton />;
 
+  const diagnosis = diagnoseRetention({ replacementRate: data.replacementRate, inProgress: data.inProgress });
   const status: DepartmentStatus =
-    data.replacementRate < 5  ? 'on-track' :
-    data.replacementRate < 10 ? 'at-risk'  : 'off-track';
+    diagnosis.tone === 'green' ? 'on-track' :
+    diagnosis.tone === 'amber' ? 'at-risk'  : 'off-track';
 
   const statTile = (
     label: string,
@@ -103,6 +106,8 @@ export function RetentionCard() {
         </div>
         <StatusBadge status={error ? 'no-data' : status} />
       </div>
+
+      <DiagnosisTile diagnosis={diagnosis} />
 
       <div style={{ ...CARD_STYLE, padding: 24 }}>
         <div

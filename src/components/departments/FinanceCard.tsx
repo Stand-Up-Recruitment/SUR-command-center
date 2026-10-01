@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import { Skeleton } from '../shared/Skeleton';
-import { useXeroFinanceData, useScheduledInvoices, useCacKPIs } from '../../hooks/queries';
+import { useXeroFinanceData, useScheduledInvoices, useCacKPIs, useOverviewSettings } from '../../hooks/queries';
 import { AUD_TO_NZD_APPROX } from '../../services/airtable';
+import { availableCash as availableCashOf, financeSummary, DEFAULT_NET_PROFIT_TARGET, type FinanceSummary } from '../../lib/finance';
+import { monthWindow, currentMonthKey } from '../../lib/nzTime';
+import { DiagnosisTile } from '../shared/DiagnosisTile';
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, Cell,
 } from 'recharts';
@@ -472,9 +475,7 @@ function CashPositionSection({
   // Available cash = 00 - Business OPS + 50 - PROFIT only. GST/TAX belongs to
   // IRD and EMP ENT / EMP00 hold staff entitlements, so they're left out.
   const accounts = bankAccounts ?? [];
-  const availableCash = accounts
-    .filter(a => a.name.startsWith('00 -') || a.name.startsWith('50 -'))
-    .reduce((sum, a) => sum + a.balance, 0);
+  const availableCash = availableCashOf(accounts) ?? 0;
   const totalInBank = accounts.reduce((sum, a) => sum + a.balance, 0);
 
   // Cash cover = available cash ÷ average AU opex (same basis as the Operating
@@ -530,11 +531,45 @@ function CashPositionSection({
   );
 }
 
+// ─── Profit target & runway (read by the Overview) ────────────────────────────
+
+function TargetRunwaySection({ s }: { s: FinanceSummary }) {
+  const k = (n: number) => `$${Math.round(n / 1000)}k`;
+  const npColor = (n: number | null) => n == null ? MUTED : n >= s.target ? NZ : n >= s.target * 0.75 ? AM : RD;
+  const rwColor = s.runwayWeeks == null ? MUTED : s.runwayWeeks >= 8 ? NZ : s.runwayWeeks >= 4 ? AM : RD;
+  return (
+    <>
+      <SH color={TEXT} label="Profit target & runway" sub="Australia only · month to date · target set on the Overview (⚙)" />
+      <G4>
+        <KP accent={PU}
+            label="Net profit this month"
+            value={s.netProfitMtd != null ? fmtNZD(s.netProfitMtd) : '—'}
+            sub={`Target ${k(s.target)} a month`} />
+        <KP accent={npColor(s.projectedNetProfit)}
+            label="Projected month end"
+            value={s.projectedNetProfit != null ? fmtNZD(s.projectedNetProfit) : '—'}
+            valueColor={npColor(s.projectedNetProfit)}
+            sub={s.projectedNetProfit != null ? `${Math.round((s.projectedNetProfit / s.target) * 100)}% of target · month to date ÷ days elapsed × days in month` : undefined} />
+        <KP accent={rwColor}
+            label="Cash runway"
+            value={s.runwayWeeks != null ? `${s.runwayWeeks.toFixed(1)} weeks` : '—'}
+            valueColor={rwColor}
+            sub="Available cash ÷ average weekly costs (last 4 weeks)" />
+        <KP accent={MUTED}
+            label="Average weekly costs"
+            value={s.weeklyCosts != null ? fmtNZD(s.weeklyCosts) : '—'}
+            sub="Cash out, last 4 finished weeks" />
+      </G4>
+    </>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function FinanceCard() {
   const { data, error } = useXeroFinanceData();
   const { data: scheduledInvoices } = useScheduledInvoices();
+  const { data: overviewSettings } = useOverviewSettings();
 
   // ── Computed values ─────────────────────────────────────────────────────────
   // Finance tab is Australia only — every headline number uses only the aus*
@@ -549,6 +584,8 @@ export function FinanceCard() {
   const { data: cac } = useCacKPIs(grossMarginPct, data?.jobBoardAdvertising90d, data?.prevJobBoardAdvertising90d, data?.audNzdMonthlyRates);
 
   if (!data) return <FinanceSkeleton />;
+
+  const summary = financeSummary(data, overviewSettings?.netProfitTarget ?? DEFAULT_NET_PROFIT_TARGET, monthWindow(currentMonthKey()));
 
   const cashKpis    = data.cashKpis ?? { openingBalance: 0, closingBalance: 0, closingBalanceActual: 0, avgWeeklyOutflow: 0, openingDate: data.asOf, closingDate: data.asOf };
   const cashFlow    = data.cashFlow ?? [];
@@ -653,6 +690,9 @@ export function FinanceCard() {
 
   return (
     <div style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
+      <DiagnosisTile diagnosis={summary.diagnosis} />
+      <TargetRunwaySection s={summary} />
+
       <PLSummarySection totalRevenue={totalRevenue} totalGrossProfit={totalGrossProfit} totalOpex={totalOpex} netProfit={netProfit} lastMonthSamePoint={data.lastMonthSamePoint} cac={cac} monthlyTrend={data.monthlyTrend} />
 
       <CashPositionSection

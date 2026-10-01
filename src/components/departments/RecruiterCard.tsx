@@ -9,19 +9,15 @@ import { timeBoundaries } from '../../services/airtable';
 import { COLORS, CARD_STYLE } from '../../styles/tokens';
 import { PlacementsTrendChart } from '../shared/PlacementsTrendChart';
 import { useAuthRole } from '../auth/AuthContext';
-import { DEFAULT_RECRUITMENT_SETTINGS, hiringTrigger, type HiringState } from '../../lib/recruitment';
+import {
+  DEFAULT_RECRUITMENT_SETTINGS, hiringTrigger, teamRecruiters, placementTargetFor, breakevenPerRecruiter as breakevenFor,
+  recruitmentPace, type HiringState,
+} from '../../lib/recruitment';
+import { diagnoseRecruitment } from '../../lib/diagnosis';
+import { DiagnosisTile } from '../shared/DiagnosisTile';
 import type { DepartmentStatus, RecruiterStat, RecruitmentSettings, RollingRates, TimeFrame } from '../../types';
 
-// Breakeven cost model — update these when Les's costs change (same pattern as
-// RECRUITER_COUNT in services/airtable.ts's LTGP calc).
-const TOTAL_WEEKLY_OVERHEAD = 14000;   // NZD/week, manual input owned by Les
-const RECRUITER_WEEKLY_SALARY = 1442;  // NZD/week, ~$75k/year baseline
-const AVG_FEE_PER_PLACEMENT = 20000;   // NZD, blended flat-fee/% average
-const WEEKS_PER_MONTH = 4.33;
-
-// Monthly placement targets per recruiter (by first name); anyone not listed gets the default.
-const PLACEMENT_TARGETS_MONTHLY: Record<string, number> = { ayn: 4, ian: 4, kade: 2, lionel: 2 };
-const DEFAULT_PLACEMENT_TARGET_MONTHLY = 2;
+// Breakeven cost model and placement targets live in lib/recruitment.ts (shared with the Overview).
 // 4 internal interviews a day per recruiter → 20/week, 80/month.
 const INTERNAL_TARGET_WEEKLY = 20;
 const INTERNAL_TARGET_MONTHLY = 80;
@@ -32,7 +28,6 @@ const WIT_BORDER = 'rgba(55,138,221,0.45)';
 const WIT_TEXT = '#6aa9ec';
 
 const MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
-const DAY_MS = 86_400_000;
 
 const pct = (numerator: number, denominator: number) =>
   denominator > 0 ? Math.round((numerator / denominator) * 100) : 0;
@@ -216,23 +211,7 @@ export function RecruiterCard() {
   // who have open jobs even if they had no interviews/placements this period.
   // Match by first name since both sources key recruiters by first name only.
   const firstName = (n: string) => n.trim().split(' ')[0].toLowerCase();
-  // Nihanga is HR & Business Operations, not a recruiter — JobAdder lists her as the
-  // owner on some open jobs, but she shouldn't appear as a "By Recruiter" card.
-  const NON_RECRUITERS = ['nihanga'];
-  const baseRecruiters: RecruiterStat[] = [...data.byRecruiter];
-  for (const stat of jobAgingData?.byRecruiter ?? []) {
-    if (NON_RECRUITERS.includes(firstName(stat.name))) continue;
-    if (!baseRecruiters.some(r => firstName(r.name) === firstName(stat.name))) {
-      baseRecruiters.push({
-        name: stat.name, phoneInterviews: 0, prevPhoneInterviews: 0, internalInterviews: 0, prevInternalInterviews: 0,
-        clientInterviews: 0, prevClientInterviews: 0, noShows: 0, prevNoShows: 0, placements: 0, prevPlacements: 0,
-        fallThroughRate: 0, prevFallThroughRate: 0,
-        rolling: { intToClient: 0, clientToContract: 0, monthsOfData: 0 },
-        monthlyPlacements: data.months.map(() => null),
-      });
-    }
-  }
-  baseRecruiters.sort((a, b) => a.name.localeCompare(b.name));
+  const baseRecruiters = teamRecruiters(data, jobAgingData);
 
   // Merge in Voice Call Log + JobAdder pipeline-stage KPIs (separate webhooks) by first name —
   // left as undefined (rendered as "—") when a hook hasn't loaded. A recruiter with no
@@ -270,26 +249,19 @@ export function RecruiterCard() {
   const clientToContractPct = pct(data.placements, data.clientInterviews);
 
   const liveHeadcount = displayRecruiters.length;
-  const overheadPerRecruiter = liveHeadcount > 0 ? TOTAL_WEEKLY_OVERHEAD / liveHeadcount : 0;
-  const totalCostPerRecruiter = overheadPerRecruiter + RECRUITER_WEEKLY_SALARY;
-  const breakevenWeekly = totalCostPerRecruiter / AVG_FEE_PER_PLACEMENT;
-  const breakevenPerRecruiter = frame === 'week' ? breakevenWeekly : breakevenWeekly * WEEKS_PER_MONTH;
-  const teamBreakeven = breakevenPerRecruiter * liveHeadcount;
+  const breakevenPerRecruiter = breakevenFor(liveHeadcount, frame);
+  // Team placement target, breakeven and projection: shared with the Overview.
+  const pace = recruitmentPace(data, displayRecruiters, frame, start, now);
+  const { target: teamPlacementTarget, breakeven: teamBreakeven, projected } = pace;
 
-  const monthlyPlacementTarget = (name: string) =>
-    PLACEMENT_TARGETS_MONTHLY[firstName(name)] ?? DEFAULT_PLACEMENT_TARGET_MONTHLY;
-  const placementTargetFor = (name: string) => frame === 'week'
-    ? monthlyPlacementTarget(name) / WEEKS_PER_MONTH
-    : monthlyPlacementTarget(name);
   const internalTarget = frame === 'week' ? INTERNAL_TARGET_WEEKLY : INTERNAL_TARGET_MONTHLY;
 
   const targets = new Map(displayRecruiters.map(r => {
-    const placement = placementTargetFor(r.name);
+    const placement = placementTargetFor(r.name, frame);
     return [r.name, { placement, ...whatItTakes(placement, r.rolling, data.rolling) }];
   }));
   const targetsFor = (name: string) => targets.get(name)!;
   // Team line = sum of the recruiters' lines.
-  const teamPlacementTarget = displayRecruiters.reduce((s, r) => s + targetsFor(r.name).placement, 0);
   const teamClientTarget = displayRecruiters.reduce((s, r) => s + targetsFor(r.name).client, 0);
   const teamInternalNeeded = displayRecruiters.reduce((s, r) => s + targetsFor(r.name).internal, 0);
   const teamInternalTarget = internalTarget * liveHeadcount;
@@ -311,12 +283,10 @@ export function RecruiterCard() {
     return `started ${started.toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}`;
   };
 
-  // Straight-line projection to period end from days elapsed so far (today counts).
-  const periodDays = frame === 'week'
-    ? 7
-    : new Date(nowDate.getFullYear(), nowDate.getMonth() + 1, 0).getDate();
-  const daysElapsed = Math.max(1, Math.ceil((now - start) / DAY_MS));
-  const projected = Math.round((data.placements / daysElapsed) * periodDays);
+  const diagnosis = diagnoseRecruitment({
+    ...pace, periodLabel,
+    hiring: hiring && { state: hiring.state, weeksUntilFull: hiring.weeksUntilFull, full: hiring.activeJobs >= hiring.slots },
+  });
 
   const status: DepartmentStatus =
     projected >= teamPlacementTarget ? 'on-track' :
@@ -454,6 +424,8 @@ export function RecruiterCard() {
       </div>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
+      <DiagnosisTile diagnosis={diagnosis} />
+
       {/* Status banner */}
       <div style={{
         borderRadius: 12, padding: '18px 22px', background: statusStyle.bg, border: `1px solid ${statusStyle.border}`,
@@ -530,8 +502,8 @@ export function RecruiterCard() {
 
       <PlacementsTrendChart
         months={data.months}
-        recruiters={displayRecruiters.map(r => ({ ...r, target: monthlyPlacementTarget(r.name) }))}
-        breakevenPerRecruiter={breakevenWeekly * WEEKS_PER_MONTH}
+        recruiters={displayRecruiters.map(r => ({ ...r, target: placementTargetFor(r.name, 'month') }))}
+        breakevenPerRecruiter={breakevenFor(liveHeadcount, 'month')}
       />
 
       {/* Fall-through + candidate stock */}
