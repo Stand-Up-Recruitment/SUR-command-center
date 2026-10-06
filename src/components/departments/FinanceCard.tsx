@@ -627,7 +627,7 @@ export function FinanceCard() {
       const [weekStart, weekEnd] = r.weekStart && r.weekEnd
         ? [new Date(r.weekStart).getTime(), new Date(r.weekEnd).getTime()]
         : [closing + (i - currentIdx - 1) * 7 * 86_400_000, closing + (i - currentIdx) * 7 * 86_400_000];
-      if (due >= weekStart && due < weekEnd) {
+      if (due >= weekStart && due <= weekEnd) {
         scheduledByWeek[i] += amountNZD;
         break; // an invoice belongs to exactly one week — stop at the first match
       }
