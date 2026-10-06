@@ -67,15 +67,15 @@ function RateTable({ head, rows, settings, recruiter }: { head: string; rows: Ra
 
 function RetentionSettingsPanel({ settings, onClose }: { settings: RetentionSettings; onClose: () => void }) {
   const save = useSaveRetentionSettings();
-  const [green, setGreen] = useState(String(settings.greenBelow));
-  const [amber, setAmber] = useState(String(settings.amberBelow));
+  const [green, setGreen] = useState(String(settings.greenMax));
+  const [amber, setAmber] = useState(String(settings.amberMax));
   const [cutoff, setCutoff] = useState(settings.rachelCutoff);
   const [password, setPassword] = useState('');
   const input: CSSProperties = { background: COLORS.bgSubtle, border: `1px solid ${COLORS.border}`, borderRadius: 6, color: COLORS.textPrimary, padding: '8px 10px', fontSize: 13, width: '100%', boxSizing: 'border-box', colorScheme: 'dark' };
   const label: CSSProperties = { fontSize: 11, color: COLORS.textMuted };
   const button: CSSProperties = { fontSize: 12, padding: '6px 12px', borderRadius: 6, border: `1px solid ${COLORS.border}`, background: 'transparent', color: COLORS.textSecondary, cursor: 'pointer' };
   const submit = () => save.mutate(
-    { settings: { greenBelow: Number(green), amberBelow: Number(amber), rachelCutoff: cutoff }, adminPassword: password },
+    { settings: { greenMax: Number(green), amberMax: Number(amber), rachelCutoff: cutoff }, adminPassword: password },
     { onSuccess: onClose },
   );
 
@@ -86,11 +86,11 @@ function RetentionSettingsPanel({ settings, onClose }: { settings: RetentionSett
         <div style={{ ...label, marginBottom: 12 }}>Status thresholds on the fall-over rate. Interim until Les sets targets.</div>
         <div style={{ display: 'flex', gap: 12 }}>
           <div style={{ flex: 1 }}>
-            <label style={label}>Green under (%)</label>
+            <label style={label}>Green up to (%)</label>
             <input style={{ ...input, margin: '4px 0 12px' }} type="number" min={0} max={100} step={0.5} value={green} onChange={e => setGreen(e.target.value)} />
           </div>
           <div style={{ flex: 1 }}>
-            <label style={label}>Amber under (%)</label>
+            <label style={label}>Amber up to (%)</label>
             <input style={{ ...input, margin: '4px 0 12px' }} type="number" min={0} max={100} step={0.5} value={amber} onChange={e => setAmber(e.target.value)} />
           </div>
         </div>

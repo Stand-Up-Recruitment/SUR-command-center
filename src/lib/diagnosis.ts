@@ -236,7 +236,7 @@ export function diagnoseRetention(s: RetentionSummary, settings: RetentionSettin
   return {
     ...plain(rag),
     tone: rag,
-    text: `Fall-over rate ${s.fallOverRate}% (green under ${settings.greenBelow}%, amber under ${settings.amberBelow}%). ${s.fallOvers ? leak + ' ' : ''}${plural(owed, 'replacement')} owed. ${plural(s.liveRescues, 'live rescue')} logged.`,
+    text: `Fall-over rate ${s.fallOverRate}% (green ${settings.greenMax}% and under, amber up to ${settings.amberMax}%). ${s.fallOvers ? leak + ' ' : ''}${plural(owed, 'replacement')} owed. ${plural(s.liveRescues, 'live rescue')} logged.`,
     summary: `Fall-over rate ${s.fallOverRate}%, ${s.fallOvers ? (s.pre >= s.post ? `${s.pre} of ${s.fallOvers} pre-start` : `${s.post} of ${s.fallOvers} after starting`) : 'no fall-overs'}`,
     items,
   };

@@ -11,8 +11,8 @@ export async function GET(): Promise<Response> {
   const { data, error } = await db.from('retention_settings').select('*').eq('id', 1).maybeSingle();
   if (error) return Response.json({ ...DEFAULTS, error: error.message });
   return Response.json({
-    greenBelow: data ? Number(data.green_below) : DEFAULTS.greenBelow,
-    amberBelow: data ? Number(data.amber_below) : DEFAULTS.amberBelow,
+    greenMax: data ? Number(data.green_max) : DEFAULTS.greenMax,
+    amberMax: data ? Number(data.amber_max) : DEFAULTS.amberMax,
     rachelCutoff: data?.rachel_cutoff ?? DEFAULTS.rachelCutoff,
   } satisfies RetentionSettings);
 }
@@ -29,12 +29,12 @@ export async function PUT(request: Request): Promise<Response> {
   if (!db) return Response.json({ error: 'Supabase not configured' }, { status: 502 });
 
   const b = await request.json().catch(() => null) as RetentionSettings | null;
-  if (!b || !isPct(b.greenBelow) || !isPct(b.amberBelow) || b.greenBelow > b.amberBelow || !isDate(b.rachelCutoff)) {
+  if (!b || !isPct(b.greenMax) || !isPct(b.amberMax) || b.greenMax > b.amberMax || !isDate(b.rachelCutoff)) {
     return Response.json({ error: 'Thresholds must be 0–100 with green ≤ amber, and the cut-off a date' }, { status: 400 });
   }
-  const settings: RetentionSettings = { greenBelow: b.greenBelow, amberBelow: b.amberBelow, rachelCutoff: b.rachelCutoff };
+  const settings: RetentionSettings = { greenMax: b.greenMax, amberMax: b.amberMax, rachelCutoff: b.rachelCutoff };
   const { error } = await db.from('retention_settings').upsert({
-    id: 1, green_below: settings.greenBelow, amber_below: settings.amberBelow, rachel_cutoff: settings.rachelCutoff,
+    id: 1, green_max: settings.greenMax, amber_max: settings.amberMax, rachel_cutoff: settings.rachelCutoff,
     updated_at: new Date().toISOString(),
   });
   if (error) return Response.json({ error: error.message }, { status: 502 });

@@ -7,7 +7,7 @@ export const GUARANTEE_DAYS = 112;            // 16 weeks, counted from the star
 const DROP_OFF_STATUS_ID = 5177;              // "Placement drop off"
 const FAMILY_FLAG_SHARE = 0.2;                // family/personal above this = used as a hiding spot
 
-export const DEFAULT_RETENTION_SETTINGS: RetentionSettings = { greenBelow: 5, amberBelow: 10, rachelCutoff: '2026-09-01' };
+export const DEFAULT_RETENTION_SETTINGS: RetentionSettings = { greenMax: 20, amberMax: 30, rachelCutoff: '2026-09-01' };
 
 // ─── Rachel's labels (see docs/retention/labelling-guide.md) ──────────────────
 export type ReasonOwner = 'Recruiter' | 'Sales' | 'Rachel' | 'None';
@@ -294,4 +294,4 @@ export function summariseRetention(placements: RetentionPlacement[], settings: R
 }
 
 /** RAG for a fall-over style rate against the admin-set thresholds. */
-export const rateRag = (rate: number, s: RetentionSettings) => (rate < s.greenBelow ? 'green' : rate < s.amberBelow ? 'amber' : 'red');
+export const rateRag = (rate: number, s: RetentionSettings) => (rate <= s.greenMax ? 'green' : rate <= s.amberMax ? 'amber' : 'red');

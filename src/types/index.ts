@@ -193,8 +193,8 @@ export interface RetentionPlacement {
 }
 
 export interface RetentionSettings {
-  greenBelow: number;     // fall-over rate % under this is green
-  amberBelow: number;     // under this is amber, else red
+  greenMax: number;      // fall-over rate % at or under this is green
+  amberMax: number;      // at or under this is amber, else red
   rachelCutoff: string;   // YYYY-MM-DD, before/after Rachel marker on cohorts
 }
 
