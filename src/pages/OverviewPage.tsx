@@ -8,7 +8,7 @@ import { NZ, AM, RD, GREY, BG, BG2, BORDER, TEXT, MUTED, RAG_COLOR, int, money0 
 import { useAuthRole } from '../components/auth/AuthContext';
 import {
   useMarketingMonth, useOrganicMonth, useMarketingSettings, useSalesMonth, useSalesSettings,
-  useRecruiterKPIs, useJobAging, useRecruitmentSettings, useRetentionKPIs, useXeroFinanceData,
+  useRecruiterKPIs, useJobAging, useRecruitmentSettings, useRetentionPlacements, useRetentionSettings, useXeroFinanceData,
   useOverviewSettings, useSaveOverviewSettings,
 } from '../hooks/queries';
 import { timeBoundaries } from '../services/airtable';
@@ -18,6 +18,7 @@ import { salesDiagnosis, targetsFor, DEFAULT_TARGET_PER_SALESPERSON } from '../c
 import { DEFAULT_RECRUITMENT_SETTINGS, hiringTrigger, teamRecruiters, recruitmentPace } from '../lib/recruitment';
 import { diagnoseRecruitment, diagnoseRetention, type AttentionItem, type Diagnosis } from '../lib/diagnosis';
 import { financeSummary, DEFAULT_NET_PROFIT_TARGET } from '../lib/finance';
+import { summariseRetention, DEFAULT_RETENTION_SETTINGS } from '../lib/retention';
 import type { Rag } from '../lib/rag';
 import type { OverviewSettings } from '../types';
 
@@ -149,7 +150,8 @@ export function OverviewPage() {
   const rec = useRecruiterKPIs('month');
   const { data: jobs } = useJobAging();
   const recSettings = useRecruitmentSettings();
-  const ret = useRetentionKPIs();
+  const ret = useRetentionPlacements();
+  const retSettings = useRetentionSettings();
   const fin = useXeroFinanceData();
   const { data: settings } = useOverviewSettings();
   const npTarget = settings?.netProfitTarget ?? DEFAULT_NET_PROFIT_TARGET;
@@ -199,13 +201,14 @@ export function OverviewPage() {
   };
 
   // Retention (current state)
-  const rt = ret.data;
+  const rtSettings = { ...DEFAULT_RETENTION_SETTINGS, ...retSettings.data };
+  const rt = ret.data ? summariseRetention(ret.data, rtSettings) : null;
   const retention: Dept = {
-    name: 'Retention', path: '/retention', loading: ret.isLoading, currentOnly: true,
-    diagnosis: rt ? diagnoseRetention({ replacementRate: rt.replacementRate, inProgress: rt.inProgress }) : null,
+    name: 'Retention', path: '/retention', loading: ret.isLoading || retSettings.isLoading, currentOnly: true,
+    diagnosis: rt ? diagnoseRetention(rt, rtSettings) : null,
     numbers: [
-      { label: 'Replacement rate', value: rt ? `${rt.replacementRate}%` : '—' },
-      { label: 'Replacements in progress', value: rt ? int(rt.inProgress) : '—' },
+      { label: 'Fall-over rate', value: rt ? `${rt.fallOverRate}%` : '—', suffix: rt ? `${rt.fallOvers} of ${rt.signed}` : undefined },
+      { label: 'Replacements owed', value: rt ? int(rt.replacementsOwed.length) : '—' },
     ],
   };
 

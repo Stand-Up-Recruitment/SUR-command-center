@@ -1,7 +1,6 @@
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import {
   fetchRecruiterKPIs,
-  fetchRetentionKPIs,
   fetchAusPlacements,
   fetchScheduledInvoices,
   fetchCacKPIs,
@@ -13,8 +12,9 @@ import { fetchMetaSpendByFrame, fetchMetaCampaignBreakdown, fetchMetaAdBreakdown
 import { fetchVoiceCallKPIs } from '../services/voiceCalls';
 import { fetchJobAdderStageKPIs, hasJobAdderStageCredentials } from '../services/jobadderStages';
 import { fetchJobAging, hasOpenJobsCredentials } from '../services/jobadderJobs';
+import { fetchRetentionPlacements, hasRetentionCredentials } from '../services/jobadderRetention';
 import { monthWindow } from '../lib/nzTime';
-import type { TimeFrame, LTGPFrame, OrganicMonth, MarketingSettings, SalesSettings, RecruitmentSettings, OverviewSettings } from '../types';
+import type { TimeFrame, LTGPFrame, OrganicMonth, MarketingSettings, SalesSettings, RecruitmentSettings, OverviewSettings, RetentionSettings } from '../types';
 
 const hasAirtableKey    = Boolean(import.meta.env.VITE_AIRTABLE_API_KEY);
 const hasClientsBase    = Boolean(import.meta.env.VITE_AIRTABLE_CLIENTS_BASE_ID);
@@ -23,7 +23,6 @@ const hasCandidatesBase = Boolean(import.meta.env.VITE_AIRTABLE_CANDIDATES_BASE_
 export const hasSalesCredentials      = hasAirtableKey && hasClientsBase;
 export const hasMarketingCredentials  = hasAirtableKey && hasClientsBase && hasCandidatesBase && Boolean(import.meta.env.VITE_META_TOKEN);
 export const hasRecruitCredentials    = hasAirtableKey && hasCandidatesBase && hasClientsBase;
-export const hasRetentionCredentials  = hasAirtableKey && hasClientsBase;
 
 export function useRecruiterKPIs(frame: TimeFrame = 'month') {
   return useQuery({
@@ -61,11 +60,12 @@ export function useJobAging() {
   });
 }
 
-export function useRetentionKPIs() {
+export function useRetentionPlacements() {
   return useQuery({
-    queryKey: ['retention'],
-    queryFn: fetchRetentionKPIs,
+    queryKey: ['retention-placements'],
+    queryFn: fetchRetentionPlacements,
     enabled: hasRetentionCredentials,
+    staleTime: 10 * 60_000, // webhook reads every placement's notes from JobAdder (~25s)
   });
 }
 
@@ -210,6 +210,27 @@ export function useSaveRecruitmentSettings() {
         body: JSON.stringify(settings),
       }),
     onSuccess: data => qc.setQueryData(['recruitment-settings'], data),
+  });
+}
+
+export function useRetentionSettings() {
+  return useQuery({
+    queryKey: ['retention-settings'],
+    queryFn: () => getJson<RetentionSettings & { error?: string }>('/api/retention-settings'),
+    retry: 1,
+  });
+}
+
+export function useSaveRetentionSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ settings, adminPassword }: { settings: RetentionSettings; adminPassword: string }) =>
+      getJson<RetentionSettings>('/api/retention-settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
+        body: JSON.stringify(settings),
+      }),
+    onSuccess: data => qc.setQueryData(['retention-settings'], data),
   });
 }
 

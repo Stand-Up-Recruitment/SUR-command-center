@@ -169,23 +169,33 @@ export interface MarketingKPIs {
 }
 
 // ─── Retention ────────────────────────────────────────────────────────────────
-export interface RetentionKPIs {
-  activeInWindow: number;
-  prevActiveInWindow: number;
+/** One JobAdder placement note, as returned by the n8n Retention webhook. */
+export interface RetentionNote {
+  type: string;        // "Status change", "Dropoff Reason", "At Risk", "Fee Outcome", "Replacement", …
+  text: string;
+  createdAt: string;   // ISO
+  createdBy: string;
+}
 
-  pastWindow: number;
-  prevPastWindow: number;
+/** One JobAdder placement (start date from 1 Jun 2026) with its notes. */
+export interface RetentionPlacement {
+  placementId: number;
+  startDate: string | null;   // YYYY-MM-DD
+  createdAt: string;          // ISO, = signed
+  statusId: number | null;
+  statusName: string;
+  type: string;               // "Permanent" | "Contract"
+  jobTitle: string;
+  company: { id: number | null; name: string };
+  candidate: string;
+  createdBy: string;          // placing recruiter (credit rule: creator)
+  notes: RetentionNote[];
+}
 
-  replacementsThisMonth: number;
-  replacementsThisWeek: number;
-  replacementsPrevWeek: number;
-
-  replacementRate: number;
-  prevReplacementRate: number;
-
-  inProgress: number;
-  inProgressThisWeek: number;
-  inProgressPrevWeek: number;
+export interface RetentionSettings {
+  greenBelow: number;     // fall-over rate % under this is green
+  amberBelow: number;     // under this is amber, else red
+  rachelCutoff: string;   // YYYY-MM-DD, before/after Rachel marker on cohorts
 }
 
 // ─── Finance (Xero P&L) ───────────────────────────────────────────────────────

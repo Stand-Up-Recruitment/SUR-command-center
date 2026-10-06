@@ -1,4 +1,6 @@
 import type { Rag } from './rag';
+import { rateRag, type RetentionSummary } from './retention.js';
+import type { RetentionSettings } from '../types';
 
 export interface DiagMetric {
   name: string;          // as it reads in a sentence, e.g. "Calls booked"
@@ -210,22 +212,32 @@ export function diagnoseRecruitment(input: {
 }
 
 // ─── Retention tab ────────────────────────────────────────────────────────────
-/** Replacement rate under 5% green, under 10% amber, else red. Any replacement in progress adds an amber item. */
-export function diagnoseRetention(input: { replacementRate: number; inProgress: number }): Diagnosis {
-  const { replacementRate: r, inProgress: n } = input;
-  const rateRag: Rag = r < 5 ? 'green' : r < 10 ? 'amber' : 'red';
-  const progress = n > 0 ? `${n} replacement${n === 1 ? '' : 's'} in progress` : 'none in progress';
+/**
+ * Tone from the fall-over rate against the admin-set thresholds. Replacements owed, unlabelled
+ * drop-offs and family/personal over 20% of drop-offs add amber items.
+ */
+export function diagnoseRetention(s: RetentionSummary, settings: RetentionSettings): Diagnosis {
+  if (!s.signed) {
+    return { state: 'early', badge: 'No data', tone: 'grey', text: 'No placements have started since 1 Jun yet.', summary: 'No placements started yet', items: [] };
+  }
+  const rag = rateRag(s.fallOverRate, settings);
+  const owed = s.replacementsOwed.length;
+  const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
   const items = flaggedFirst([
-    { rag: rateRag, text: `Replacement rate ${r}%` },
-    { rag: n > 0 ? 'amber' as const : 'green' as const, text: progress },
+    { rag, text: `Fall-over rate ${s.fallOverRate}% (${s.fallOvers} of ${s.signed} signed)` },
+    { rag: owed ? 'amber' as const : 'green' as const, text: `${plural(owed, 'replacement')} owed` },
+    { rag: s.unlabelled ? 'amber' as const : 'green' as const, text: `${plural(s.unlabelled, 'drop-off')} without a reason label` },
+    { rag: s.familyFlag ? 'amber' as const : 'green' as const, text: `Family / personal is ${Math.round(s.familyShare * 100)}% of drop-offs (over 20%)` },
   ]).map(c => ({ rag: c.rag, text: c.text }));
-  const tone: Rag = items.some(i => i.rag === 'red') ? 'red' : items.length ? 'amber' : 'green';
-  const rateLine = r >= 10 ? `About 1 in ${Math.round(100 / r)} placements needing replacement` : `Replacement rate ${r}%`;
+
+  const leak = s.pre >= s.post
+    ? `${s.pre} of ${s.fallOvers} fall-overs are pre-start: candidates going cold before day 1 is the biggest leak.`
+    : `${s.post} of ${s.fallOvers} fall-overs happen after starting: in-guarantee losses are the biggest leak.`;
   return {
-    ...plain(tone),
-    tone,
-    text: `Replacement rate ${r}% (green under 5%, amber under 10%). ${progress[0].toUpperCase()}${progress.slice(1)}.`,
-    summary: `${rateLine}, ${progress}`,
+    ...plain(rag),
+    tone: rag,
+    text: `Fall-over rate ${s.fallOverRate}% (green under ${settings.greenBelow}%, amber under ${settings.amberBelow}%). ${s.fallOvers ? leak + ' ' : ''}${plural(owed, 'replacement')} owed. ${plural(s.liveRescues, 'live rescue')} logged.`,
+    summary: `Fall-over rate ${s.fallOverRate}%, ${s.fallOvers ? (s.pre >= s.post ? `${s.pre} of ${s.fallOvers} pre-start` : `${s.post} of ${s.fallOvers} after starting`) : 'no fall-overs'}`,
     items,
   };
 }

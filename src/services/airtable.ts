@@ -10,7 +10,6 @@ import type {
   TimeFrame,
   AusPlacement,
   ScheduledInvoice,
-  RetentionKPIs,
   CacKPIs,
   AcquisitionCacs,
   HandoffTotals,
@@ -590,129 +589,6 @@ export async function fetchScheduledInvoices(): Promise<ScheduledInvoice[]> {
   return records
     .filter(f => f['Due Date'])
     .map(f => ({ amount: f['Invoice Amount'] ?? 0, dueDate: f['Due Date']! }));
-}
-
-// ─── Retention ───────────────────────────────────────────────────────────────
-type RetentionPlacementFields = {
-  'Candidate Start Date'?: string;
-  'Replacement Guarantee End Date'?: string;
-  'Cancellation Date'?: string;
-  'Created Date'?: string;
-  [key: string]: unknown;
-};
-
-export async function fetchRetentionKPIs(): Promise<RetentionKPIs> {
-  if (!CLIENTS_BASE_ID) throw new Error('Retention credentials not configured');
-
-  const today = Date.now();
-  const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
-  const sevenDaysAgo = today - sevenDaysMs;
-  const fourteenDaysAgo = today - 2 * sevenDaysMs;
-
-  const d = new Date();
-  const monthStart = new Date(d.getFullYear(), d.getMonth(), 1).getTime();
-
-  const records = await fetchAllFromBase<RetentionPlacementFields>(
-    CLIENTS_BASE_ID,
-    PLACEMENTS_TABLE_ID,
-    {}
-  );
-
-  // Resolve the "Status" field name (raw record key can carry a leading BOM character);
-  // exact match only — this table also has Relocation Status, Testimonial Status, etc.
-  const statusKey = records.length > 0
-    ? (Object.keys(records[0]).find(k => k.replace(/^\uFEFF/, '') === 'Status') ?? '')
-    : '';
-
-  const getStatus = (f: RetentionPlacementFields): string =>
-    (f[statusKey] as string | undefined) ?? '';
-
-  // ── Metric 1: Active in guarantee window ─────────────────────────────────
-  const activeInWindow = records.filter(f => {
-    const start = f['Candidate Start Date'] ? new Date(f['Candidate Start Date']).getTime() : null;
-    const end = f['Replacement Guarantee End Date'] ? new Date(f['Replacement Guarantee End Date']).getTime() : null;
-    return start !== null && end !== null && start <= today && end >= today && getStatus(f) !== 'End';
-  }).length;
-
-  const prevActiveInWindow = records.filter(f => {
-    const start = f['Candidate Start Date'] ? new Date(f['Candidate Start Date']).getTime() : null;
-    const end = f['Replacement Guarantee End Date'] ? new Date(f['Replacement Guarantee End Date']).getTime() : null;
-    return start !== null && end !== null && start <= sevenDaysAgo && end >= sevenDaysAgo && getStatus(f) !== 'End';
-  }).length;
-
-  // ── Metric 2: Past guarantee window ──────────────────────────────────────
-  const pastWindow = records.filter(f => {
-    const end = f['Replacement Guarantee End Date'] ? new Date(f['Replacement Guarantee End Date']).getTime() : null;
-    return end !== null && end < today;
-  }).length;
-
-  const prevPastWindow = records.filter(f => {
-    const end = f['Replacement Guarantee End Date'] ? new Date(f['Replacement Guarantee End Date']).getTime() : null;
-    return end !== null && end < sevenDaysAgo;
-  }).length;
-
-  // ── Metric 3: Replacements triggered ─────────────────────────────────────
-  const isTriggered = (f: RetentionPlacementFields) =>
-    getStatus(f) === 'End' && Boolean(f['Cancellation Date']);
-
-  const replacementsThisMonth = records.filter(f => {
-    if (!isTriggered(f)) return false;
-    const t = new Date(f['Cancellation Date']!).getTime();
-    return t >= monthStart && t <= today;
-  }).length;
-
-  const replacementsThisWeek = records.filter(f => {
-    if (!isTriggered(f)) return false;
-    const t = new Date(f['Cancellation Date']!).getTime();
-    return t >= sevenDaysAgo && t <= today;
-  }).length;
-
-  const replacementsPrevWeek = records.filter(f => {
-    if (!isTriggered(f)) return false;
-    const t = new Date(f['Cancellation Date']!).getTime();
-    return t >= fourteenDaysAgo && t < sevenDaysAgo;
-  }).length;
-
-  // ── Metric 4: Replacement rate % (all-time) ───────────────────────────────
-  const totalPlacements = records.length;
-  const totalTriggered = records.filter(isTriggered).length;
-  const replacementRate = totalPlacements > 0
-    ? Math.round((totalTriggered / totalPlacements) * 1000) / 10
-    : 0;
-
-  const placementsBefore7d = records.filter(f => {
-    const created = f['Created Date'] ? new Date(f['Created Date']).getTime() : 0;
-    return created < sevenDaysAgo;
-  });
-  const triggeredBefore7d = placementsBefore7d.filter(f =>
-    isTriggered(f) && new Date(f['Cancellation Date']!).getTime() < sevenDaysAgo
-  ).length;
-  const prevReplacementRate = placementsBefore7d.length > 0
-    ? Math.round((triggeredBefore7d / placementsBefore7d.length) * 1000) / 10
-    : 0;
-
-  // ── Metric 5: Replacements in progress (Status = "Replacement") ───────────
-  const inProgress = records.filter(f => getStatus(f) === 'Replacement').length;
-
-  const inProgressThisWeek = records.filter(f => {
-    if (getStatus(f) !== 'Replacement') return false;
-    const created = f['Created Date'] ? new Date(f['Created Date']).getTime() : 0;
-    return created >= sevenDaysAgo && created <= today;
-  }).length;
-
-  const inProgressPrevWeek = records.filter(f => {
-    if (getStatus(f) !== 'Replacement') return false;
-    const created = f['Created Date'] ? new Date(f['Created Date']).getTime() : 0;
-    return created >= fourteenDaysAgo && created < sevenDaysAgo;
-  }).length;
-
-  return {
-    activeInWindow, prevActiveInWindow,
-    pastWindow, prevPastWindow,
-    replacementsThisMonth, replacementsThisWeek, replacementsPrevWeek,
-    replacementRate, prevReplacementRate,
-    inProgress, inProgressThisWeek, inProgressPrevWeek,
-  };
 }
 
 // ─── CAC ──────────────────────────────────────────────────────────────────────
