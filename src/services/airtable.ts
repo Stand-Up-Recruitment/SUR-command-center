@@ -23,6 +23,7 @@ import {
 } from './metaAds';
 import { toMs, trailingDays, last12Months, nzDate, type MonthWindow, type DayRange } from '../lib/nzTime';
 import { candidateQualifier, DEFAULT_NON_TRADE_CATEGORIES } from '../lib/qualified';
+import { isNonRecruiter } from '../lib/recruitment';
 
 const API_KEY = import.meta.env.VITE_AIRTABLE_API_KEY as string;
 const CLIENTS_BASE_ID = import.meta.env.VITE_AIRTABLE_CLIENTS_BASE_ID as string;
@@ -191,10 +192,13 @@ function rollingRates(pipeline: PipelineFields[], placements: RecruiterPlacement
 export async function fetchRecruiterKPIs(frame: TimeFrame = 'month'): Promise<RecruiterKPIs> {
   const b = timeBoundaries(frame);
 
-  const [pipeline, placements] = await Promise.all([
+  const [allPipeline, allPlacements] = await Promise.all([
     fetchAllFromBase<PipelineFields>(CANDIDATES_BASE_ID, PIPELINE_TABLE_ID, {}),
     fetchAllFromBase<RecruiterPlacementFields>(CLIENTS_BASE_ID, PLACEMENTS_TABLE_ID, {}),
   ]);
+  // Non-recruiters' rows are left out of the team totals and the per-recruiter list.
+  const pipeline = allPipeline.filter(f => !isNonRecruiter(f.Name));
+  const placements = allPlacements.filter(f => !isNonRecruiter(f.Recruiter));
 
   const pipelineThis = pipeline.filter(f => isInPeriod(f.Created, b.start, b.now));
   const pipelinePrev = pipeline.filter(f => isInPeriod(f.Created, b.prevStart, b.prevEnd));

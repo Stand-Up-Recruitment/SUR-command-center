@@ -14,8 +14,10 @@ const PLACEMENT_TARGETS_MONTHLY: Record<string, number> = { ayn: 4, ian: 4, kade
 const DEFAULT_PLACEMENT_TARGET_MONTHLY = 2;
 
 // Nihanga is HR & Business Operations, not a recruiter — JobAdder lists her as the
-// owner on some open jobs, but she shouldn't appear as a "By Recruiter" card.
+// owner on some open jobs, but she shouldn't appear as a "By Recruiter" card or count
+// toward the team's KPI totals.
 const NON_RECRUITERS = ['nihanga'];
+export const isNonRecruiter = (name: string | undefined) => Boolean(name) && NON_RECRUITERS.includes(firstName(name!));
 
 const DAY_MS = 86_400_000;
 
@@ -82,7 +84,7 @@ export function hiringTrigger(jobs: JobAgingKPIs, s: RecruitmentSettings): Hirin
 export function teamRecruiters(data: RecruiterKPIs, jobs: JobAgingKPIs | undefined): RecruiterStat[] {
   const out: RecruiterStat[] = [...data.byRecruiter];
   for (const stat of jobs?.byRecruiter ?? []) {
-    if (NON_RECRUITERS.includes(firstName(stat.name))) continue;
+    if (isNonRecruiter(stat.name)) continue;
     if (!out.some(r => firstName(r.name) === firstName(stat.name))) {
       out.push({
         name: stat.name, phoneInterviews: 0, prevPhoneInterviews: 0, internalInterviews: 0, prevInternalInterviews: 0,
