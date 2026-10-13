@@ -74,6 +74,8 @@ export interface VoiceCallKPIs {
   // All counted per unique phone number, so retries and callbacks count once.
   teamLeads: number;       // numbers dialled, current period
   prevTeamLeads: number;   // numbers dialled, previous period
+  teamAnswered: number;    // numbers that answered, current period
+  prevTeamAnswered: number; // numbers that answered, previous period
   teamBooked: number;      // numbers booked into an internal interview, current period
   prevTeamBooked: number;  // numbers booked into an internal interview, previous period
 }

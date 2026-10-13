@@ -297,7 +297,7 @@ export function RecruiterCard() {
   const clientColor = rag(data.clientInterviews, teamClientTarget);
   const internalColor = rag(data.internalInterviews, teamInternalTarget);
 
-  // Recruitment bot — leads contacted and internal interviews booked, both straight from the
+  // Recruitment bot — leads contacted, answered and internal interviews booked, all straight from the
   // Voice Call Log, one per phone number. "—" until the webhook has loaded.
   // No-shows = team sum of the recruiters' JobAdder "No Show-up" counts.
   // Show-up rate = showed ÷ (showed + no-shows), per candidate, across all internal
@@ -678,6 +678,7 @@ export function RecruiterCard() {
         </div>
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
           {miniStat(voiceCallData?.teamLeads ?? '—', 'Leads contacted', `Unique numbers the bot dialled · last ${periodLabel}: ${voiceCallData?.prevTeamLeads ?? '—'}`, COLORS.textPrimary, 30)}
+          {miniStat(voiceCallData?.teamAnswered ?? '—', 'Answered', `Unique numbers that picked up · last ${periodLabel}: ${voiceCallData?.prevTeamAnswered ?? '—'}`, COLORS.textPrimary, 30)}
           {miniStat(voiceCallData?.teamBooked ?? '—', 'Internal interviews booked', `Booked by the bot · last ${periodLabel}: ${voiceCallData?.prevTeamBooked ?? '—'}`, COLORS.textPrimary, 30)}
           {miniStat(noShows, 'No-shows', `JobAdder "No Show-up" · last ${periodLabel}: ${prevNoShows}`, COLORS.textPrimary, 30)}
           {miniStat(showUpPct !== undefined ? `${showUpPct}%` : '—', 'Show-up rate', 'Showed ÷ (showed + no-shows)',

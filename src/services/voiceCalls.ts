@@ -6,7 +6,7 @@ import { timeBoundaries } from './airtable';
 const PROXY_URL = '/api/voice-stats';
 
 type VoiceStatsResponse = {
-  totals: { unique_dialled: number; unique_booked: number };
+  totals: { unique_dialled: number; unique_answered: number; unique_booked: number };
 };
 
 // NZ calendar date (YYYY-MM-DD) — the endpoint counts `days` in Pacific/Auckland days.
@@ -22,7 +22,8 @@ async function getStats(days: number, to?: string): Promise<VoiceStatsResponse> 
 }
 
 // From the Voice Call Log, counted per unique phone number so retries and callbacks count once:
-// leads contacted = numbers the bot dialled (answered + no answer); booked = numbers the bot
+// leads contacted = numbers the bot dialled (answered + no answer); answered = numbers that
+// picked up; booked = numbers the bot
 // booked an internal interview for (outbound calls and inbound callbacks).
 export async function fetchVoiceCallKPIs(frame: TimeFrame = 'month'): Promise<VoiceCallKPIs> {
   const b = timeBoundaries(frame);
@@ -33,6 +34,8 @@ export async function fetchVoiceCallKPIs(frame: TimeFrame = 'month'): Promise<Vo
   return {
     teamLeads: current.totals.unique_dialled,
     prevTeamLeads: prev.totals.unique_dialled,
+    teamAnswered: current.totals.unique_answered,
+    prevTeamAnswered: prev.totals.unique_answered,
     teamBooked: current.totals.unique_booked,
     prevTeamBooked: prev.totals.unique_booked,
   };
