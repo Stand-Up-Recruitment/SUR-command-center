@@ -39,17 +39,16 @@ export interface RecruiterStat {
   prevInternalInterviews: number;
   clientInterviews: number;
   prevClientInterviews: number;
-  // Internal interviews missed (JobAdder Internal Interview → No Show-up), per candidate;
-  // excludes candidates who later attended a rebooked interview.
+  // Internal interviews missed. The Recruitment card overrides this with the JobAdder
+  // "No Show-up" candidate status (JobAdderStageStat.noShows) once that webhook loads.
   noShows: number;
   prevNoShows: number;
   placements: number;
   prevPlacements: number;
   fallThroughRate: number;     // % of contracts signed this period later terminated (Status='End' + Cancellation Date)
   prevFallThroughRate: number;
-  // Optional — merged in from the Voice Call Log / JobAdder webhooks; absent until that
-  // hook's data has loaded, or if the recruiter has no matching calls / JobAdder owner.
-  leadsContactedByBot?: number;
+  // Optional — merged in from the JobAdder webhook; absent until that hook's data has
+  // loaded, or if the recruiter has no matching JobAdder owner.
   referenceChecks?: number;
   prevReferenceChecks?: number;
   candidatesPitched?: number;
@@ -70,10 +69,13 @@ export interface RollingRates {
   monthsOfData: number;      // full months in the window with interview data (0–4)
 }
 
-// ─── Voice Call Log (leads contacted by bot) ───────────────────────────────────
+// ─── Voice Call Log (leads contacted + interviews booked by bot) ───────────────
 export interface VoiceCallKPIs {
-  byRecruiter: { name: string; leadsContactedByBot: number }[];  // calls dialled, current period
-  prevTeamLeads: number;                                         // calls dialled, previous period (team)
+  // All counted per unique phone number, so retries and callbacks count once.
+  teamLeads: number;       // numbers dialled, current period
+  prevTeamLeads: number;   // numbers dialled, previous period
+  teamBooked: number;      // numbers booked into an internal interview, current period
+  prevTeamBooked: number;  // numbers booked into an internal interview, previous period
 }
 
 // ─── JobAdder pipeline stages + Calendly bot bookings ──────────────────────────
@@ -89,6 +91,10 @@ export interface JobAdderStageStat {
   prevCandidatesPitched: number;
   internalInterviewsBotBooked: number;
   prevInternalInterviewsBotBooked: number;
+  // Candidates in the JobAdder "No Show-up" candidate status, credited to whoever last
+  // updated the candidate, by when they did.
+  noShows: number;
+  prevNoShows: number;
 }
 
 export interface JobAdderStageKPIs {

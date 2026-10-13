@@ -5,10 +5,8 @@ import { timeBoundaries } from './airtable';
 // stays server-side.
 const PROXY_URL = '/api/voice-stats';
 
-type Tally = { dialled: number };
 type VoiceStatsResponse = {
-  by_day: (Tally & { date: string })[];
-  by_recruiter: (Tally & { recruiter: string })[];
+  totals: { unique_dialled: number; unique_booked: number };
 };
 
 // NZ calendar date (YYYY-MM-DD) — the endpoint counts `days` in Pacific/Auckland days.
@@ -16,21 +14,26 @@ const nzDate = (ms: number) => new Date(ms).toLocaleDateString('en-CA', { timeZo
 const daysSince = (ms: number) =>
   Math.round((Date.parse(nzDate(Date.now())) - Date.parse(nzDate(ms))) / 86_400_000) + 1;
 
-async function getStats(days: number): Promise<VoiceStatsResponse> {
-  const res = await fetch(`${PROXY_URL}?days=${days}`, { signal: AbortSignal.timeout(20_000) });
+// `to` (NZ date, exclusive) closes the range; without it the range runs to today.
+async function getStats(days: number, to?: string): Promise<VoiceStatsResponse> {
+  const res = await fetch(`${PROXY_URL}?days=${days}${to ? `&to=${to}` : ''}`, { signal: AbortSignal.timeout(20_000) });
   if (!res.ok) throw new Error(`Voice call stats HTTP ${res.status}`);
   return res.json() as Promise<VoiceStatsResponse>;
 }
 
-// Leads contacted = calls the bot dialled (answered + no answer), from the Voice Call Log.
-// Per-recruiter for the current period; previous period is a team total from by_day.
+// From the Voice Call Log, counted per unique phone number so retries and callbacks count once:
+// leads contacted = numbers the bot dialled (answered + no answer); booked = numbers the bot
+// booked an internal interview for (outbound calls and inbound callbacks).
 export async function fetchVoiceCallKPIs(frame: TimeFrame = 'month'): Promise<VoiceCallKPIs> {
   const b = timeBoundaries(frame);
-  const [current, span] = await Promise.all([getStats(daysSince(b.start)), getStats(daysSince(b.prevStart))]);
-  const prevFrom = nzDate(b.prevStart);
-  const prevTo = nzDate(b.prevEnd); // exclusive
+  const [current, prev] = await Promise.all([
+    getStats(daysSince(b.start)),
+    getStats(daysSince(b.prevStart), nzDate(b.prevEnd)),
+  ]);
   return {
-    byRecruiter: current.by_recruiter.map(r => ({ name: r.recruiter, leadsContactedByBot: r.dialled })),
-    prevTeamLeads: span.by_day.filter(d => d.date >= prevFrom && d.date < prevTo).reduce((s, d) => s + d.dialled, 0),
+    teamLeads: current.totals.unique_dialled,
+    prevTeamLeads: prev.totals.unique_dialled,
+    teamBooked: current.totals.unique_booked,
+    prevTeamBooked: prev.totals.unique_booked,
   };
 }

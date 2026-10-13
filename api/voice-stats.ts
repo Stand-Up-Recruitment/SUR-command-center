@@ -7,8 +7,10 @@ export async function GET(request: Request): Promise<Response> {
   const token = process.env.N8N_DASH_TOKEN;
   if (!token) return Response.json({ error: 'N8N_DASH_TOKEN not configured' }, { status: 502 });
 
-  const days = Math.min(Math.max(parseInt(new URL(request.url).searchParams.get('days') ?? '', 10) || 30, 1), 365);
-  const res = await fetch(`${UPSTREAM}?days=${days}`, {
+  const params = new URL(request.url).searchParams;
+  const days = Math.min(Math.max(parseInt(params.get('days') ?? '', 10) || 30, 1), 365);
+  const to = /^\d{4}-\d{2}-\d{2}$/.test(params.get('to') ?? '') ? `&to=${params.get('to')}` : '';
+  const res = await fetch(`${UPSTREAM}?days=${days}${to}`, {
     headers: { 'x-dashboard-token': token },
     signal: AbortSignal.timeout(15_000),
   }).catch(() => null);

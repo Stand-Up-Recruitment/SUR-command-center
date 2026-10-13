@@ -213,16 +213,15 @@ export function RecruiterCard() {
   const firstName = (n: string) => n.trim().split(' ')[0].toLowerCase();
   const baseRecruiters = teamRecruiters(data, jobAgingData);
 
-  // Merge in Voice Call Log + JobAdder pipeline-stage KPIs (separate webhooks) by first name —
-  // left as undefined (rendered as "—") when a hook hasn't loaded. A recruiter with no
-  // calls in the Voice Call Log dialled 0.
+  // Merge in JobAdder pipeline-stage KPIs (separate webhook) by first name — left as
+  // undefined (rendered as "—") when the hook hasn't loaded. No-shows come from the
+  // JobAdder "No Show-up" candidate status once loaded; a recruiter with none there has 0.
   // Copies each row so the React Query cache isn't mutated.
   const displayRecruiters: RecruiterStat[] = baseRecruiters.map(r => {
-    const vc = voiceCallData?.byRecruiter.find(s => firstName(s.name) === firstName(r.name));
     const js = jobAdderStageData?.byRecruiter.find(s => firstName(s.name) === firstName(r.name));
     return {
       ...r,
-      ...(voiceCallData && { leadsContactedByBot: vc?.leadsContactedByBot ?? 0 }),
+      ...(jobAdderStageData && { noShows: js?.noShows ?? 0, prevNoShows: js?.prevNoShows ?? 0 }),
       ...(js && {
         referenceChecks: js.referenceChecks,
         prevReferenceChecks: js.prevReferenceChecks,
@@ -298,25 +297,17 @@ export function RecruiterCard() {
   const clientColor = rag(data.clientInterviews, teamClientTarget);
   const internalColor = rag(data.internalInterviews, teamInternalTarget);
 
-  // Recruitment bot — team totals summed from the per-recruiter webhooks.
-  const sumDefined = (vals: (number | undefined)[]) =>
-    vals.some(v => v !== undefined) ? vals.reduce<number>((s, v) => s + (v ?? 0), 0) : undefined;
-  const botLeads = sumDefined(displayRecruiters.map(r => r.leadsContactedByBot));
-  const prevBotLeads = voiceCallData?.prevTeamLeads;
-  // Leads contacted = bot calls dialled (Voice Call Log) + recruiters' own phone interviews
-  // (KPI's Recruiter Status = Phone Interview, unique candidates). Bot part counts as 0 until loaded.
-  const leadsContacted = (botLeads ?? 0) + data.phoneInterviews;
-  const prevLeadsContacted = (prevBotLeads ?? 0) + data.prevPhoneInterviews;
-  // Booked = internal interviews that are over (KPI's Recruiter rows): showed + no-shows,
-  // unique candidates, bot and manual bookings alike.
-  const internalBooked = data.internalInterviews + data.noShows;
-  const prevInternalBooked = data.prevInternalInterviews + data.prevNoShows;
+  // Recruitment bot — leads contacted and internal interviews booked, both straight from the
+  // Voice Call Log, one per phone number. "—" until the webhook has loaded.
+  // No-shows = team sum of the recruiters' JobAdder "No Show-up" counts.
   // Show-up rate = showed ÷ (showed + no-shows), per candidate, across all internal
   // interviews (bot and manual). An Internal Interview row is only logged once the candidate
-  // leaves that JobAdder status, i.e. after the interview; a miss logs a No Show-up row instead.
+  // leaves that JobAdder status, i.e. after the interview.
+  const noShows = displayRecruiters.reduce((s, r) => s + r.noShows, 0);
+  const prevNoShows = displayRecruiters.reduce((s, r) => s + r.prevNoShows, 0);
   const showUpRate = (showed: number, noShows: number) =>
     showed + noShows > 0 ? pct(showed, showed + noShows) : undefined;
-  const showUpPct = showUpRate(data.internalInterviews, data.noShows);
+  const showUpPct = showUpRate(data.internalInterviews, noShows);
 
   const pill = (label: string, bg: string, color = '#0d0d0d') => (
     <span style={{
@@ -686,10 +677,10 @@ export function RecruiterCard() {
           <span style={SECTION_LABEL}>Recruitment Bot · Team</span>
         </div>
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-          {miniStat(leadsContacted, 'Leads contacted', `Bot ${botLeads ?? '—'} · phone interviews ${data.phoneInterviews} · last ${periodLabel}: ${prevLeadsContacted}`, COLORS.textPrimary, 30)}
-          {miniStat(internalBooked, 'Internal interviews booked', `Showed + no-shows · last ${periodLabel}: ${prevInternalBooked}`, COLORS.textPrimary, 30)}
-          {miniStat(data.noShows, 'No-shows', `Internal interviews missed · last ${periodLabel}: ${data.prevNoShows}`, COLORS.textPrimary, 30)}
-          {miniStat(showUpPct !== undefined ? `${showUpPct}%` : '—', 'Show-up rate', 'Showed ÷ booked',
+          {miniStat(voiceCallData?.teamLeads ?? '—', 'Leads contacted', `Unique numbers the bot dialled · last ${periodLabel}: ${voiceCallData?.prevTeamLeads ?? '—'}`, COLORS.textPrimary, 30)}
+          {miniStat(voiceCallData?.teamBooked ?? '—', 'Internal interviews booked', `Booked by the bot · last ${periodLabel}: ${voiceCallData?.prevTeamBooked ?? '—'}`, COLORS.textPrimary, 30)}
+          {miniStat(noShows, 'No-shows', `JobAdder "No Show-up" · last ${periodLabel}: ${prevNoShows}`, COLORS.textPrimary, 30)}
+          {miniStat(showUpPct !== undefined ? `${showUpPct}%` : '—', 'Show-up rate', 'Showed ÷ (showed + no-shows)',
             showUpPct !== undefined ? rag(showUpPct, 80) : COLORS.textPrimary, 30)}
         </div>
       </div>
