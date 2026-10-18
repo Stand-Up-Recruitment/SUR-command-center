@@ -7,7 +7,6 @@ import {
   fetchMarketingMonth,
   fetchSalesMonth,
   fetchClientPlacements,
-  fetchCrmTobDates,
 } from '../services/airtable';
 import { fetchClientInvoices, hasClientInvoicesCredentials } from '../services/clientInvoices';
 import { fetchXeroFinanceData, hasXeroCredentials } from '../services/xero';
@@ -77,15 +76,6 @@ export function useClientPlacements() {
   return useQuery({
     queryKey: ['client-placements'],
     queryFn: fetchClientPlacements,
-    enabled: hasSalesCredentials,
-    staleTime: 10 * 60_000,
-  });
-}
-
-export function useCrmTobDates() {
-  return useQuery({
-    queryKey: ['crm-tob-dates'],
-    queryFn: fetchCrmTobDates,
     enabled: hasSalesCredentials,
     staleTime: 10 * 60_000,
   });

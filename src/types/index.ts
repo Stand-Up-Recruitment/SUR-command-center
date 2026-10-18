@@ -215,13 +215,6 @@ export interface ClientPlacement {
   cancellationDate: string | null; // YYYY-MM-DD
 }
 
-/** One CRM row's ToB dates. */
-export interface CrmTob {
-  company: string;
-  sentDate: string | null;   // YYYY-MM-DD
-  signedDate: string | null; // YYYY-MM-DD
-}
-
 /** One Australian Xero sales invoice, as returned by the n8n client-invoices webhook. */
 export interface ClientInvoice {
   invoiceNumber: string;

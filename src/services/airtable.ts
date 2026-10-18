@@ -17,7 +17,6 @@ import type {
   SalesMonth,
   SalesFunnel,
   ClientPlacement,
-  CrmTob,
 } from '../types';
 import {
   fetchMetaSpend, fetchMetaSpendByFrame, fetchMetaSpendPrevPeriod, fetchMetaCprByGroup,
@@ -601,21 +600,6 @@ export async function fetchClientPlacements(): Promise<ClientPlacement[]> {
       cancellationDate: f['Cancellation Date'] ?? null,
     };
   }).filter(p => p.client);
-}
-
-/** ToB sent / signed dates per CRM row, for the Clients scorecard's Sales Responsiveness. */
-export async function fetchCrmTobDates(): Promise<CrmTob[]> {
-  if (!CLIENTS_BASE_ID) throw new Error('Airtable credentials not configured');
-  const rows = await fetchAllFromBase<{ 'Company Name'?: string; 'Sent Date'?: string; 'Signed Date'?: string }>(
-    CLIENTS_BASE_ID, CRM_TABLE_ID, {}, ['Company Name', 'Sent Date', 'Signed Date'],
-  );
-  return rows
-    .filter(r => r['Company Name']?.trim())
-    .map(r => ({
-      company: r['Company Name']!.trim(),
-      sentDate: r['Sent Date']?.slice(0, 10) ?? null,
-      signedDate: r['Signed Date']?.slice(0, 10) ?? null,
-    }));
 }
 
 export async function fetchScheduledInvoices(): Promise<ScheduledInvoice[]> {

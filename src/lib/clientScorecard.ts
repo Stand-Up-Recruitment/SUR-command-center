@@ -1,8 +1,7 @@
-// AU Client Scorecard: Volume 30% + Payment 40% + Retention & Relationship 30%, plus a
-// Sales Responsiveness signal that is shown but not scored. Rules follow the
-// "AU Client Scorecard — Requirements" doc (14 Oct 2026). Pure functions: the Clients
-// tab renders this, and the Overview will read it from here rather than recalculate.
-import type { ClientInvoice, ClientPlacement, CrmTob, RetentionPlacement } from '../types';
+// AU Client Scorecard: Volume 30% + Payment 40% + Retention & Relationship 30%. Rules
+// follow the "AU Client Scorecard — Requirements" doc (14 Oct 2026). Pure functions: the
+// Clients tab renders this, and the Overview will read it from here rather than recalculate.
+import type { ClientInvoice, ClientPlacement, RetentionPlacement } from '../types';
 import { companyKey } from './companyKey';
 import { placementFacts } from './retention';
 
@@ -47,7 +46,6 @@ export interface ClientScore {
   volume: Signal;
   payment: Signal & { overdueCount: number; overdueAmount: number; paidDaysLate: number[] };
   retention: Signal & { redFlags: number };
-  sales: Signal;
 }
 
 export interface Scorecard {
@@ -216,37 +214,6 @@ export function retentionSignal(
   };
 }
 
-// ─── Sales Responsiveness (shown, not scored) ─────────────────────────────────
-export function salesSignal(rows: CrmTob[]): Signal {
-  const working: Working = {
-    columns: ['Company (CRM)', 'ToB sent', 'ToB signed'],
-    rows: rows.map(r => [r.company, r.sentDate ?? '—', r.signedDate ?? '—']),
-    steps: [],
-  };
-  if (rows.length === 0) {
-    working.steps.push('No CRM record for this client');
-    return { score: null, tone: 'neutral', headline: 'no record on file', working };
-  }
-  // Most recent signed ToB with both dates.
-  const dated = rows.filter(r => r.sentDate && r.signedDate).sort((a, b) => b.signedDate!.localeCompare(a.signedDate!));
-  if (dated.length === 0) {
-    working.steps.push('CRM record has no sent and signed date pair');
-    return { score: null, tone: 'neutral', headline: 'dates not on file', working };
-  }
-  const { sentDate, signedDate } = dated[0];
-  const d = daysBetween(sentDate!, signedDate!);
-  working.steps.push(`Signed ${signedDate} − sent ${sentDate} = ${d} day${d === 1 ? '' : 's'}`);
-  let tone: Tone; let headline: string;
-  if (d < 0) { tone = 'neutral'; headline = 'turnaround unclear'; }
-  else if (d <= 1) { tone = 'good'; headline = 'same/next day'; }
-  else if (d <= 5) { tone = 'good'; headline = `signed in ${d} days`; }
-  else if (d <= 14) { tone = 'ok'; headline = `took ${d} days`; }
-  else { tone = 'bad'; headline = 'slow to close'; }
-  working.steps.push(`0–1 days same/next day · 2–5 good · 6–14 ok · over 14 slow → ${headline}`);
-  working.steps.push('Shown only — not part of the score');
-  return { score: null, tone, headline, working };
-}
-
 // ─── Composite ────────────────────────────────────────────────────────────────
 /** Weighted score; a component with no data is dropped and the other weights rescaled. */
 export function composite(sub: { volume: number | null; payment: number | null; retention: number | null }): number {
@@ -259,7 +226,6 @@ export function buildScorecard(
   placements: ClientPlacement[],
   invoices: ClientInvoice[] | null,
   jobAdder: RetentionPlacement[] | null,
-  crm: CrmTob[] | null,
   asAt: string,
 ): Scorecard {
   const groups = new Map<string, ClientPlacement[]>();
@@ -281,11 +247,6 @@ export function buildScorecard(
     const k = companyKey(p.company.name, p.company.name);
     jaBy.set(k, [...(jaBy.get(k) ?? []), { candidate: p.candidate, reason: f.reason, dropped: f.dropped }]);
   }
-  const crmBy = new Map<string, CrmTob[]>();
-  for (const r of crm ?? []) {
-    const k = companyKey(r.company, r.company);
-    crmBy.set(k, [...(crmBy.get(k) ?? []), r]);
-  }
 
   const scored = [...groups.entries()].map(([key, ps]) => {
     const volume = volumeSignal(ps.length, maxN);
@@ -293,9 +254,8 @@ export function buildScorecard(
     if (!invoices) payment.working.steps = ['Xero invoices unavailable — Payment left out of the score'];
     const retention = retentionSignal(ps, jaBy.get(key) ?? []);
     if (!jobAdder) retention.working.steps.unshift('JobAdder notes unavailable — every departure treated as unexplained');
-    const sales = salesSignal(crm ? crmBy.get(key) ?? [] : []);
     const score = composite({ volume: volume.score, payment: payment.score, retention: retention.score });
-    return { key, name: ps[0].client, rank: 0, score, tier: tierOf(score), placements: ps.length, volume, payment, retention, sales };
+    return { key, name: ps[0].client, rank: 0, score, tier: tierOf(score), placements: ps.length, volume, payment, retention };
   });
   scored.sort((a, b) => b.score - a.score || b.placements - a.placements || a.name.localeCompare(b.name));
   scored.forEach((c, i) => { c.rank = i + 1; });

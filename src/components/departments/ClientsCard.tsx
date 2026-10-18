@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Skeleton } from '../shared/Skeleton';
 import { Grid, Metric } from '../shared/monthLayout';
 import { NZ, AM, RD, GREY, BG, BG2, BORDER, TEXT, MUTED, int, shortDate } from '../shared/monthTheme';
-import { useClientPlacements, useClientInvoices, useCrmTobDates, useRetentionPlacements } from '../../hooks/queries';
+import { useClientPlacements, useClientInvoices, useRetentionPlacements } from '../../hooks/queries';
 import { hasClientInvoicesCredentials } from '../../services/clientInvoices';
 import { hasRetentionCredentials } from '../../services/jobadderRetention';
 import { buildScorecard, WEIGHTS, UNEXPLAINED_NUDGE_EACH, UNEXPLAINED_NUDGE_CAP, type ClientScore, type Signal, type Tier, type Tone } from '../../lib/clientScorecard';
@@ -13,12 +13,11 @@ const TIER_COLOR: Record<Tier, string> = { A: NZ, B: NZ, C: AM, D: RD };
 const TIER_LABEL: Record<Tier, string> = { A: 'Top tier', B: 'Solid', C: 'Watch', D: 'At risk' };
 const pct = (w: number) => `${Math.round(w * 100)}%`;
 
-type SignalKey = 'volume' | 'payment' | 'retention' | 'sales';
+type SignalKey = 'volume' | 'payment' | 'retention';
 const SIGNALS: { key: SignalKey; label: string }[] = [
   { key: 'volume', label: `Volume · ${pct(WEIGHTS.volume)}` },
   { key: 'payment', label: `Payment · ${pct(WEIGHTS.payment)}` },
   { key: 'retention', label: `Retention & Relationship · ${pct(WEIGHTS.retention)}` },
-  { key: 'sales', label: 'Sales responsiveness · not scored' },
 ];
 
 function ClientsSkeleton() {
@@ -118,7 +117,6 @@ function ClientRow({ c }: { c: ClientScore }) {
 export function ClientsCard() {
   const placementsQ = useClientPlacements();
   const invoicesQ = useClientInvoices();
-  const crmQ = useCrmTobDates();
   const jobAdderQ = useRetentionPlacements();
   const [filter, setFilter] = useState<Tier | 'All'>('All');
 
@@ -127,10 +125,10 @@ export function ClientsCard() {
   const jobAdderDone = !hasRetentionCredentials || !jobAdderQ.isLoading;
 
   const card = useMemo(
-    () => placementsQ.data && invoicesDone && jobAdderDone && !crmQ.isLoading
-      ? buildScorecard(placementsQ.data, invoicesQ.data ?? null, jobAdderQ.data ?? null, crmQ.data ?? null, asAt)
+    () => placementsQ.data && invoicesDone && jobAdderDone
+      ? buildScorecard(placementsQ.data, invoicesQ.data ?? null, jobAdderQ.data ?? null, asAt)
       : null,
-    [placementsQ.data, invoicesQ.data, jobAdderQ.data, crmQ.data, invoicesDone, jobAdderDone, crmQ.isLoading, asAt],
+    [placementsQ.data, invoicesQ.data, jobAdderQ.data, invoicesDone, jobAdderDone, asAt],
   );
 
   if (placementsQ.error) return <div style={{ color: RD, fontSize: 13 }}>Could not load placements: {(placementsQ.error as Error).message}</div>;
@@ -139,7 +137,6 @@ export function ClientsCard() {
   const missing = [
     !invoicesQ.data && 'Xero invoices (Payment left out of every score)',
     !jobAdderQ.data && 'JobAdder notes (departures treated as unexplained)',
-    !crmQ.data && 'Airtable CRM (Sales responsiveness blank)',
   ].filter(Boolean) as string[];
 
   const counts = { All: card.clients.length, A: 0, B: 0, C: 0, D: 0 } as Record<Tier | 'All', number>;
@@ -195,7 +192,6 @@ export function ClientsCard() {
         <div><b style={{ color: TEXT }}>Volume (30%)</b>: placements with the client ÷ placements with our biggest client × 100.</div>
         <div><b style={{ color: TEXT }}>Payment (40%)</b>, from Xero: 100 if invoices are paid on time on average, minus 3 per average day late (a neutral 70 if nothing is paid yet), minus 15 for each invoice overdue now and 5 for each void / credited invoice.</div>
         <div><b style={{ color: TEXT }}>Retention & Relationship (30%)</b>, from JobAdder drop-off reasons: only client-caused departures ("Client quality") count against the client. Candidate-side reasons cost nothing. Unexplained departures cost {UNEXPLAINED_NUDGE_EACH} each, capped at {UNEXPLAINED_NUDGE_CAP}.</div>
-        <div><b style={{ color: TEXT }}>Sales responsiveness</b>: days from ToB sent to signed in the CRM. Shown only, not scored.</div>
         <div>If a client has no data for a component, the other weights are rescaled. Tiers: A 80+, B 70–79.9, C 50–69.9, D under 50.</div>
         <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 8 }}>
           {(['good', 'ok', 'bad', 'neutral'] as Tone[]).map(t => (
