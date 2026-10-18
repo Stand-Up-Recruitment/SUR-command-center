@@ -16,6 +16,8 @@ import type {
   MarketingMonth,
   SalesMonth,
   SalesFunnel,
+  ClientPlacement,
+  CrmTob,
 } from '../types';
 import {
   fetchMetaSpend, fetchMetaSpendByFrame, fetchMetaSpendPrevPeriod, fetchMetaCprByGroup,
@@ -24,6 +26,7 @@ import {
 import { toMs, trailingDays, last12Months, nzDate, type MonthWindow, type DayRange } from '../lib/nzTime';
 import { candidateQualifier, DEFAULT_NON_TRADE_CATEGORIES } from '../lib/qualified';
 import { isNonRecruiter } from '../lib/recruitment';
+import { companyKey } from '../lib/companyKey';
 
 const API_KEY = import.meta.env.VITE_AIRTABLE_API_KEY as string;
 const CLIENTS_BASE_ID = import.meta.env.VITE_AIRTABLE_CLIENTS_BASE_ID as string;
@@ -578,6 +581,43 @@ export async function fetchAusPlacements(): Promise<AusPlacement[]> {
   });
 }
 
+/** Every placement, any year, for the Clients scorecard. */
+export async function fetchClientPlacements(): Promise<ClientPlacement[]> {
+  if (!CLIENTS_BASE_ID) throw new Error('Airtable credentials not configured');
+  const records = await fetchAllFromBase<{
+    'Candidate Name'?: string;
+    'Company Name'?: string[];
+    'Cancellation Date'?: string;
+    [key: string]: unknown;
+  }>(CLIENTS_BASE_ID, PLACEMENTS_TABLE_ID, {});
+
+  return records.map(f => {
+    // Same BOM-safe "Status" lookup as fetchAusPlacements.
+    const statusKey = Object.keys(f).find(k => k.replace(/^\uFEFF/, '') === 'Status') ?? '';
+    return {
+      client: (f['Company Name']?.[0] ?? '').trim(),
+      candidate: f['Candidate Name'] ?? '',
+      status: (f[statusKey] as string | undefined) ?? '',
+      cancellationDate: f['Cancellation Date'] ?? null,
+    };
+  }).filter(p => p.client);
+}
+
+/** ToB sent / signed dates per CRM row, for the Clients scorecard's Sales Responsiveness. */
+export async function fetchCrmTobDates(): Promise<CrmTob[]> {
+  if (!CLIENTS_BASE_ID) throw new Error('Airtable credentials not configured');
+  const rows = await fetchAllFromBase<{ 'Company Name'?: string; 'Sent Date'?: string; 'Signed Date'?: string }>(
+    CLIENTS_BASE_ID, CRM_TABLE_ID, {}, ['Company Name', 'Sent Date', 'Signed Date'],
+  );
+  return rows
+    .filter(r => r['Company Name']?.trim())
+    .map(r => ({
+      company: r['Company Name']!.trim(),
+      sentDate: r['Sent Date']?.slice(0, 10) ?? null,
+      signedDate: r['Signed Date']?.slice(0, 10) ?? null,
+    }));
+}
+
 export async function fetchScheduledInvoices(): Promise<ScheduledInvoice[]> {
   if (!CLIENTS_BASE_ID) throw new Error('Airtable credentials not configured');
 
@@ -948,8 +988,6 @@ const inDays = (day: string | null | undefined, r: DayRange) => Boolean(day) && 
 const daysBetween = (from: string, to: string) => Math.round((Date.parse(to) - Date.parse(from)) / 86_400_000);
 
 // Duplicate CRM companies ("Formtech Construction" twice) count once.
-const companyKey = (name: string | undefined, fallback: string) =>
-  (name ?? '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\b(pty|ltd|limited|proprietary)\b/g, ' ').replace(/\s+/g, ' ').trim() || fallback;
 
 const salespersonOf = (v: unknown): string => {
   const name = typeof v === 'object' && v !== null ? (v as { name?: string }).name : v;

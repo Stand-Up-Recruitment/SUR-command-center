@@ -6,7 +6,10 @@ import {
   fetchCacKPIs,
   fetchMarketingMonth,
   fetchSalesMonth,
+  fetchClientPlacements,
+  fetchCrmTobDates,
 } from '../services/airtable';
+import { fetchClientInvoices, hasClientInvoicesCredentials } from '../services/clientInvoices';
 import { fetchXeroFinanceData, hasXeroCredentials } from '../services/xero';
 import { fetchMetaSpendByFrame, fetchMetaCampaignBreakdown, fetchMetaAdBreakdown } from '../services/metaAds';
 import { fetchVoiceCallKPIs } from '../services/voiceCalls';
@@ -66,6 +69,34 @@ export function useRetentionPlacements() {
     queryFn: fetchRetentionPlacements,
     enabled: hasRetentionCredentials,
     staleTime: 10 * 60_000, // webhook reads every placement's notes from JobAdder (~25s)
+  });
+}
+
+// ─── Clients scorecard ────────────────────────────────────────────────────────
+export function useClientPlacements() {
+  return useQuery({
+    queryKey: ['client-placements'],
+    queryFn: fetchClientPlacements,
+    enabled: hasSalesCredentials,
+    staleTime: 10 * 60_000,
+  });
+}
+
+export function useCrmTobDates() {
+  return useQuery({
+    queryKey: ['crm-tob-dates'],
+    queryFn: fetchCrmTobDates,
+    enabled: hasSalesCredentials,
+    staleTime: 10 * 60_000,
+  });
+}
+
+export function useClientInvoices() {
+  return useQuery({
+    queryKey: ['client-invoices'],
+    queryFn: fetchClientInvoices,
+    enabled: hasClientInvoicesCredentials,
+    staleTime: 10 * 60_000, // webhook pages through every AU invoice in Xero
   });
 }
 

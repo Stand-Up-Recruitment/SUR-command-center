@@ -12,6 +12,7 @@ import { SalesPage } from './pages/SalesPage';
 import { RecruitmentPage } from './pages/RecruitmentPage';
 import { FinancePage } from './pages/FinancePage';
 import { RetentionPage } from './pages/RetentionPage';
+import { ClientsPage } from './pages/ClientsPage';
 
 const IS_DEMO =
   !import.meta.env.VITE_AIRTABLE_API_KEY ||
@@ -37,6 +38,7 @@ function AppRoutes() {
       <Route path="/recruitment" element={<RecruitmentPage />} />
       <Route path="/finance"     element={<FinancePage />} />
       <Route path="/retention"   element={<RetentionPage />} />
+      <Route path="/clients"     element={<ClientsPage />} />
     </Routes>
   );
 }

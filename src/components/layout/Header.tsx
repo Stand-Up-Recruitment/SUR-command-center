@@ -11,6 +11,7 @@ const TABS = [
   { label: 'Recruitment', to: '/recruitment'            },
   { label: 'Finance',     to: '/finance'                    },
   { label: 'Retention',   to: '/retention'                  },
+  { label: 'Clients',     to: '/clients'                    },
 ] as const;
 
 const MARKETING_TABS = new Set(['/marketing']);

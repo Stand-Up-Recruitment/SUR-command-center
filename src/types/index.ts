@@ -206,6 +206,38 @@ export interface RetentionSettings {
   rachelCutoff: string;   // YYYY-MM-DD, before/after Rachel marker on cohorts
 }
 
+// ─── Clients (AU Client Scorecard) ────────────────────────────────────────────
+/** One Airtable placement, any year. */
+export interface ClientPlacement {
+  client: string;
+  candidate: string;
+  status: string;                  // "Live" | "Pending" | "End" | "Completed"
+  cancellationDate: string | null; // YYYY-MM-DD
+}
+
+/** One CRM row's ToB dates. */
+export interface CrmTob {
+  company: string;
+  sentDate: string | null;   // YYYY-MM-DD
+  signedDate: string | null; // YYYY-MM-DD
+}
+
+/** One Australian Xero sales invoice, as returned by the n8n client-invoices webhook. */
+export interface ClientInvoice {
+  invoiceNumber: string;
+  contact: string;
+  contactId: string;
+  date: string | null;            // YYYY-MM-DD
+  dueDate: string | null;         // YYYY-MM-DD
+  status: string;                 // "AUTHORISED" | "PAID"
+  currency: string;
+  total: number;
+  amountPaid: number;
+  amountCredited: number;
+  amountDue: number;
+  fullyPaidOnDate: string | null; // YYYY-MM-DD
+}
+
 // ─── Finance (Xero P&L) ───────────────────────────────────────────────────────
 export interface XeroAgedReceivable {
   contact: string;
