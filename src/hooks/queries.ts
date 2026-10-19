@@ -15,6 +15,7 @@ import { fetchVoiceCallKPIs } from '../services/voiceCalls';
 import { fetchJobAdderStageKPIs, hasJobAdderStageCredentials } from '../services/jobadderStages';
 import { fetchJobAging, hasOpenJobsCredentials } from '../services/jobadderJobs';
 import { fetchRetentionPlacements, hasRetentionCredentials } from '../services/jobadderRetention';
+import { fetchFirstSubmitKPIs, hasFirstSubmitCredentials } from '../services/firstSubmit';
 import { monthWindow } from '../lib/nzTime';
 import type { TimeFrame, LTGPFrame, OrganicMonth, MarketingSettings, SalesSettings, RecruitmentSettings, OverviewSettings, RetentionSettings } from '../types';
 
@@ -59,6 +60,15 @@ export function useJobAging() {
     queryKey: ['job-aging'],
     queryFn: fetchJobAging,
     enabled: hasOpenJobsCredentials,
+  });
+}
+
+export function useFirstSubmitKPIs() {
+  return useQuery({
+    queryKey: ['first-submit'],
+    queryFn: fetchFirstSubmitKPIs,
+    enabled: hasFirstSubmitCredentials,
+    staleTime: 10 * 60_000, // webhook pages through every submit note in JobAdder (~20s)
   });
 }
 

@@ -9,7 +9,7 @@ import { useAuthRole } from '../components/auth/AuthContext';
 import {
   useMarketingMonth, useOrganicMonth, useMarketingSettings, useSalesMonth, useSalesSettings,
   useRecruiterKPIs, useJobAging, useRecruitmentSettings, useRetentionPlacements, useRetentionSettings, useXeroFinanceData,
-  useOverviewSettings, useSaveOverviewSettings,
+  useOverviewSettings, useSaveOverviewSettings, useFirstSubmitKPIs,
 } from '../hooks/queries';
 import { timeBoundaries } from '../services/airtable';
 import { monthWindow, recentMonthKeys, currentMonthKey } from '../lib/nzTime';
@@ -153,6 +153,7 @@ export function OverviewPage() {
   const ret = useRetentionPlacements();
   const retSettings = useRetentionSettings();
   const fin = useXeroFinanceData();
+  const { data: firstSubmit } = useFirstSubmitKPIs();
   const { data: settings } = useOverviewSettings();
   const npTarget = settings?.netProfitTarget ?? DEFAULT_NET_PROFIT_TARGET;
 
@@ -293,6 +294,13 @@ export function OverviewPage() {
               {' · '}
               {f?.projectedNetProfit != null ? k(f.projectedNetProfit) : '—'}
             </b> net profit of <b style={{ color: TEXT }}>{k(npTarget)} a month</b>
+          </span>
+          <span title="AU companies with an open job: days from the company being created in JobAdder to its first CV submitted">
+            New client to first CV:{' '}
+            <b style={{ color: TEXT }}>
+              {firstSubmit?.averageDaysToFirstSubmit != null ? `${Math.round(firstSubmit.averageDaysToFirstSubmit)} days avg` : '— days'}
+            </b>
+            {firstSubmit?.medianDaysToFirstSubmit != null && <> (median {Math.round(firstSubmit.medianDaysToFirstSubmit)}, {firstSubmit.companiesMeasured} clients)</>}
           </span>
         </div>
       </div>

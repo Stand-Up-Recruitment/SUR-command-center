@@ -149,6 +149,13 @@ export interface JobAgingKPIs {
   growth28?: { byOwner: (JobFlow & { name: string })[]; unassigned: JobFlow };
 }
 
+/** Days from company created to its first CV submitted (AU, apps still at Submit CV, companies with an open job), from the n8n webhook. */
+export interface FirstSubmitKPIs {
+  averageDaysToFirstSubmit: number | null;
+  medianDaysToFirstSubmit: number | null;
+  companiesMeasured: number;
+}
+
 // ─── Marketing ────────────────────────────────────────────────────────────────
 export interface LeadMetric {
   total: number;
