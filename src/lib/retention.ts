@@ -111,7 +111,6 @@ export function placementFacts(p: RetentionPlacement, today: string): PlacementF
 // ─── Tab summary ──────────────────────────────────────────────────────────────
 export interface RateRow { name: string; signed: number; fell: number; pre: number; post: number; rate: number }
 export interface Cohort { month: string; label: string; placed: number; live: (number | null)[]; afterCutoff: boolean }
-export interface AtRiskRow { placementId: number; candidate: string; client: string; by: string; issue: string; days: number; state: 'Live' | 'Saved' | 'Lost' }
 
 export interface RetentionSummary {
   today: string;
@@ -124,18 +123,12 @@ export interface RetentionSummary {
   fallOverRate: number;          // %
   preRate: number;
   inGuaranteeRate: number;       // post ÷ started
-  saves: number;
-  lost: number;
-  liveRescues: number;
   notStarted: number;
   notStartedMonths: string;      // "October"
   activeInGuarantee: number;
   guaranteeComplete: number;
   nextClear: { client: string; date: string } | null;
   replacementsOwed: { placementId: number; client: string }[];
-  replacementsInProgress: number;
-  feeLost: number;
-  feeOutcomesLogged: number;
   weekBands: { label: string; count: number }[];
   byStatus: { name: string; count: number }[];   // JobAdder status, all placements incl. future starts
   reasons: { name: string; stage: string; owner: ReasonOwner; count: number }[];
@@ -147,7 +140,6 @@ export interface RetentionSummary {
   byTrade: RateRow[];
   byRecruiter: RateRow[];
   cohorts: Cohort[];
-  atRiskRows: AtRiskRow[];
   last2Months: { signed: number; fell: number };
 }
 
@@ -190,18 +182,10 @@ export function summariseRetention(placements: RetentionPlacement[], settings: R
   const live = started.filter(f => !f.dropped);
   const inGuarantee = (f: PlacementFacts) => f.guaranteeEnd! > today;
 
-  // Saves: At Risk, then 16 weeks with no drop-off and no reduced / refunded / replacement outcome.
-  const flagged = all.filter(f => f.atRisk);
-  const badFee = (f: PlacementFacts) => /reduced|refund|replacement/i.test(f.feeOutcome?.outcome ?? '');
-  const saved = flagged.filter(f => !f.dropped && !inGuarantee(f) && !badFee(f));
-  const lost = flagged.filter(f => f.dropped || (!inGuarantee(f) && badFee(f)));
-  const rescues = flagged.filter(f => f.started && !f.dropped && inGuarantee(f));
-
   // Replacements: "Replacement owed" fee outcome, matched to a later placement whose Replacement note names it.
   const replacedBy = new Map(all.filter(f => f.replaces).map(f => [f.replaces!, f]));
   const owedAll = all.filter(f => f.dropped && /replacement owed/i.test(f.feeOutcome?.outcome ?? ''));
   const owed = owedAll.filter(f => !replacedBy.has(f.p.placementId));
-  const inProgress = owedAll.filter(f => { const r = replacedBy.get(f.p.placementId); return r && !(r.started && !inGuarantee(r)); });
 
   // Post-start timing: week of employment (from start date) when the problem was first logged.
   const bands = [{ label: '0–2 wks', max: 2 }, { label: '3–6 wks', max: 6 }, { label: '7–12 wks', max: 12 }, { label: '13–16 wks', max: Infinity }];
@@ -256,18 +240,12 @@ export function summariseRetention(placements: RetentionPlacement[], settings: R
     fallOverRate: pct(drops.length, period.length),
     preRate: pct(pre.length, period.length),
     inGuaranteeRate: pct(post.length, started.length),
-    saves: saved.length,
-    lost: lost.length,
-    liveRescues: rescues.length,
     notStarted: future.length,
     notStartedMonths: futureMonths.length ? `${futureMonths.join(', ')} starts` : 'None booked',
     activeInGuarantee: live.filter(inGuarantee).length,
     guaranteeComplete: live.filter(f => !inGuarantee(f)).length,
     nextClear: clearing ? { client: clearing.p.company.name, date: clearing.guaranteeEnd! } : null,
     replacementsOwed: owed.map(f => ({ placementId: f.p.placementId, client: f.p.company.name })),
-    replacementsInProgress: inProgress.length,
-    feeLost: all.reduce((n, f) => n + (/reduced|refund/i.test(f.feeOutcome?.outcome ?? '') ? f.feeOutcome!.amountLost : 0), 0),
-    feeOutcomesLogged: all.filter(f => f.feeOutcome).length,
     weekBands,
     byStatus,
     reasons,
@@ -287,12 +265,6 @@ export function summariseRetention(placements: RetentionPlacement[], settings: R
     }, []).sort((a, b) => Number(a.name === 'Other trades') - Number(b.name === 'Other trades')),
     byRecruiter: rateRows(period, f => f.p.createdBy.split(' ')[0] || 'Unknown', 1, () => 'Other'),
     cohorts,
-    atRiskRows: flagged.map(f => ({
-      placementId: f.p.placementId, candidate: f.p.candidate, client: f.p.company.name,
-      by: f.atRisk!.by, issue: f.atRisk!.issue,
-      days: daysBetween(f.atRisk!.date, f.dropDate ?? (inGuarantee(f) ? today : f.guaranteeEnd!)),
-      state: (saved.includes(f) ? 'Saved' : lost.includes(f) ? 'Lost' : 'Live') as AtRiskRow['state'],
-    })).sort((a, b) => b.days - a.days),
     last2Months: { signed: recent.length, fell: recent.filter(f => f.dropped).length },
   };
 }

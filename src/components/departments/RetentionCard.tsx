@@ -7,7 +7,7 @@ import { DiagnosisTile } from '../shared/DiagnosisTile';
 import { useAuthRole } from '../auth/AuthContext';
 import { useRetentionPlacements, useRetentionSettings, useSaveRetentionSettings } from '../../hooks/queries';
 import { COLORS, CARD_STYLE } from '../../styles/tokens';
-import { NZ, AM, RD, GREY, RAG_COLOR, money0, shortDate } from '../shared/monthTheme';
+import { NZ, AM, RD, GREY, RAG_COLOR, shortDate } from '../shared/monthTheme';
 import { diagnoseRetention } from '../../lib/diagnosis';
 import { summariseRetention, rateRag, DEFAULT_RETENTION_SETTINGS, OWNERS, type RateRow, type ReasonOwner } from '../../lib/retention';
 import type { DepartmentStatus, RetentionSettings } from '../../types';
@@ -121,7 +121,7 @@ function RetentionSkeleton() {
         <Skeleton height={28} width={80} radius={8} />
       </div>
       <Skeleton height={52} radius={10} />
-      <div style={{ display: 'flex', gap: 16 }}>{[0, 1, 2, 3].map(i => <Skeleton key={i} height={130} radius={12} style={{ flex: 1 }} />)}</div>
+      <div style={{ display: 'flex', gap: 16 }}>{[0, 1, 2].map(i => <Skeleton key={i} height={130} radius={12} style={{ flex: 1 }} />)}</div>
       <div style={{ display: 'flex', gap: 16 }}>{[0, 1, 2, 3].map(i => <Skeleton key={i} height={100} radius={12} style={{ flex: 1 }} />)}</div>
       <div style={{ display: 'flex', gap: 16 }}>{[0, 1].map(i => <Skeleton key={i} height={300} radius={12} style={{ flex: 1 }} />)}</div>
       <p style={{ ...NOTE, margin: 0 }}>Reading placements and notes from JobAdder, this takes about 30 seconds…</p>
@@ -178,15 +178,13 @@ export function RetentionCard() {
       <DiagnosisTile diagnosis={diagnosis} />
 
       <div style={LABEL}>Headline</div>
-      <Row cols="1.3fr 1fr 1fr 1fr">
+      <Row cols="1.3fr 1fr 1fr">
         <Tile big label="Fall-over rate" value={`${s.fallOverRate}%`} color={rateColor(s.fallOverRate)}
           note={`${s.fallOvers} of ${s.signed} signed fell over`} tag="Headline · drives status" />
         <Tile label="Pre-start pull-out" value={`${s.preRate}%`} color={rateColor(s.preRate)}
           note={`${s.pre} of ${s.signed} never reached site`} tag="Owner: Recruiters" />
         <Tile label="In-guarantee fall-over" value={`${s.inGuaranteeRate}%`} color={rateColor(s.inGuaranteeRate)}
           note={`${s.post} of ${s.startedCount} who started`} tag="Owner: Rachel + Sales" />
-        <Tile label="Live rescues" value={String(s.liveRescues)}
-          note="At Risk, still live and inside the guarantee" tag="Leading · Rachel" />
       </Row>
 
       <Row cols="repeat(4, 1fr)">
@@ -262,59 +260,31 @@ export function RetentionCard() {
         <Card title="Who — by recruiter"><RateTable head="Recruiter" rows={s.byRecruiter} settings={settings} recruiter /><div style={{ ...NOTE, marginTop: 10 }}>Credited to whoever created the placement</div></Card>
       </Row>
 
-      <Row cols="1.2fr 1fr">
-        <Card title="Cohorts — % still live, by month signed">
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead><tr><th style={TH}>Signed</th><th style={TH}>Placed</th>{['4 wks', '8 wks', '16 wks'].map(h => <th key={h} style={{ ...TH, textAlign: 'center' }}>{h}</th>)}</tr></thead>
-            <tbody>
-              {s.cohorts.map((c, i) => {
-                const marker = c.afterCutoff && !s.cohorts[i - 1]?.afterCutoff;
-                const cell: CSSProperties = { ...TD, ...(marker && { borderTop: `2px solid ${RD}` }) };
-                return (
-                  <tr key={c.month}>
-                    <td style={cell}>{c.label}</td><td style={cell}>{c.placed}</td>
-                    {c.live.map((v, j) => (
-                      <td key={j} style={{ ...cell, textAlign: 'center', color: v == null ? COLORS.textMuted : v >= 90 ? NZ : v >= 75 ? AM : RD }}>
-                        {v == null ? 'pending' : `${Math.round(v)}%`}
-                      </td>
-                    ))}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          <div style={{ ...NOTE, marginTop: 10 }}>
-            Red line = before/after Rachel ({shortDate(settings.rachelCutoff)}). Green ≥90%, amber 75–89%, red &lt;75%, counting placements that have reached that week.
-            {' '}Last 2 months: {s.last2Months.signed} signed, {s.last2Months.fell} fell over.
-          </div>
-        </Card>
-
-        <Card title="Saves & rework">
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead><tr><th style={TH}>Placement</th><th style={TH}>Signalled by</th><th style={TH}>Issue</th><th style={TH}>Days</th><th style={TH}>State</th></tr></thead>
-            <tbody>
-              {s.atRiskRows.length ? s.atRiskRows.map(r => (
-                <tr key={r.placementId}>
-                  <td style={TD}>{r.candidate || r.placementId}<div style={{ fontSize: 11, color: COLORS.textMuted }}>{r.client}</div></td>
-                  <td style={TD}>{r.by}</td><td style={{ ...TD, fontSize: 12 }}>{r.issue}</td><td style={TD}>{r.days}</td>
-                  <td style={{ ...TD, color: r.state === 'Saved' ? NZ : r.state === 'Lost' ? RD : AM }}>{r.state}</td>
+      <Card title="Cohorts — % still live, by month signed">
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead><tr><th style={TH}>Signed</th><th style={TH}>Placed</th>{['4 wks', '8 wks', '16 wks'].map(h => <th key={h} style={{ ...TH, textAlign: 'center' }}>{h}</th>)}</tr></thead>
+          <tbody>
+            {s.cohorts.map((c, i) => {
+              const marker = c.afterCutoff && !s.cohorts[i - 1]?.afterCutoff;
+              const cell: CSSProperties = { ...TD, ...(marker && { borderTop: `2px solid ${RD}` }) };
+              return (
+                <tr key={c.month}>
+                  <td style={cell}>{c.label}</td><td style={cell}>{c.placed}</td>
+                  {c.live.map((v, j) => (
+                    <td key={j} style={{ ...cell, textAlign: 'center', color: v == null ? COLORS.textMuted : v >= 90 ? NZ : v >= 75 ? AM : RD }}>
+                      {v == null ? 'pending' : `${Math.round(v)}%`}
+                    </td>
+                  ))}
                 </tr>
-              )) : (
-                <tr><td colSpan={5} style={TD}>
-                  <div style={{ border: `1px dashed ${COLORS.border}`, borderRadius: 8, padding: 14, color: COLORS.textMuted, fontSize: 12.5, textAlign: 'center' }}>No At Risk notes logged yet.</div>
-                </td></tr>
-              )}
-            </tbody>
-          </table>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginTop: 14 }}>
-            <Tile label="Confirmed" value={String(s.saves)} note="Saves" />
-            <Tile label="Lost" value={String(s.lost)} note="After an At Risk flag" />
-            <Tile label="Fee lost" value={s.feeOutcomesLogged ? money0(s.feeLost) : '—'} color={s.feeOutcomesLogged ? undefined : COLORS.textMuted}
-              note={s.feeOutcomesLogged ? 'Reduced or refunded' : 'No Fee Outcome notes yet'} />
-          </div>
-          <div style={{ ...NOTE, marginTop: 10 }}>Replacements: {owed.length} owed · {s.replacementsInProgress} in progress</div>
-        </Card>
-      </Row>
+              );
+            })}
+          </tbody>
+        </table>
+        <div style={{ ...NOTE, marginTop: 10 }}>
+          Red line = before/after Rachel ({shortDate(settings.rachelCutoff)}). Green ≥90%, amber 75–89%, red &lt;75%, counting placements that have reached that week.
+          {' '}Last 2 months: {s.last2Months.signed} signed, {s.last2Months.fell} fell over.
+        </div>
+      </Card>
 
       {showSettings && <RetentionSettingsPanel settings={settings} onClose={() => setShowSettings(false)} />}
     </div>
