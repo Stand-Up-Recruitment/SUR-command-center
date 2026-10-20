@@ -121,7 +121,7 @@ function RetentionSkeleton() {
         <Skeleton height={28} width={80} radius={8} />
       </div>
       <Skeleton height={52} radius={10} />
-      <div style={{ display: 'flex', gap: 16 }}>{[0, 1, 2, 3, 4].map(i => <Skeleton key={i} height={130} radius={12} style={{ flex: 1 }} />)}</div>
+      <div style={{ display: 'flex', gap: 16 }}>{[0, 1, 2, 3].map(i => <Skeleton key={i} height={130} radius={12} style={{ flex: 1 }} />)}</div>
       <div style={{ display: 'flex', gap: 16 }}>{[0, 1, 2, 3].map(i => <Skeleton key={i} height={100} radius={12} style={{ flex: 1 }} />)}</div>
       <div style={{ display: 'flex', gap: 16 }}>{[0, 1].map(i => <Skeleton key={i} height={300} radius={12} style={{ flex: 1 }} />)}</div>
       <p style={{ ...NOTE, margin: 0 }}>Reading placements and notes from JobAdder, this takes about 30 seconds…</p>
@@ -154,6 +154,8 @@ export function RetentionCard() {
   const rateColor = (r: number) => RAG_COLOR[rateRag(r, settings)];
   const maxReason = Math.max(1, ...s.reasons.map(r => r.count));
   const maxBand = Math.max(1, ...s.weekBands.map(b => b.count));
+  const maxStatus = Math.max(1, ...s.byStatus.map(b => b.count));
+  const statusColor = (name: string) => (/drop off/i.test(name) ? RD : /live|^week \d+/i.test(name) ? NZ : GREY);
   const owed = s.replacementsOwed;
 
   return (
@@ -176,15 +178,13 @@ export function RetentionCard() {
       <DiagnosisTile diagnosis={diagnosis} />
 
       <div style={LABEL}>Headline</div>
-      <Row cols="1.3fr 1fr 1fr 1fr 1fr">
+      <Row cols="1.3fr 1fr 1fr 1fr">
         <Tile big label="Fall-over rate" value={`${s.fallOverRate}%`} color={rateColor(s.fallOverRate)}
           note={`${s.fallOvers} of ${s.signed} signed fell over`} tag="Headline · drives status" />
         <Tile label="Pre-start pull-out" value={`${s.preRate}%`} color={rateColor(s.preRate)}
           note={`${s.pre} of ${s.signed} never reached site`} tag="Owner: Recruiters" />
         <Tile label="In-guarantee fall-over" value={`${s.inGuaranteeRate}%`} color={rateColor(s.inGuaranteeRate)}
           note={`${s.post} of ${s.startedCount} who started`} tag="Owner: Rachel + Sales" />
-        <Tile label="Save rate" value={s.saveRate == null ? '—' : `${s.saveRate}%`} color={s.saveRate == null ? COLORS.textMuted : undefined}
-          note={s.saveRate == null ? 'No At Risk outcomes yet. A save confirms at 16 weeks' : `${s.saves} saved, ${s.lost} lost after an At Risk flag`} tag="Lagging · Rachel" />
         <Tile label="Live rescues" value={String(s.liveRescues)}
           note="At Risk, still live and inside the guarantee" tag="Leading · Rachel" />
       </Row>
@@ -197,6 +197,21 @@ export function RetentionCard() {
         <Tile label="Replacements owed" value={String(owed.length)} color={owed.length ? AM : undefined}
           note={owed.length ? owed.map(o => o.client).join(', ') : 'None logged as Fee Outcome "Replacement owed"'} />
       </Row>
+
+      <Card title="Status — placements by JobAdder status">
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead><tr><th style={TH}>Status</th><th style={TH}>#</th><th style={{ ...TH, width: '60%' }} /></tr></thead>
+          <tbody>
+            {s.byStatus.map(b => (
+              <tr key={b.name}>
+                <td style={TD}>{b.name}</td><td style={TD}>{b.count}</td>
+                <td style={TD}><div style={{ height: 10, borderRadius: 5, width: `${(b.count / maxStatus) * 100}%`, background: statusColor(b.name) }} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div style={{ ...NOTE, marginTop: 10 }}>All placements with a start date from 1 Jun, including future starts</div>
+      </Card>
 
       <Row cols="1fr 1fr">
         <Card title="Stage — where they fall over">

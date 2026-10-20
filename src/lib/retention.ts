@@ -126,7 +126,6 @@ export interface RetentionSummary {
   inGuaranteeRate: number;       // post ÷ started
   saves: number;
   lost: number;
-  saveRate: number | null;
   liveRescues: number;
   notStarted: number;
   notStartedMonths: string;      // "October"
@@ -138,6 +137,7 @@ export interface RetentionSummary {
   feeLost: number;
   feeOutcomesLogged: number;
   weekBands: { label: string; count: number }[];
+  byStatus: { name: string; count: number }[];   // JobAdder status, all placements incl. future starts
   reasons: { name: string; stage: string; owner: ReasonOwner; count: number }[];
   unlabelled: number;
   byOwner: Record<ReasonOwner, number>;
@@ -211,6 +211,10 @@ export function summariseRetention(placements: RetentionPlacement[], settings: R
     weekBands[bands.findIndex(b => week <= b.max)].count++;
   }
 
+  const statusMap = new Map<string, number>();
+  for (const f of all) { const n = f.p.statusName || 'Unknown'; statusMap.set(n, (statusMap.get(n) ?? 0) + 1); }
+  const byStatus = [...statusMap].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, undefined, { numeric: true }));
+
   const reasons = REASONS.map(r => ({ name: r.name, stage: r.stage, owner: r.owner, count: drops.filter(f => f.reason === r.name).length }));
   const byOwner = Object.fromEntries(OWNERS.map(o => [o, reasons.filter(r => r.owner === o).reduce((n, r) => n + r.count, 0)])) as Record<ReasonOwner, number>;
   const family = reasons.find(r => r.owner === 'None')!.count;
@@ -254,7 +258,6 @@ export function summariseRetention(placements: RetentionPlacement[], settings: R
     inGuaranteeRate: pct(post.length, started.length),
     saves: saved.length,
     lost: lost.length,
-    saveRate: saved.length + lost.length > 0 ? pct(saved.length, saved.length + lost.length) : null,
     liveRescues: rescues.length,
     notStarted: future.length,
     notStartedMonths: futureMonths.length ? `${futureMonths.join(', ')} starts` : 'None booked',
@@ -266,6 +269,7 @@ export function summariseRetention(placements: RetentionPlacement[], settings: R
     feeLost: all.reduce((n, f) => n + (/reduced|refund/i.test(f.feeOutcome?.outcome ?? '') ? f.feeOutcome!.amountLost : 0), 0),
     feeOutcomesLogged: all.filter(f => f.feeOutcome).length,
     weekBands,
+    byStatus,
     reasons,
     unlabelled: drops.filter(f => !f.reason).length,
     byOwner,
