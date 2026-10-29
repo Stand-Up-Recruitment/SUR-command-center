@@ -1,8 +1,8 @@
 // Sales tab targets, rates and Diagnosis, shared by the Sales tab and the Overview.
-import { int, cmpRag, type Cmp } from '../shared/monthTheme';
-import type { MonthWindow } from '../../lib/nzTime';
-import { rate, pctChange, isTooEarly, type Rag, type RagContext } from '../../lib/rag';
-import { diagnoseSales, type SalesDiagMetric, type Diagnosis } from '../../lib/diagnosis';
+import { int, cmpRag, type Cmp } from '../shared/monthTheme.js';
+import type { MonthWindow } from '../../lib/nzTime.js';
+import { rate, pctChange, isTooEarly, type Rag, type RagContext } from '../../lib/rag.js';
+import { diagnoseSales, type SalesDiagMetric, type Diagnosis } from '../../lib/diagnosis.js';
 import type { SalesFunnel, SalesMonth } from '../../types';
 
 export const STALE_DAYS = 14;

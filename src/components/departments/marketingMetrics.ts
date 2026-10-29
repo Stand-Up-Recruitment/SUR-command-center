@@ -1,8 +1,8 @@
 // Marketing tab cards and Diagnosis, shared by the Marketing tab and the Overview.
-import { money0, money2, int, cmpRag, type Cmp } from '../shared/monthTheme';
-import type { MonthWindow } from '../../lib/nzTime';
-import { rate, pctChange, isTooEarly, proRata, type RagContext } from '../../lib/rag';
-import { diagnose, type DiagMetric, type Diagnosis } from '../../lib/diagnosis';
+import { money0, money2, int, cmpRag, type Cmp } from '../shared/monthTheme.js';
+import type { MonthWindow } from '../../lib/nzTime.js';
+import { rate, pctChange, isTooEarly, proRata, type RagContext } from '../../lib/rag.js';
+import { diagnose, type DiagMetric, type Diagnosis } from '../../lib/diagnosis.js';
 import type { MarketingMonth, OrganicChannel, OrganicMonth, MarketingSettings, MarketingTargets } from '../../types';
 
 const div0 = (a: number, b: number) => (b > 0 ? a / b : 0);
