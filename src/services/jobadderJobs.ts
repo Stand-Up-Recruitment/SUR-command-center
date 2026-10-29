@@ -1,6 +1,7 @@
 import type { JobAgingKPIs } from '../types';
+import { env } from '../lib/env.js';
 
-const WEBHOOK_URL = import.meta.env.VITE_N8N_OPEN_JOBS_WEBHOOK_URL as string | undefined;
+const WEBHOOK_URL = env.VITE_N8N_OPEN_JOBS_WEBHOOK_URL as string | undefined;
 
 export const hasOpenJobsCredentials = Boolean(WEBHOOK_URL);
 

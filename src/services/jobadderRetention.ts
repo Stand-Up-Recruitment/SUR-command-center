@@ -1,6 +1,7 @@
 import type { RetentionPlacement } from '../types';
+import { env } from '../lib/env.js';
 
-const WEBHOOK_URL = import.meta.env.VITE_N8N_RETENTION_WEBHOOK_URL as string | undefined;
+const WEBHOOK_URL = env.VITE_N8N_RETENTION_WEBHOOK_URL as string | undefined;
 
 export const hasRetentionCredentials = Boolean(WEBHOOK_URL);
 

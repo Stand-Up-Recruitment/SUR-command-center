@@ -1,6 +1,7 @@
 import type { ClientInvoice } from '../types';
+import { env } from '../lib/env.js';
 
-const WEBHOOK_URL = import.meta.env.VITE_N8N_CLIENT_INVOICES_WEBHOOK_URL as string | undefined;
+const WEBHOOK_URL = env.VITE_N8N_CLIENT_INVOICES_WEBHOOK_URL as string | undefined;
 
 export const hasClientInvoicesCredentials = Boolean(WEBHOOK_URL);
 

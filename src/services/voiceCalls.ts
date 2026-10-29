@@ -1,5 +1,5 @@
 import type { TimeFrame, VoiceCallKPIs } from '../types';
-import { timeBoundaries } from './airtable';
+import { timeBoundaries } from './airtable.js';
 
 // Same-origin proxy (api/voice-stats.ts in production, Vite proxy in dev) — the n8n token
 // stays server-side.

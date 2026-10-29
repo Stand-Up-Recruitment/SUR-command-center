@@ -2,8 +2,8 @@
 // follow the "AU Client Scorecard — Requirements" doc (14 Oct 2026). Pure functions: the
 // Clients tab renders this, and the Overview will read it from here rather than recalculate.
 import type { ClientInvoice, ClientPlacement, RetentionPlacement } from '../types';
-import { companyKey } from './companyKey';
-import { placementFacts } from './retention';
+import { companyKey } from './companyKey.js';
+import { placementFacts } from './retention.js';
 
 export const WEIGHTS = { volume: 0.3, payment: 0.4, retention: 0.3 } as const;
 // Tier cut-offs and the unexplained-departure nudge were reconstructed from the original

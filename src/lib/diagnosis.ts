@@ -1,4 +1,4 @@
-import type { Rag } from './rag';
+import type { Rag } from './rag.js';
 import { rateRag, type RetentionSummary } from './retention.js';
 import type { RetentionSettings } from '../types';
 

@@ -21,15 +21,16 @@ import type {
 import {
   fetchMetaSpend, fetchMetaSpendByFrame, fetchMetaSpendPrevPeriod, fetchMetaCprByGroup,
   fetchMetaPaidRange, fetchMetaSpendRange, fetchMetaSpendMonthly,
-} from './metaAds';
-import { toMs, trailingDays, last12Months, nzDate, type MonthWindow, type DayRange } from '../lib/nzTime';
-import { candidateQualifier, DEFAULT_NON_TRADE_CATEGORIES } from '../lib/qualified';
-import { isNonRecruiter } from '../lib/recruitment';
-import { companyKey } from '../lib/companyKey';
+} from './metaAds.js';
+import { toMs, trailingDays, last12Months, nzDate, type MonthWindow, type DayRange } from '../lib/nzTime.js';
+import { env } from '../lib/env.js';
+import { candidateQualifier, DEFAULT_NON_TRADE_CATEGORIES } from '../lib/qualified.js';
+import { isNonRecruiter } from '../lib/recruitment.js';
+import { companyKey } from '../lib/companyKey.js';
 
-const API_KEY = import.meta.env.VITE_AIRTABLE_API_KEY as string;
-const CLIENTS_BASE_ID = import.meta.env.VITE_AIRTABLE_CLIENTS_BASE_ID as string;
-const CANDIDATES_BASE_ID = import.meta.env.VITE_AIRTABLE_CANDIDATES_BASE_ID as string;
+const API_KEY = env.VITE_AIRTABLE_API_KEY as string;
+const CLIENTS_BASE_ID = env.VITE_AIRTABLE_CLIENTS_BASE_ID as string;
+const CANDIDATES_BASE_ID = env.VITE_AIRTABLE_CANDIDATES_BASE_ID as string;
 const CLIENTS_TABLE_ID = 'tblF4uPjZ7eF4BFzP';
 const CANDIDATES_TABLE_ID = 'tblHhlHjb7keWPUdE';
 const CRM_TABLE_ID = 'tbl4XcHW2Gb7PF4fw';
@@ -479,7 +480,7 @@ function buildChannels(
 }
 
 export async function fetchMarketingKPIs(frame: TimeFrame = 'month'): Promise<MarketingKPIs> {
-  if (!CLIENTS_BASE_ID || !CANDIDATES_BASE_ID || !import.meta.env.VITE_META_TOKEN) {
+  if (!CLIENTS_BASE_ID || !CANDIDATES_BASE_ID || !env.VITE_META_TOKEN) {
     throw new Error('Marketing credentials not configured');
   }
 

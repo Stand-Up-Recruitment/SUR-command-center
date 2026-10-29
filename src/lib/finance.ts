@@ -1,6 +1,6 @@
 // Finance figures shared by the Finance tab and the Overview.
 import type { XeroFinanceData } from '../types';
-import type { MonthWindow } from './nzTime';
+import type { MonthWindow } from './nzTime.js';
 import { isTooEarly } from './rag.js';
 import { diagnoseFinance, type Diagnosis } from './diagnosis.js';
 

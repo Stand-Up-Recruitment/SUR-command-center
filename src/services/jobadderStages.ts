@@ -1,7 +1,8 @@
 import type { JobAdderStageKPIs, TimeFrame } from '../types';
-import { timeBoundaries } from './airtable';
+import { env } from '../lib/env.js';
+import { timeBoundaries } from './airtable.js';
 
-const WEBHOOK_URL = import.meta.env.VITE_N8N_JOBADDER_STAGES_WEBHOOK_URL as string | undefined;
+const WEBHOOK_URL = env.VITE_N8N_JOBADDER_STAGES_WEBHOOK_URL as string | undefined;
 
 export const hasJobAdderStageCredentials = Boolean(WEBHOOK_URL);
 
