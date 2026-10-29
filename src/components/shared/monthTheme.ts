@@ -1,5 +1,5 @@
 // Palette, formatters and the card colour rule shared by the month-view tabs (Marketing, Sales).
-import { rate, rateVsTarget, type Rag, type Better, type RagContext } from '../../lib/rag';
+import { rate, rateVsTarget, type Rag, type Better, type RagContext } from '../../lib/rag.js';
 
 // ─── Palette (shared with the Finance tab) ────────────────────────────────────
 export const NZ     = '#1D9E75';

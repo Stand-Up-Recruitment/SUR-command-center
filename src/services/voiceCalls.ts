@@ -5,7 +5,7 @@ import { timeBoundaries } from './airtable.js';
 // stays server-side.
 const PROXY_URL = '/api/voice-stats';
 
-type VoiceStatsResponse = {
+export type VoiceStatsResponse = {
   totals: { unique_dialled: number; unique_answered: number; unique_booked: number };
 };
 
@@ -25,11 +25,12 @@ async function getStats(days: number, to?: string): Promise<VoiceStatsResponse> 
 // leads contacted = numbers the bot dialled (answered + no answer); answered = numbers that
 // picked up; booked = numbers the bot
 // booked an internal interview for (outbound calls and inbound callbacks).
-export async function fetchVoiceCallKPIs(frame: TimeFrame = 'month'): Promise<VoiceCallKPIs> {
+// `get` lets the server (api/mcp.ts) call the proxy handler directly instead of fetching a relative URL.
+export async function fetchVoiceCallKPIs(frame: TimeFrame = 'month', get = getStats): Promise<VoiceCallKPIs> {
   const b = timeBoundaries(frame);
   const [current, prev] = await Promise.all([
-    getStats(daysSince(b.start)),
-    getStats(daysSince(b.prevStart), nzDate(b.prevEnd)),
+    get(daysSince(b.start)),
+    get(daysSince(b.prevStart), nzDate(b.prevEnd)),
   ]);
   return {
     teamLeads: current.totals.unique_dialled,
