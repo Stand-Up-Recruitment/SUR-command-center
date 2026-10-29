@@ -1,6 +1,7 @@
 import type { FirstSubmitKPIs } from '../types';
+import { env } from '../lib/env.js';
 
-const WEBHOOK_URL = import.meta.env.VITE_N8N_FIRST_SUBMIT_WEBHOOK_URL as string | undefined;
+const WEBHOOK_URL = env.VITE_N8N_FIRST_SUBMIT_WEBHOOK_URL as string | undefined;
 
 export const hasFirstSubmitCredentials = Boolean(WEBHOOK_URL);
 

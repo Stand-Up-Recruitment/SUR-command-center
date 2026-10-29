@@ -1,10 +1,11 @@
 import type { LTGPFrame, MetaPaidTotals, MetaCampaignRow, MetaAdRow } from '../types';
+import { env } from '../lib/env.js';
 
 const META_BASE = 'https://graph.facebook.com/v21.0';
 const META_ACCOUNT = 'act_1566498283991021';
 
 export async function fetchMetaSpend(): Promise<{ thisWeek: number; prevWeek: number }> {
-  const token = import.meta.env.VITE_META_TOKEN as string;
+  const token = env.VITE_META_TOKEN as string;
 
   const thisWeekUrl =
     `${META_BASE}/${META_ACCOUNT}/insights?fields=spend&date_preset=last_7d` +
@@ -55,7 +56,7 @@ export async function fetchMetaCprByGroup(): Promise<{
   clientCpr: number;
   prevClientCpr: number;
 }> {
-  const token = import.meta.env.VITE_META_TOKEN as string;
+  const token = env.VITE_META_TOKEN as string;
   if (!token) return { candidateCpr: 0, prevCandidateCpr: 0, clientCpr: 0, prevClientCpr: 0 };
 
   const now = new Date();
@@ -151,7 +152,7 @@ async function fetchAndGroupCampaigns(dateParam: string): Promise<{
   candidateSpend: number;
   clientSpend: number;
 }> {
-  const token = import.meta.env.VITE_META_TOKEN as string;
+  const token = env.VITE_META_TOKEN as string;
   if (!token) return { candidateSpend: 0, clientSpend: 0 };
 
   const campaigns: Array<{ campaign_name: string; spend: string }> = [];
@@ -218,7 +219,7 @@ function actionValue(actions: Action[] | undefined, type: string): number {
 }
 
 async function fetchCampaignInsights(range: { since: string; until: string }, fields: string, extra = '', level: 'campaign' | 'ad' = 'campaign'): Promise<CampaignRow[]> {
-  const token = import.meta.env.VITE_META_TOKEN as string;
+  const token = env.VITE_META_TOKEN as string;
   if (!token) throw new Error('Meta token not configured');
   const rows: CampaignRow[] = [];
   let nextUrl: string | null =

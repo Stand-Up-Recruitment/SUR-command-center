@@ -1,4 +1,8 @@
 {
-  "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }],
+  "rewrites": [
+    { "source": "/.well-known/oauth-protected-resource/:path*", "destination": "/api/oauth?step=resource" },
+    { "source": "/.well-known/oauth-authorization-server/:path*", "destination": "/api/oauth?step=server" },
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ],
   "crons": [{ "path": "/api/cron/follower-snapshot", "schedule": "59 10 * * *" }]
 }
