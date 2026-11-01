@@ -3,7 +3,7 @@ import { Skeleton } from '../shared/Skeleton';
 import { useXeroFinanceData, useScheduledInvoices, useCacKPIs, useOverviewSettings } from '../../hooks/queries';
 import { AUD_TO_NZD_APPROX } from '../../services/airtable';
 import { availableCash as availableCashOf, financeSummary, DEFAULT_NET_PROFIT_TARGET, type FinanceSummary } from '../../lib/finance';
-import { monthWindow, currentMonthKey } from '../../lib/nzTime';
+import { monthWindow, currentMonthKey, recentMonthKeys, type MonthWindow } from '../../lib/nzTime';
 import { DiagnosisTile } from '../shared/DiagnosisTile';
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, Cell,
@@ -80,7 +80,7 @@ function KPDelta({ label, value, valueColor, accent, sub, deltaPct, invert }: {
 type MonthMetric = 'revenue' | 'grossProfit' | 'opex' | 'netProfit';
 type MonthFigures = Partial<Record<MonthMetric, number>>;
 type MonthCompare = {
-  currentName: string; lastName: string;
+  currentName: string; lastName: string; isCurrent: boolean;
   current?: MonthFigures; samePoint?: MonthFigures | null; lastTotal?: MonthFigures;
 };
 
@@ -102,13 +102,15 @@ function KPMonth({ label, value, valueColor, accent, metric, compare, invert }: 
       <div style={{ fontSize: 11, color: MUTED, marginBottom: 4 }}>{label}</div>
       <div style={{ fontSize: 21, fontWeight: 500, color: valueColor ?? TEXT, lineHeight: 1.1 }}>{value}</div>
       <div style={{ fontSize: 11, color: MUTED, marginTop: 3 }}>
-        {compare.currentName} so far: {cur != null ? fmtNZD(cur) : '—'}
+        {compare.currentName} {compare.isCurrent ? 'so far' : 'total'}: {cur != null ? fmtNZD(cur) : '—'}
       </div>
       <div style={{ fontSize: 11, color: MUTED, marginTop: 3 }}>
         <span style={{ color: pctColor }}>
           {pct == null ? '—' : `${pct >= 0 ? '▲' : '▼'} ${Math.abs(pct).toFixed(0)}%`}
         </span>
-        {` vs ${compare.lastName} at the same point · ${compare.lastName} total ${lastTotal != null ? fmtNZD(lastTotal) : '—'}`}
+        {compare.isCurrent
+          ? ` vs ${compare.lastName} at the same point · ${compare.lastName} total ${lastTotal != null ? fmtNZD(lastTotal) : '—'}`
+          : ` vs ${compare.lastName} total ${lastTotal != null ? fmtNZD(lastTotal) : '—'}`}
       </div>
     </div>
   );
@@ -280,7 +282,8 @@ function TwelveMonthTrendChart({ data }: { data: XeroFinanceData['monthlyTrend']
   );
 }
 
-function PLSummarySection({ totalRevenue, totalGrossProfit, totalOpex, netProfit, lastMonthSamePoint, cac, monthlyTrend }: {
+function PLSummarySection({ w, totalRevenue, totalGrossProfit, totalOpex, netProfit, lastMonthSamePoint, cac, monthlyTrend }: {
+  w: MonthWindow;
   totalRevenue: number; totalGrossProfit: number; totalOpex: number; netProfit: number;
   lastMonthSamePoint: XeroFinanceData['lastMonthSamePoint'];
   cac: {
@@ -298,17 +301,18 @@ function PLSummarySection({ totalRevenue, totalGrossProfit, totalOpex, netProfit
   const grossMarginPct = totalRevenue > 0 ? (totalGrossProfit / totalRevenue) * 100 : 0;
   const netMarginPct = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
 
-  // Current month = the trend's partial isCurrentMonth entry; last month's
-  // total = the entry before it; "same point" = last month 1st → same day.
-  const curIdx = (monthlyTrend ?? []).findIndex(m => m.isCurrentMonth);
+  // Selected month = the trend's partial isCurrentMonth entry, or a past month
+  // matched by name; last month's total = the entry before it. "Same point" =
+  // last month 1st → same day for the current month, else last month's total.
+  const curIdx = (monthlyTrend ?? []).findIndex(m => w.isCurrent ? m.isCurrentMonth : !m.isCurrentMonth && m.month.startsWith(w.shortLabel));
   const currentMonth = curIdx >= 0 ? monthlyTrend?.[curIdx] : undefined;
   const lastMonth = curIdx > 0 ? monthlyTrend?.[curIdx - 1] : undefined;
-  const shortMonth = (label?: string) => label?.split(' ')[0] ?? '—';
   const compare: MonthCompare = {
-    currentName: shortMonth(currentMonth?.month),
-    lastName: shortMonth(lastMonth?.month),
+    currentName: w.shortLabel,
+    lastName: w.prevShortLabel,
+    isCurrent: w.isCurrent,
     current: currentMonth,
-    samePoint: lastMonthSamePoint,
+    samePoint: w.isCurrent ? lastMonthSamePoint : lastMonth,
     lastTotal: lastMonth,
   };
 
@@ -533,16 +537,16 @@ function CashPositionSection({
 
 // ─── Profit target & runway (read by the Overview) ────────────────────────────
 
-function TargetRunwaySection({ s }: { s: FinanceSummary }) {
+function TargetRunwaySection({ s, w }: { s: FinanceSummary; w: MonthWindow }) {
   const k = (n: number) => `$${Math.round(n / 1000)}k`;
   const npColor = (n: number | null) => n == null ? MUTED : n >= s.target ? NZ : n >= s.target * 0.75 ? AM : RD;
   const rwColor = s.runwayWeeks == null ? MUTED : s.runwayWeeks >= 8 ? NZ : s.runwayWeeks >= 4 ? AM : RD;
   return (
     <>
-      <SH color={TEXT} label="Profit target & runway" sub="Australia only · month to date · target set on the Overview (⚙)" />
+      <SH color={TEXT} label="Profit target & runway" sub={`Australia only · ${w.isCurrent ? 'month to date' : 'full month'} · target set on the Overview (⚙)`} />
       <G4>
         <KP accent={PU}
-            label="Net profit this month"
+            label={w.isCurrent ? 'Net profit this month' : `Net profit · ${w.label}`}
             value={s.netProfitMtd != null ? fmtNZD(s.netProfitMtd) : '—'}
             sub={`Target ${k(s.target)} a month`} />
         <KP accent={npColor(s.projectedNetProfit)}
@@ -554,11 +558,11 @@ function TargetRunwaySection({ s }: { s: FinanceSummary }) {
             label="Cash runway"
             value={s.runwayWeeks != null ? `${s.runwayWeeks.toFixed(1)} weeks` : '—'}
             valueColor={rwColor}
-            sub="Available cash ÷ average weekly costs (last 4 weeks)" />
+            sub="Available cash ÷ average weekly costs (last 4 weeks) · as of today" />
         <KP accent={MUTED}
             label="Average weekly costs"
             value={s.weeklyCosts != null ? fmtNZD(s.weeklyCosts) : '—'}
-            sub="Cash out, last 4 finished weeks" />
+            sub="Cash out, last 4 finished weeks · as of today" />
       </G4>
     </>
   );
@@ -570,6 +574,8 @@ export function FinanceCard() {
   const { data, error } = useXeroFinanceData();
   const { data: scheduledInvoices } = useScheduledInvoices();
   const { data: overviewSettings } = useOverviewSettings();
+  const [month, setMonth] = useState(currentMonthKey);
+  const w = monthWindow(month);
 
   // ── Computed values ─────────────────────────────────────────────────────────
   // Finance tab is Australia only — every headline number uses only the aus*
@@ -585,7 +591,10 @@ export function FinanceCard() {
 
   if (!data) return <FinanceSkeleton />;
 
-  const summary = financeSummary(data, overviewSettings?.netProfitTarget ?? DEFAULT_NET_PROFIT_TARGET, monthWindow(currentMonthKey()));
+  const target = overviewSettings?.netProfitTarget ?? DEFAULT_NET_PROFIT_TARGET;
+  // Diagnosis stays on the current month (same as the Overview); the target row follows the dropdown.
+  const summary = financeSummary(data, target, monthWindow(currentMonthKey()));
+  const monthSummary = w.isCurrent ? summary : financeSummary(data, target, w);
 
   const cashKpis    = data.cashKpis ?? { openingBalance: 0, closingBalance: 0, closingBalanceActual: 0, avgWeeklyOutflow: 0, openingDate: data.asOf, closingDate: data.asOf };
   const cashFlow    = data.cashFlow ?? [];
@@ -691,9 +700,18 @@ export function FinanceCard() {
   return (
     <div style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
       <DiagnosisTile diagnosis={summary.diagnosis} />
-      <TargetRunwaySection s={summary} />
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
+        <select
+          value={month}
+          onChange={e => setMonth(e.target.value)}
+          style={{ background: BG2, color: TEXT, border: `1px solid ${BORDER}`, borderRadius: 8, padding: '8px 12px', fontSize: 13 }}
+        >
+          {recentMonthKeys(12).map(k => <option key={k} value={k}>{monthWindow(k).label}</option>)}
+        </select>
+      </div>
+      <TargetRunwaySection s={monthSummary} w={w} />
 
-      <PLSummarySection totalRevenue={totalRevenue} totalGrossProfit={totalGrossProfit} totalOpex={totalOpex} netProfit={netProfit} lastMonthSamePoint={data.lastMonthSamePoint} cac={cac} monthlyTrend={data.monthlyTrend} />
+      <PLSummarySection w={w} totalRevenue={totalRevenue} totalGrossProfit={totalGrossProfit} totalOpex={totalOpex} netProfit={netProfit} lastMonthSamePoint={data.lastMonthSamePoint} cac={cac} monthlyTrend={data.monthlyTrend} />
 
       <CashPositionSection
         cashKpis={cashKpis}
