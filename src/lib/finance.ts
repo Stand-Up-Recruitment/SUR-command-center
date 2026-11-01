@@ -31,9 +31,10 @@ function cashRunwayWeeks(data: XeroFinanceData): number | null {
   return cash != null && costs != null && costs > 0 ? cash / costs : null;
 }
 
-/** This month's AUS net profit so far: the partial isCurrentMonth entry of the 12-month trend. */
-function netProfitMonthToDate(data: XeroFinanceData): number | null {
-  return data.monthlyTrend?.find(m => m.isCurrentMonth)?.netProfit ?? null;
+/** AUS net profit for `w`'s month from the 12-month trend: the partial isCurrentMonth entry, or a past month matched by name. */
+function netProfitMonthToDate(data: XeroFinanceData, w: MonthWindow): number | null {
+  const entry = data.monthlyTrend?.find(m => w.isCurrent ? m.isCurrentMonth : !m.isCurrentMonth && m.month.startsWith(w.shortLabel));
+  return entry?.netProfit ?? null;
 }
 
 /** Straight-line month-end projection: month to date ÷ days elapsed × days in month. */
@@ -51,9 +52,9 @@ export interface FinanceSummary {
   diagnosis: Diagnosis;
 }
 
-/** Everything the Finance tab's target/runway row and Diagnosis show. `w` is the current month's window. */
+/** Everything the Finance tab's target/runway row and Diagnosis show. `w` is the selected month's window. */
 export function financeSummary(data: XeroFinanceData, target: number, w: MonthWindow): FinanceSummary {
-  const netProfitMtd = netProfitMonthToDate(data);
+  const netProfitMtd = netProfitMonthToDate(data, w);
   const projectedNetProfit = netProfitMtd == null ? null : projectMonthEnd(netProfitMtd, w.dayOfMonth, w.daysInMonth);
   const runwayWeeks = cashRunwayWeeks(data);
   return {
