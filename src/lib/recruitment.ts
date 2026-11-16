@@ -26,7 +26,7 @@ export const DEFAULT_RECRUITMENT_SETTINGS: RecruitmentSettings = {
   maxActiveJobs: 7,
   rampWeeks: 4,
   bufferWeeks: 2,
-  recruiters: ['Ayn', 'Ian', 'Ty', 'Lionel'].map(name => ({ name, startDate: null })),
+  recruiters: ['Ayn', 'Ian', 'Ty', 'Lionel', 'Amir'].map(name => ({ name, startDate: null })),
 };
 
 // "Hire soon" runs this many weeks past the hire-now point (ramp + buffer).
