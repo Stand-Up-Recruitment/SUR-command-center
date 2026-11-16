@@ -10,8 +10,26 @@ export const AVG_FEE_PER_PLACEMENT = 20000;   // NZD, blended flat-fee/% average
 export const WEEKS_PER_MONTH = 4.33;
 
 // Monthly placement targets per recruiter (by first name); anyone not listed gets the default.
-const PLACEMENT_TARGETS_MONTHLY: Record<string, number> = { ayn: 4, ian: 4, ty: 2, lionel: 2 };
+const PLACEMENT_TARGETS_MONTHLY: Record<string, number> = { ayn: 4, ian: 4, lionel: 2 };
 const DEFAULT_PLACEMENT_TARGET_MONTHLY = 2;
+
+// Career track (Recruiter Career Track, trial v1, Nov 2026), by first name. Update when someone
+// moves up. `next` is the bar for the next tier: Sourcers count sourced submissions + sourced
+// placements, Placers count placements over a rolling 3 months.
+export interface TierInfo {
+  tier: string;
+  kind: 'sourcer' | 'placer';
+  kicker: number; // NZD per placement
+  next?: { tier: string; submissions?: number; placements: number };
+}
+const TIERS: Record<string, TierInfo> = {
+  ian:    { tier: 'Senior Placer', kind: 'placer', kicker: 800 },
+  ayn:    { tier: 'Senior Placer', kind: 'placer', kicker: 0 },
+  lionel: { tier: 'Intermediate Placer 1', kind: 'placer', kicker: 400, next: { tier: 'Senior Placer', placements: 9 } },
+  amir:   { tier: 'Team Lead (in training)', kind: 'placer', kicker: 800 },
+  ty:     { tier: 'Sourcer 1', kind: 'sourcer', kicker: 0, next: { tier: 'Sourcer 2', submissions: 10, placements: 1 } },
+};
+export const tierFor = (name: string): TierInfo | undefined => TIERS[firstName(name)];
 
 // Nihanga is HR & Business Operations, not a recruiter — JobAdder lists her as the
 // owner on some open jobs, but she shouldn't appear as a "By Recruiter" card or count
@@ -92,6 +110,7 @@ export function teamRecruiters(data: RecruiterKPIs, jobs: JobAgingKPIs | undefin
         fallThroughRate: 0, prevFallThroughRate: 0,
         rolling: { intToClient: 0, clientToContract: 0, monthsOfData: 0 },
         monthlyPlacements: data.months.map(() => null),
+        placements3m: 0, sourcedSubmissions: 0, sourcedPlacements: 0,
       });
     }
   }
@@ -99,6 +118,7 @@ export function teamRecruiters(data: RecruiterKPIs, jobs: JobAgingKPIs | undefin
 }
 
 export function placementTargetFor(name: string, frame: TimeFrame): number {
+  if (tierFor(name)?.kind === 'sourcer') return 0; // Sourcers book; their Placers place
   const monthly = PLACEMENT_TARGETS_MONTHLY[firstName(name)] ?? DEFAULT_PLACEMENT_TARGET_MONTHLY;
   return frame === 'week' ? monthly / WEEKS_PER_MONTH : monthly;
 }
@@ -130,4 +150,35 @@ export function recruitmentPace(
     breakeven: breakevenPerRecruiter(recruiters.length, frame) * recruiters.length,
     projected: Math.round((data.placements / daysElapsed) * periodDays),
   };
+}
+
+type SourcingRow = { Name?: string; Status?: string; Created?: string; 'Candidates Email'?: string[]; 'Candidate Name'?: string[] };
+const normName = (n: string) => n.trim().toLowerCase().replace(/\s+/g, ' ');
+
+/**
+ * Sourcer tally from the KPI's Recruiter table, keyed by first name. Whoever logged a candidate's
+ * earliest row sourced them; it's a sourced submission once the candidate has a Client-Candidate
+ * Interview row, and a sourced placement once they have a signed contract (matched by candidate
+ * name; fall-overs still count). Bot-booked candidates are logged under the bot, so they don't count.
+ * shortcut: counts are all-time, not since the last tier change; add tier dates when someone moves up.
+ */
+export function sourcedTally(rows: SourcingRow[], placedCandidateNames: string[]) {
+  const byCandidate = new Map<string, SourcingRow[]>();
+  for (const r of rows) {
+    const c = r['Candidates Email']?.[0];
+    if (!c || !r.Created || !r.Name?.trim()) continue;
+    if (!byCandidate.has(c)) byCandidate.set(c, []);
+    byCandidate.get(c)!.push(r);
+  }
+  const placed = new Set(placedCandidateNames.map(normName));
+  const out = new Map<string, { submissions: number; placements: number }>();
+  for (const cRows of byCandidate.values()) {
+    if (!cRows.some(r => r.Status === 'Client-Candidate Interview')) continue;
+    const first = cRows.reduce((a, b) => (Date.parse(b.Created!) < Date.parse(a.Created!) ? b : a));
+    const t = out.get(firstName(first.Name!)) ?? { submissions: 0, placements: 0 };
+    t.submissions++;
+    if (cRows.some(r => r['Candidate Name']?.some(n => placed.has(normName(n))))) t.placements++;
+    out.set(firstName(first.Name!), t);
+  }
+  return out;
 }

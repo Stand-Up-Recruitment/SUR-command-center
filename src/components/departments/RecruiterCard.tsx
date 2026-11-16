@@ -10,7 +10,7 @@ import { COLORS, CARD_STYLE } from '../../styles/tokens';
 import { PlacementsTrendChart } from '../shared/PlacementsTrendChart';
 import { useAuthRole } from '../auth/AuthContext';
 import {
-  DEFAULT_RECRUITMENT_SETTINGS, hiringTrigger, teamRecruiters, placementTargetFor, breakevenPerRecruiter as breakevenFor,
+  DEFAULT_RECRUITMENT_SETTINGS, hiringTrigger, teamRecruiters, placementTargetFor, tierFor, breakevenPerRecruiter as breakevenFor,
   recruitmentPace, type HiringState,
 } from '../../lib/recruitment';
 import { diagnoseRecruitment } from '../../lib/diagnosis';
@@ -543,6 +543,7 @@ export function RecruiterCard() {
                   const rInternalColor = rag(r.internalInterviews, internalTarget);
                   const rClientColor = rag(r.clientInterviews, t.client);
                   const rPlacementColor = rag(r.placements, t.placement, breakevenPerRecruiter);
+                  const tier = tierFor(r.name);
                   const rateNote = [
                     t.limitedData && 'limited data',
                     t.teamRateUsed && 'team rate used',
@@ -558,6 +559,17 @@ export function RecruiterCard() {
                         {r.name} <span style={{ fontSize: 10, color: COLORS.textMuted }}>{isOpen ? '▾' : '▸'}</span>
                         {startedLabel(r.name) && (
                           <div style={{ fontSize: 11, fontWeight: 400, color: COLORS.textMuted, marginTop: 2 }}>{startedLabel(r.name)}</div>
+                        )}
+                        {tier && (
+                          <div style={{ fontSize: 11, fontWeight: 400, color: COLORS.textSecondary, marginTop: 2 }}>
+                            {tier.tier} · {tier.kicker ? `$${tier.kicker}/placement` : 'no kicker'}
+                            <div style={{ color: COLORS.textMuted }}>
+                              {tier.kind === 'sourcer'
+                                ? `${r.sourcedSubmissions}/${tier.next?.submissions ?? '—'} sourced subs · ${r.sourcedPlacements}/${tier.next?.placements ?? '—'} placed`
+                                : `${r.placements3m}${tier.next ? `/${tier.next.placements}` : ''} placed, last 3 mo`}
+                              {tier.next && ` → ${tier.next.tier}`}
+                            </div>
+                          </div>
                         )}
                       </td>
                       <td style={td}>{cellValue(r.internalInterviews, internalTarget, rInternalColor)}</td>
@@ -583,7 +595,9 @@ export function RecruiterCard() {
                           display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap',
                         }}>
                           <span style={{ fontSize: 13, fontWeight: 700, color: WIT_TEXT }}>
-                            ◎ What it takes: {t.internal} internal · {t.client} client interviews for {fmtTarget(t.placement)} placements
+                            {tier?.kind === 'sourcer'
+                              ? '◎ Sourcer: books internal interviews for their Placers, no placement target'
+                              : `◎ What it takes: ${t.internal} internal · ${t.client} client interviews for ${fmtTarget(t.placement)} placements`}
                           </span>
                           <span style={{ fontSize: 11, color: COLORS.textSecondary, fontFamily: MONO }}>
                             4-mo rates: {Math.round(t.i2c * 100)}% · {Math.round(t.c2c * 100)}%{rateNote && ` (${rateNote})`}

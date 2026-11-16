@@ -61,6 +61,11 @@ export interface RecruiterStat {
   // Placements per month, last 12 months oldest-first (current month last, partial);
   // null for months before the recruiter's first activity.
   monthlyPlacements: (number | null)[];
+  // Career track: contracts signed in the last 3 months (fall-overs still count), and the
+  // Sourcer tally from sourcedTally() in lib/recruitment.ts.
+  placements3m: number;
+  sourcedSubmissions: number;
+  sourcedPlacements: number;
 }
 
 export interface RollingRates {
