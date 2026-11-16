@@ -25,7 +25,7 @@ import {
 import { toMs, trailingDays, last12Months, nzDate, type MonthWindow, type DayRange } from '../lib/nzTime.js';
 import { env } from '../lib/env.js';
 import { candidateQualifier, DEFAULT_NON_TRADE_CATEGORIES } from '../lib/qualified.js';
-import { isNonRecruiter } from '../lib/recruitment.js';
+import { isNonRecruiter, sourcedTally, firstName } from '../lib/recruitment.js';
 import { companyKey } from '../lib/companyKey.js';
 
 const API_KEY = env.VITE_AIRTABLE_API_KEY as string;
@@ -159,8 +159,8 @@ const INSTALMENTS_TABLE_ID = 'tblzsNY9hiQunnopk';
 const isFallThrough = (f: { Status?: string; 'Cancellation Date'?: string }) =>
   f.Status === 'End' && Boolean(f['Cancellation Date']);
 
-type PipelineFields = { Status?: string; Created?: string; Name?: string; 'Candidates Email'?: string[] };
-type RecruiterPlacementFields = { 'Created Date'?: string; Recruiter?: string; Status?: string; 'Cancellation Date'?: string };
+type PipelineFields = { Status?: string; Created?: string; Name?: string; 'Candidates Email'?: string[]; 'Candidate Name'?: string[] };
+type RecruiterPlacementFields = { 'Created Date'?: string; Recruiter?: string; Status?: string; 'Cancellation Date'?: string; 'Candidate Name'?: string };
 
 // The pipeline table logs one record per stage per candidate, but a candidate is sometimes
 // logged twice at the same stage. Count each candidate once per stage per period.
@@ -264,6 +264,7 @@ export async function fetchRecruiterKPIs(frame: TimeFrame = 'month'): Promise<Re
         fallThroughRate: 0, prevFallThroughRate: 0,
         rolling: { intToClient: 0, clientToContract: 0, monthsOfData: 0 },
         monthlyPlacements: [],
+        placements3m: 0, sourcedSubmissions: 0, sourcedPlacements: 0,
       });
     }
     return recruiterMap.get(name)!;
@@ -339,6 +340,17 @@ export async function fetchRecruiterKPIs(frame: TimeFrame = 'month'): Promise<Re
     const firstKey = activityKeys.length > 0 ? Math.min(...activityKeys) : Infinity;
     stat.monthlyPlacements = chartMonthKeys.map(k => k < firstKey ? null
       : ownPlacements.filter(f => f.Status !== 'End' && f['Created Date'] && monthKey(f['Created Date']) === k).length);
+  }
+
+  // Career track: rolling 3 months for Placers (fall-overs still count), sourced tally for Sourcers.
+  const threeMonthsAgo = new Date(today.getFullYear(), today.getMonth() - 3, today.getDate()).getTime();
+  const sourced = sourcedTally(pipeline, allPlacements.map(f => f['Candidate Name'] ?? '').filter(Boolean));
+  for (const [name, stat] of recruiterMap) {
+    stat.placements3m = placements.filter(f =>
+      f.Recruiter?.trim() === name && f['Created Date'] && Date.parse(f['Created Date']) >= threeMonthsAgo).length;
+    const t = sourced.get(firstName(name));
+    stat.sourcedSubmissions = t?.submissions ?? 0;
+    stat.sourcedPlacements = t?.placements ?? 0;
   }
 
   const byRecruiter = Array.from(recruiterMap.values()).sort((a, b) => a.name.localeCompare(b.name));
