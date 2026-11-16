@@ -15,6 +15,7 @@ const TABS = [
 ] as const;
 
 const MARKETING_TABS = new Set(['/marketing']);
+const RECRUITMENT_TABS = new Set(['/recruitment']);
 
 interface HeaderProps {
   onRefresh: () => void;
@@ -23,7 +24,9 @@ interface HeaderProps {
 
 export function Header({ onRefresh, isDemo }: HeaderProps) {
   const role = useAuthRole();
-  const tabs = role === 'marketing' ? TABS.filter(t => MARKETING_TABS.has(t.to)) : TABS;
+  const tabs = role === 'marketing' ? TABS.filter(t => MARKETING_TABS.has(t.to))
+    : role === 'recruitment' ? TABS.filter(t => RECRUITMENT_TABS.has(t.to))
+    : TABS;
   const [now, setNow] = useState(new Date());
 
   useEffect(() => {

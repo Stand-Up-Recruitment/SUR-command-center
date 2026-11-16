@@ -6,13 +6,16 @@ const ENV_USER = import.meta.env.VITE_AUTH_USERNAME as string | undefined;
 const ENV_PASS = import.meta.env.VITE_AUTH_PASSWORD as string | undefined;
 const MARKETING_USER = import.meta.env.VITE_AUTH_MARKETING_USERNAME as string | undefined;
 const MARKETING_PASS = import.meta.env.VITE_AUTH_MARKETING_PASSWORD as string | undefined;
+const RECRUITMENT_USER = import.meta.env.VITE_AUTH_RECRUITMENT_USERNAME as string | undefined;
+const RECRUITMENT_PASS = import.meta.env.VITE_AUTH_RECRUITMENT_PASSWORD as string | undefined;
 const AUTH_ENABLED = Boolean(ENV_USER && ENV_PASS);
 const SESSION_KEY = 'sur_auth';
 const SESSION_ROLE_KEY = 'sur_auth_role';
 
 function getRole(): AuthRole {
   if (!AUTH_ENABLED) return 'admin';
-  return sessionStorage.getItem(SESSION_ROLE_KEY) === 'marketing' ? 'marketing' : 'admin';
+  const stored = sessionStorage.getItem(SESSION_ROLE_KEY);
+  return stored === 'marketing' || stored === 'recruitment' ? stored : 'admin';
 }
 
 function isAuthenticated(): boolean {
@@ -30,6 +33,11 @@ function authenticate(username: string, password: string): AuthRole | null {
     sessionStorage.setItem(SESSION_KEY, 'ok');
     sessionStorage.setItem(SESSION_ROLE_KEY, 'marketing');
     return 'marketing';
+  }
+  if (RECRUITMENT_USER && RECRUITMENT_PASS && username === RECRUITMENT_USER && password === RECRUITMENT_PASS) {
+    sessionStorage.setItem(SESSION_KEY, 'ok');
+    sessionStorage.setItem(SESSION_ROLE_KEY, 'recruitment');
+    return 'recruitment';
   }
   return null;
 }

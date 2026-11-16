@@ -30,6 +30,15 @@ function AppRoutes() {
     );
   }
 
+  if (role === 'recruitment') {
+    return (
+      <Routes>
+        <Route path="/recruitment" element={<RecruitmentPage />} />
+        <Route path="*"            element={<Navigate to="/recruitment" replace />} />
+      </Routes>
+    );
+  }
+
   return (
     <Routes>
       <Route path="/"            element={<OverviewPage />} />

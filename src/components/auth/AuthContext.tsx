@@ -1,6 +1,6 @@
 import { createContext, useContext } from 'react';
 
-export type AuthRole = 'admin' | 'marketing';
+export type AuthRole = 'admin' | 'marketing' | 'recruitment';
 
 export const AuthContext = createContext<AuthRole>('admin');
 
