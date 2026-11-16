@@ -10,7 +10,7 @@ export const AVG_FEE_PER_PLACEMENT = 20000;   // NZD, blended flat-fee/% average
 export const WEEKS_PER_MONTH = 4.33;
 
 // Monthly placement targets per recruiter (by first name); anyone not listed gets the default.
-const PLACEMENT_TARGETS_MONTHLY: Record<string, number> = { ayn: 4, ian: 4, kade: 2, lionel: 2 };
+const PLACEMENT_TARGETS_MONTHLY: Record<string, number> = { ayn: 4, ian: 4, ty: 2, lionel: 2 };
 const DEFAULT_PLACEMENT_TARGET_MONTHLY = 2;
 
 // Nihanga is HR & Business Operations, not a recruiter — JobAdder lists her as the
@@ -26,7 +26,7 @@ export const DEFAULT_RECRUITMENT_SETTINGS: RecruitmentSettings = {
   maxActiveJobs: 7,
   rampWeeks: 4,
   bufferWeeks: 2,
-  recruiters: ['Ayn', 'Ian', 'Kade', 'Lionel'].map(name => ({ name, startDate: null })),
+  recruiters: ['Ayn', 'Ian', 'Ty', 'Lionel'].map(name => ({ name, startDate: null })),
 };
 
 // "Hire soon" runs this many weeks past the hire-now point (ramp + buffer).
