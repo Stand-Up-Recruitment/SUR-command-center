@@ -5,39 +5,38 @@ import { Skeleton } from '../shared/Skeleton';
 import {
   useRecruiterKPIs, useJobAging, useVoiceCallKPIs, useJobAdderStageKPIs, useRecruitmentSettings, useSaveRecruitmentSettings,
 } from '../../hooks/queries';
-import { timeBoundaries } from '../../services/airtable';
-import { COLORS, CARD_STYLE } from '../../styles/tokens';
-import { PlacementsTrendChart } from '../shared/PlacementsTrendChart';
+import { COLORS } from '../../styles/tokens';
 import { useAuthRole } from '../auth/AuthContext';
 import {
   DEFAULT_RECRUITMENT_SETTINGS, hiringTrigger, teamRecruiters, placementTargetFor, tierFor, breakevenPerRecruiter as breakevenFor,
-  recruitmentPace, type HiringState,
+  biggestBreak, todaysActions, shouldWeHire, botLooksOff, SHOW_UP_TARGET, STALE_LIMIT,
+  type BoardRow, type ActionLevel,
 } from '../../lib/recruitment';
-import { diagnoseRecruitment } from '../../lib/diagnosis';
-import { DiagnosisTile } from '../shared/DiagnosisTile';
-import type { DepartmentStatus, RecruiterStat, RecruitmentSettings, RollingRates, TimeFrame } from '../../types';
+import { workingDays, neededByToday, pace, PACE_LABEL, type Pace } from '../../lib/workingDays';
+import type { RecruiterStat, RecruitmentSettings, RollingRates, TimeFrame } from '../../types';
 
-// Breakeven cost model and placement targets live in lib/recruitment.ts (shared with the Overview).
+// Layout and colours follow the "Recruitment tab v2" mockup (Claude Design, 19 Nov 2026).
+
 // 4 internal interviews a day per recruiter → 20/week, 80/month.
 const INTERNAL_TARGET_WEEKLY = 20;
 const INTERNAL_TARGET_MONTHLY = 80;
 
-// "What it takes" line colours (blue info band, per the mockup).
-const WIT_BG = 'rgba(55,138,221,0.14)';
-const WIT_BORDER = 'rgba(55,138,221,0.45)';
-const WIT_TEXT = '#6aa9ec';
+const C = {
+  card: '#1A1B1E', inset: '#222327', border: '#2E3036', rowBorder: '#26282D', track: '#2A2C31',
+  text: '#F2F2F3', soft: '#C9CBD1', muted: '#A1A3AA', faint: '#8A8D95', ink: '#141414',
+  green: '#4FCB7C', amber: '#F2A93B', red: '#F0504A', blue: '#8DBBF7', greyFill: '#3A3C42',
+};
+const PACE_COLOR: Record<Pace, string> = { green: C.green, amber: C.amber, red: C.red, grey: C.faint };
+// Filled status chips: [background, text]
+const FILL: Record<Pace | 'blue', [string, string]> = {
+  green: ['#3FBF6E', C.ink], amber: [C.amber, C.ink], red: [C.red, C.ink], blue: [C.blue, C.ink], grey: [C.greyFill, '#E6E7EA'],
+};
+const LEVEL_TONE: Record<ActionLevel, Pace | 'blue'> = { 'FIX NOW': 'red', 'THIS WEEK': 'amber', '1:1': 'blue', 'WATCH': 'grey' };
 
-const MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
-
-const pct = (numerator: number, denominator: number) =>
-  denominator > 0 ? Math.round((numerator / denominator) * 100) : 0;
-
-const fmtTarget = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
-
-// Green at/above target · orange below target but above breakeven (or activity 75–99%)
-// · red below breakeven (or activity under 75%).
-const rag = (value: number, target: number, breakeven = target * 0.75) =>
-  value >= target ? COLORS.success : value >= breakeven ? COLORS.warning : COLORS.danger;
+const NUM_FONT = "'Space Grotesk', ui-sans-serif, system-ui, sans-serif";
+const CARD: CSSProperties = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 14 };
+const LABEL: CSSProperties = { fontSize: 13, fontWeight: 600, color: C.muted, letterSpacing: '0.4px' };
+const TODO: CSSProperties = { fontSize: 13, fontWeight: 600, color: C.text, background: C.inset, border: `1px solid ${C.border}`, borderRadius: 8, padding: '9px 11px' };
 
 // Client interviews needed = placement target ÷ 4-month client → contract rate; internal
 // needed = client needed ÷ 4-month int → client rate; both rounded up. A rate of 0 (no data
@@ -48,58 +47,22 @@ function whatItTakes(placementTarget: number, own: RollingRates, team: RollingRa
   const ceil = (n: number) => Math.ceil(n - 1e-9); // guard float noise, e.g. 7.0000000001
   const client = c2c > 0 ? ceil(placementTarget / c2c) : 0;
   const internal = i2c > 0 ? ceil(client / i2c) : 0;
-  return {
-    client, internal, c2c, i2c,
-    teamRateUsed: !own.clientToContract || !own.intToClient,
-    limitedData: own.monthsOfData < 4,
-  };
+  return { client, internal, c2c, i2c };
 }
-
-const ragLabel = (color: string) =>
-  color === COLORS.success ? 'On track' : color === COLORS.warning ? 'Below target' : 'Behind';
-
-// Same color language as StatusBadge (src/components/shared/StatusBadge.tsx), reused here
-// as a full-width block instead of a pill.
-const STATUS_STYLE: Record<DepartmentStatus, { bg: string; border: string; text: string; subtext: string }> = {
-  'on-track': { bg: COLORS.accentBg, border: COLORS.accentBorder, text: COLORS.success, subtext: COLORS.success },
-  'at-risk':  { bg: COLORS.warningBg, border: COLORS.warning, text: COLORS.warning, subtext: COLORS.warning },
-  'off-track': { bg: COLORS.dangerBg, border: COLORS.danger, text: COLORS.danger, subtext: COLORS.danger },
-  'no-data':  { bg: COLORS.bgSubtle, border: COLORS.border, text: COLORS.textMuted, subtext: COLORS.textMuted },
-};
-
-const SECTION_LABEL: CSSProperties = {
-  fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, textTransform: 'uppercase', letterSpacing: '0.08em',
-};
 
 function RecruiterSkeleton() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <Skeleton height={22} width={120} />
-          <Skeleton height={13} width={200} />
-        </div>
-        <Skeleton height={28} width={140} radius={8} />
-      </div>
-      <Skeleton height={64} radius={12} />
+      <Skeleton height={40} width={260} />
+      <Skeleton height={160} radius={12} />
       <div style={{ display: 'flex', gap: 12 }}>
-        {[0, 1, 2, 3].map(i => <Skeleton key={i} height={130} radius={12} style={{ flex: 1 }} />)}
+        {[0, 1, 2, 3].map(i => <Skeleton key={i} height={110} radius={12} style={{ flex: 1 }} />)}
       </div>
-      <div style={{ display: 'flex', gap: 12 }}>
-        {[0, 1].map(i => <Skeleton key={i} height={48} radius={12} style={{ flex: 1 }} />)}
-      </div>
+      <Skeleton height={120} radius={12} />
       <Skeleton height={320} radius={12} />
-      <Skeleton height={140} radius={12} />
     </div>
   );
 }
-
-const HIRING_STYLE: Record<HiringState, { bg: string; border: string; text: string }> = {
-  'hire-now':  { bg: COLORS.dangerBg, border: COLORS.danger, text: COLORS.danger },
-  'hire-soon': { bg: COLORS.warningBg, border: COLORS.warning, text: COLORS.warning },
-  'ok':        { bg: COLORS.successBg, border: COLORS.success, text: COLORS.success },
-  'no-data':   { bg: COLORS.bgSubtle, border: COLORS.border, text: COLORS.textMuted },
-};
 
 const SIX_MONTHS_MS = 182 * 86_400_000;
 
@@ -178,9 +141,54 @@ function RecruitmentSettingsPanel({ settings, onClose }: { settings: Recruitment
 }
 
 const TIMEFRAME_OPTIONS: { value: TimeFrame; label: string }[] = [
-  { value: 'week', label: 'Weekly' },
-  { value: 'month', label: 'Monthly' },
+  { value: 'week', label: 'This week' },
+  { value: 'month', label: 'This month' },
 ];
+
+const Chip = ({ tone, children, width }: { tone: Pace | 'blue'; children: ReactNode; width?: number }) => (
+  <span style={{
+    fontSize: 11, fontWeight: 700, letterSpacing: '0.5px', padding: '4px 8px', borderRadius: 5, whiteSpace: 'nowrap',
+    background: FILL[tone][0], color: FILL[tone][1], width, textAlign: width ? 'center' : undefined, boxSizing: 'border-box',
+    display: 'inline-block', justifySelf: 'start',
+  }}>{children}</span>
+);
+
+const Section = ({ title, aside, children }: { title: string; aside: ReactNode; children: ReactNode }) => (
+  <section style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: 12 }}>
+      <h2 style={{ margin: 0, fontFamily: NUM_FONT, fontSize: 22, fontWeight: 700, color: C.text }}>{title}</h2>
+      {typeof aside === 'string' ? <span style={{ fontSize: 14, color: C.muted }}>{aside}</span> : aside}
+    </div>
+    {children}
+  </section>
+);
+
+const Tag = ({ bg, children }: { bg: string; children: ReactNode }) => (
+  <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.8px', color: C.ink, background: bg, padding: '4px 8px', borderRadius: 5 }}>{children}</span>
+);
+
+const Big = ({ value, color, unit, size = 52 }: { value: ReactNode; color: string; unit?: string; size?: number }) => (
+  <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+    <span style={{ fontFamily: NUM_FONT, fontSize: size, fontWeight: 700, color, lineHeight: 1 }}>{value}</span>
+    {unit && <span style={{ fontSize: 16, color: C.soft }}>{unit}</span>}
+  </div>
+);
+
+const Tile = ({ label, chip, children }: { label: string; chip: ReactNode; children: ReactNode }) => (
+  <div style={{ ...CARD, padding: 20, display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+      <span style={LABEL}>{label}</span>{chip}
+    </div>
+    {children}
+  </div>
+);
+
+const Line = ({ children, muted }: { children: ReactNode; muted?: boolean }) => (
+  <div style={{ fontSize: muted ? 13 : 15, color: muted ? C.muted : C.text }}>{children}</div>
+);
+
+const BOARD_COLS = '190px 110px 120px 120px 120px 110px minmax(0, 1fr) 210px';
+const SOURCER_COLS = '190px 110px 1fr 1fr 210px';
 
 export function RecruiterCard() {
   const [frame, setFrame] = useState<TimeFrame>('month');
@@ -192,517 +200,447 @@ export function RecruiterCard() {
   const { data: settingsData, error: settingsError, isLoading: settingsLoading } = useRecruitmentSettings();
   const role = useAuthRole();
   const [showSettings, setShowSettings] = useState(false);
+  const [now] = useState(Date.now); // page load time; the tab is reloaded daily
 
   if (isLoading || settingsLoading) return <RecruiterSkeleton />;
   if (!data) return null;
 
-  const periodLabel = frame === 'week' ? 'week' : 'month';
-
-  // Subtitle date range, e.g. "1–28 Sep" or "29 Sep–5 Oct".
-  const { start, now } = timeBoundaries(frame);
-  const startDate = new Date(start);
-  const nowDate = new Date(now);
-  const fmtDay = (d: Date) => d.toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' });
-  const rangeLabel = startDate.getMonth() === nowDate.getMonth()
-    ? `${startDate.getDate()}–${fmtDay(nowDate)}`
-    : `${fmtDay(startDate)}–${fmtDay(nowDate)}`;
-
-  // Job aging is a live snapshot, not tied to the selected period — include recruiters
-  // who have open jobs even if they had no interviews/placements this period.
-  // Match by first name since both sources key recruiters by first name only.
+  const wd = workingDays(frame, now);
+  const period = frame === 'week' ? 'week' : 'month';
+  const need = (target: number) => neededByToday(target, wd);
   const firstName = (n: string) => n.trim().split(' ')[0].toLowerCase();
-  const baseRecruiters = teamRecruiters(data, jobAgingData);
 
-  // Merge in JobAdder pipeline-stage KPIs (separate webhook) by first name — left as
-  // undefined (rendered as "—") when the hook hasn't loaded. No-shows come from the
-  // JobAdder "No Show-up" candidate status once loaded; a recruiter with none there has 0.
-  // Copies each row so the React Query cache isn't mutated.
-  const displayRecruiters: RecruiterStat[] = baseRecruiters.map(r => {
+  // Merge JobAdder pipeline-stage KPIs (separate webhook) by first name. Copies each row so
+  // the React Query cache isn't mutated.
+  const recruiters: RecruiterStat[] = teamRecruiters(data, jobAgingData).map(r => {
     const js = jobAdderStageData?.byRecruiter.find(s => firstName(s.name) === firstName(r.name));
     return {
       ...r,
       ...(jobAdderStageData && { noShows: js?.noShows ?? 0, prevNoShows: js?.prevNoShows ?? 0 }),
       ...(js && {
         referenceChecks: js.referenceChecks,
-        prevReferenceChecks: js.prevReferenceChecks,
         candidatesPitched: js.candidatesPitched,
-        prevCandidatesPitched: js.prevCandidatesPitched,
         internalInterviewsBotBooked: js.internalInterviewsBotBooked,
-        prevInternalInterviewsBotBooked: js.prevInternalInterviewsBotBooked,
       }),
     };
   });
 
-  const jobAgingFor = (name: string) => {
-    const stat = jobAgingData?.byRecruiter?.find(r => firstName(r.name) === firstName(name));
-    return stat ?? { totalOpenJobs: 0, fresh: 0, ageing: 0, stale: 0 };
-  };
-
-  const totalOpenJobs = jobAgingData?.totalOpenJobs ?? 0;
-  const jobsFresh = jobAgingData?.fresh ?? 0;
-  const jobsAgeing = jobAgingData?.ageing ?? 0;
-  const jobsStale = jobAgingData?.stale ?? 0;
-  const stalePct = pct(jobsStale, totalOpenJobs);
-
-  const internalToClientPct = pct(data.clientInterviews, data.internalInterviews);
-  const clientToContractPct = pct(data.placements, data.clientInterviews);
-
-  const liveHeadcount = displayRecruiters.length;
-  const breakevenPerRecruiter = breakevenFor(liveHeadcount, frame);
-  // Team placement target, breakeven and projection: shared with the Overview.
-  const pace = recruitmentPace(data, displayRecruiters, frame, start, now);
-  const { target: teamPlacementTarget, breakeven: teamBreakeven, projected } = pace;
-
-  const internalTarget = frame === 'week' ? INTERNAL_TARGET_WEEKLY : INTERNAL_TARGET_MONTHLY;
-
-  const targets = new Map(displayRecruiters.map(r => {
-    const placement = placementTargetFor(r.name, frame);
-    return [r.name, { placement, ...whatItTakes(placement, r.rolling, data.rolling) }];
-  }));
-  const targetsFor = (name: string) => targets.get(name)!;
-  // Team line = sum of the recruiters' lines.
-  const teamClientTarget = displayRecruiters.reduce((s, r) => s + targetsFor(r.name).client, 0);
-  const teamInternalNeeded = displayRecruiters.reduce((s, r) => s + targetsFor(r.name).internal, 0);
-  const teamInternalTarget = internalTarget * liveHeadcount;
-  const unassignedJobs = jobAgingData?.unassigned;
-
-  // Hiring trigger + per-recruiter job cap. Falls back to the default settings if the API is down.
-  const recruitment = settingsData ?? DEFAULT_RECRUITMENT_SETTINGS;
+  // Defaults when the settings API is down or answers without settings (e.g. vite dev serves no /api).
+  const recruitment: RecruitmentSettings = settingsData?.recruiters ? settingsData : DEFAULT_RECRUITMENT_SETTINGS;
   const settingsWarning = settingsError?.message ?? settingsData?.error;
-  const maxJobs = recruitment.maxActiveJobs;
-  const hiring = jobAgingData ? hiringTrigger(jobAgingData, recruitment) : null;
-  // Green under max − 2 · amber max − 2 to max − 1 · red at max (full).
-  const loadColor = (jobs: number) =>
-    jobs >= maxJobs ? COLORS.danger : jobs >= maxJobs - 2 ? COLORS.warning : COLORS.success;
-  const startedLabel = (name: string) => {
-    const startDate = recruitment.recruiters.find(r => firstName(r.name) === firstName(name))?.startDate;
-    if (!startDate) return null;
-    const started = new Date(`${startDate}T00:00:00`);
-    if (now - started.getTime() > SIX_MONTHS_MS) return null;
-    return `started ${started.toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}`;
-  };
+  const cap = recruitment.maxActiveJobs;
+  const jobsFor = (name: string) =>
+    jobAgingData?.byRecruiter?.find(r => firstName(r.name) === firstName(name)) ?? { totalOpenJobs: 0, fresh: 0, ageing: 0, stale: 0 };
 
-  const diagnosis = diagnoseRecruitment({
-    ...pace, periodLabel,
-    hiring: hiring && { state: hiring.state, weeksUntilFull: hiring.weeksUntilFull, full: hiring.activeJobs >= hiring.slots },
+  // ── Board rows: every target is turned into "needed by today" ──
+  const internalTarget = frame === 'week' ? INTERNAL_TARGET_WEEKLY : INTERNAL_TARGET_MONTHLY;
+  const rows = recruiters.map(r => {
+    const kind = tierFor(r.name)?.kind ?? 'placer';
+    const placementTarget = placementTargetFor(r.name, frame);
+    const wit = whatItTakes(placementTarget, r.rolling, data.rolling);
+    const jobs = jobsFor(r.name);
+    const board: BoardRow = {
+      name: r.name, kind, jobs: jobs.totalOpenJobs, rolling: r.rolling,
+      internal: { done: r.internalInterviews, needed: need(internalTarget) },
+      client: { done: r.clientInterviews, needed: need(wit.client) },
+      placements: { done: r.placements, needed: need(placementTarget) },
+    };
+    return { stat: r, board, jobs, wit, placementTarget };
   });
+  const placers = rows.filter(r => r.board.kind === 'placer');
+  const sourcers = rows.filter(r => r.board.kind === 'sourcer');
 
-  const status: DepartmentStatus =
-    projected >= teamPlacementTarget ? 'on-track' :
-    projected >= teamBreakeven ? 'at-risk' : 'off-track';
-  const statusStyle = STATUS_STYLE[error ? 'no-data' : status];
-  const statusTitle = status === 'on-track' ? 'On track' : status === 'at-risk' ? 'Below target' : 'Behind target';
+  // ── Are we on track? ──
+  const teamTarget = recruiters.reduce((s, r) => s + placementTargetFor(r.name, frame), 0);
+  const teamBreakeven = breakevenFor(recruiters.length, frame) * recruiters.length;
+  const placementsNeeded = need(teamTarget);
+  const placementsPace = pace(data.placements, placementsNeeded);
+  // Run-rate on working days; swap for placements + offers × offer→contract rate once offers are fed.
+  const projected = wd.elapsed > 0 ? Math.round((data.placements / wd.elapsed) * wd.total) : null;
+  const projectedTone: Pace = projected === null ? 'grey' : projected >= teamTarget ? 'green' : projected >= teamBreakeven ? 'amber' : 'red';
+  const fallThroughs = Math.round((data.fallThroughRate / 100) * data.placements);
 
-  const placementColor = rag(data.placements, teamPlacementTarget, teamBreakeven);
-  const clientColor = rag(data.clientInterviews, teamClientTarget);
-  const internalColor = rag(data.internalInterviews, teamInternalTarget);
+  // ── Where is it breaking? ──
+  const teamInternalTarget = internalTarget * recruiters.length;
+  const teamClientTarget = rows.reduce((s, r) => s + r.wit.client, 0);
+  const cvsSent = jobAdderStageData ? recruiters.reduce((s, r) => s + (r.candidatesPitched ?? 0), 0) : null;
+  const noShows = recruiters.reduce((s, r) => s + r.noShows, 0);
+  const showUpPct = data.internalInterviews + noShows > 0 ? Math.round((data.internalInterviews / (data.internalInterviews + noShows)) * 100) : null;
+  const bot = voiceCallData
+    ? { dials: voiceCallData.teamLeads, prev: voiceCallData.prevTeamLeads, expected: (voiceCallData.prevTeamLeads * wd.elapsed) / Math.max(1, wd.total) }
+    : null;
+  const botOff = botLooksOff(bot);
 
-  // Recruitment bot — leads contacted, answered and internal interviews booked, all straight from the
-  // Voice Call Log, one per phone number. "—" until the webhook has loaded.
-  // No-shows = team sum of the recruiters' JobAdder "No Show-up" counts.
-  // Show-up rate = showed ÷ (showed + no-shows), per candidate, across all internal
-  // interviews (bot and manual). An Internal Interview row is only logged once the candidate
-  // leaves that JobAdder status, i.e. after the interview.
-  const noShows = displayRecruiters.reduce((s, r) => s + r.noShows, 0);
-  const prevNoShows = displayRecruiters.reduce((s, r) => s + r.prevNoShows, 0);
-  const showUpRate = (showed: number, noShows: number) =>
-    showed + noShows > 0 ? pct(showed, showed + noShows) : undefined;
-  const showUpPct = showUpRate(data.internalInterviews, noShows);
+  type Stage = { label: string; value: number | null; needed?: number; need: string; sub: string; tone: Pace };
+  const counted = (label: string, value: number, target: number, sub: string): Stage => {
+    const needed = need(target);
+    return { label, value, needed, need: `Need ${needed} by today`, sub, tone: pace(value, needed) };
+  };
+  const engine: Stage[] = [
+    {
+      label: 'BOT · LEADS DIALLED', value: bot?.dials ?? null, tone: bot === null ? 'grey' : botOff ? 'red' : 'green',
+      need: bot === null ? 'No bot data' : botOff ? 'Bot looks OFF' : 'Bot is ON',
+      sub: voiceCallData ? `Last ${period} ${voiceCallData.prevTeamLeads.toLocaleString()} · ${voiceCallData.teamAnswered} answered · ${voiceCallData.teamBooked} booked` : 'Bot stats unavailable',
+    },
+    counted('INTERNAL INTERVIEWS HELD', data.internalInterviews, teamInternalTarget,
+      showUpPct === null ? 'Show-up: no data' : `Show-up ${showUpPct}% (target ${SHOW_UP_TARGET}%)`),
+    { label: 'CVS SENT TO CLIENTS', value: cvsSent, tone: 'grey', need: cvsSent === null ? 'Not tracked yet' : 'No target yet', sub: 'Target set after 4 weeks of data' },
+    counted('CLIENT INTERVIEWS', data.clientInterviews, teamClientTarget, `${period === 'week' ? 'Week' : 'Month'} target ${teamClientTarget}`),
+    counted('PLACEMENTS', data.placements, teamTarget, `${period === 'week' ? 'Week' : 'Month'} target ${Math.round(teamTarget)}`),
+  ];
+  const breakStage = engine
+    .filter(s => s.needed && s.value !== null && s.value / s.needed < 1)
+    .sort((a, b) => a.value! / a.needed! - b.value! / b.needed!)[0];
+  const stageName: Record<string, string> = { 'INTERNAL INTERVIEWS HELD': 'Internal interviews', 'CLIENT INTERVIEWS': 'Client interviews', 'PLACEMENTS': 'Placements' };
+  const breakText = !breakStage ? null
+    : breakStage.label === 'INTERNAL INTERVIEWS HELD'
+      ? `Top of the funnel. ${botOff ? 'Bot looks off, so internal' : 'Internal'} interviews are ${breakStage.value} done vs ${breakStage.needed} needed by today.`
+      : `${stageName[breakStage.label]}: ${breakStage.value} done vs ${breakStage.needed} needed by today.`;
 
-  const pill = (label: string, bg: string, color = '#0d0d0d') => (
-    <span style={{
-      fontSize: 11, fontWeight: 700, color, background: bg, borderRadius: 999,
-      padding: '3px 10px', whiteSpace: 'nowrap', flexShrink: 0,
-    }}>{label}</span>
+  // ── Job desk ──
+  const jobsKnown = jobAgingData ? { stale: jobAgingData.stale, open: jobAgingData.totalOpenJobs } : null;
+  const stalePct = jobsKnown && jobsKnown.open ? Math.round((jobsKnown.stale / jobsKnown.open) * 100) : null;
+  const staleLimit = jobsKnown ? Math.floor((jobsKnown.open * STALE_LIMIT) / 100) : null;
+  const jobsOnBoard = rows.reduce((s, r) => s + r.jobs.totalOpenJobs, 0);
+  const offBoardJobs = jobsKnown ? jobsKnown.open - jobsOnBoard : 0;
+  const netNewPerWeek = jobAgingData ? hiringTrigger(jobAgingData, recruitment).growthPerWeek : null;
+  const emptyDesks = placers.filter(r => r.jobs.totalOpenJobs === 0);
+  const hire = shouldWeHire(
+    jobAgingData ? { jobs: placers.reduce((s, r) => s + r.jobs.totalOpenJobs, 0), people: placers.length, empty: emptyDesks.length } : null,
+    jobsKnown, netNewPerWeek,
   );
+  const hireAdvice = hire.hire ? 'All three tests pass.'
+    : [
+      emptyDesks.length && `Give ${emptyDesks.map(r => r.stat.name).join(' and ')} jobs`,
+      hire.tests[1].pass === false && 'clean the stale desk',
+    ].filter(Boolean).join(' and ').replace(/^./, c => c.toUpperCase()) + (emptyDesks.length || hire.tests[1].pass === false ? ' first. ' : '') + 'Hire only when all three pass.';
+  const loadScale = Math.max(cap * 3, ...rows.map(r => r.jobs.totalOpenJobs));
+  const loadColor = (n: number) => (n === 0 ? C.greyFill : n >= cap ? C.red : n >= cap - 2 ? C.amber : C.green);
 
-  const bigValue = (value: ReactNode, target: ReactNode, color: string, size = 44) => (
-    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontFamily: MONO, fontVariantNumeric: 'tabular-nums' }}>
-      <span style={{ fontSize: size, fontWeight: 800, color, lineHeight: 1 }}>{value}</span>
-      <span style={{ fontSize: size * 0.45, color: COLORS.textMuted }}>/ {target}</span>
-    </div>
-  );
+  // ── Today's actions ──
+  const actions = todaysActions({ rows: rows.map(r => r.board), team: data.rolling, cap, jobs: jobsKnown, showUpPct, bot, period });
 
-  const kpiTile = (label: string, badge: ReactNode, value: ReactNode, sub: string, foot: string) => (
-    <div style={{ ...CARD_STYLE, padding: 18, display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
-        <span style={SECTION_LABEL}>{label}</span>
-        {badge}
-      </div>
-      {value}
-      <div>
-        <div style={{ fontSize: 13, color: COLORS.textSecondary }}>{sub}</div>
-        <div style={{ fontSize: 12, color: COLORS.textMuted, marginTop: 6 }}>{foot}</div>
-      </div>
-    </div>
-  );
-
-  const connector = (value: number) => (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
-      <span style={{ fontSize: 13, fontWeight: 700, color: COLORS.textPrimary, fontFamily: MONO }}>{value}%</span>
-      <span style={{ fontSize: 16, color: COLORS.textMuted }}>→</span>
-      <span style={{ fontSize: 10, color: COLORS.textMuted }}>convert</span>
-    </div>
-  );
-
-  const strip = (label: string, sub: string, value: ReactNode) => (
-    <div style={{ ...CARD_STYLE, padding: '14px 18px', flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-      <div>
-        <div style={SECTION_LABEL}>{label}</div>
-        <div style={{ fontSize: 12, color: COLORS.textMuted, marginTop: 2 }}>{sub}</div>
-      </div>
-      {value}
-    </div>
-  );
-
-  const stackedBar = (fresh: number, ageing: number, stale: number) => {
-    const total = fresh + ageing + stale;
-    return (
-      <div style={{ display: 'flex', gap: 2, height: 8, borderRadius: 4, overflow: 'hidden', background: COLORS.border }}>
-        {total > 0 ? (
-          <>
-            {fresh  > 0 && <div style={{ flexGrow: fresh,  background: COLORS.success }} />}
-            {ageing > 0 && <div style={{ flexGrow: ageing, background: COLORS.warning }} />}
-            {stale  > 0 && <div style={{ flexGrow: stale,  background: COLORS.danger }} />}
-          </>
-        ) : null}
-      </div>
-    );
+  const roleLabel = (name: string) => {
+    const startDate = recruitment.recruiters.find(r => firstName(r.name) === firstName(name))?.startDate;
+    const started = startDate && now - new Date(`${startDate}T00:00:00`).getTime() <= SIX_MONTHS_MS
+      ? `started ${new Date(`${startDate}T00:00:00`).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })}` : null;
+    return [tierFor(name)?.tier ?? 'Placer', started].filter(Boolean).join(' · ');
   };
 
-  const cellValue = (value: ReactNode, target: ReactNode, color: string = COLORS.textPrimary) => (
-    <span style={{ fontFamily: MONO, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-      <span style={{ fontSize: 18, fontWeight: 700, color }}>{value}</span>
-      <span style={{ fontSize: 12, color: COLORS.textMuted }}> / {target}</span>
-    </span>
-  );
+  // ── Trend: team placements per month, months with data only ──
+  const trend = data.months
+    .map((month, i) => ({ month, value: recruiters.some(r => r.monthlyPlacements[i] != null) ? recruiters.reduce((s, r) => s + (r.monthlyPlacements[i] ?? 0), 0) : null }))
+    .filter((t): t is { month: string; value: number } => t.value !== null)
+    .filter((_, i, all) => all.slice(0, i + 1).some(x => x.value > 0)); // drop leading empty months
+  const monthlyTarget = recruiters.reduce((s, r) => s + placementTargetFor(r.name, 'month'), 0);
+  const monthlyBreakeven = breakevenFor(recruiters.length, 'month') * recruiters.length;
+  const trendMax = Math.max(monthlyTarget, ...trend.map(t => t.value), 1);
+  const barH = (v: number) => Math.round((v / trendMax) * 210);
 
-  const miniStat = (value: ReactNode, label: string, sub?: string, color: string = COLORS.textPrimary, size = 16) => (
-    <div style={{ flex: 1, minWidth: 0 }}>
-      <div style={{ fontSize: size, fontWeight: 700, color, fontFamily: MONO, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
-      <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 2 }}>{label}</div>
-      {sub && <div style={{ fontSize: 12, color: COLORS.textMuted }}>{sub}</div>}
-    </div>
+  const doneNeed = (s: { done: number; needed: number }, size = 20) => (
+    <span style={{ fontFamily: NUM_FONT, fontSize: size, fontWeight: 700, color: PACE_COLOR[pace(s.done, s.needed)] }}>{s.done} / {s.needed}</span>
   );
-
-  const th: CSSProperties = { ...SECTION_LABEL, fontSize: 10, textAlign: 'left', padding: '12px 10px', verticalAlign: 'top' };
-  const td: CSSProperties = { padding: '14px 10px', fontSize: 13, color: COLORS.textPrimary, verticalAlign: 'middle' };
-  const pctCell: CSSProperties = { ...td, fontFamily: MONO, fontWeight: 700 };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-        <div>
-          <h2 style={{ fontSize: 22, fontWeight: 900, color: COLORS.textPrimary, letterSpacing: '-0.5px', margin: 0 }}>Recruitment</h2>
-          <p style={{ fontSize: 13, color: COLORS.textMuted, margin: '3px 0 0' }}>
-            {frame === 'week' ? 'Week' : 'Month'} to date · {rangeLabel} · updates daily
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 28, color: C.text }}>
+      <header style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <h1 style={{ margin: 0, fontFamily: NUM_FONT, fontSize: 34, fontWeight: 700, letterSpacing: '-0.5px' }}>Recruitment</h1>
+          <p style={{ margin: 0, fontSize: 14, color: C.muted }}>
+            {new Date(now).toLocaleDateString('en-NZ', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Pacific/Auckland' }).replace(',', '')}
+            {' · '}Working day {wd.elapsed} of {wd.total} · Targets below are what we should have done by today
           </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {isFetching && (
-            <div style={{
-              width: 14, height: 14, borderRadius: '50%',
-              border: `2px solid ${COLORS.border}`,
-              borderTopColor: COLORS.accent,
-              animation: 'spin 0.7s linear infinite',
-            }} />
+            <div style={{ width: 14, height: 14, borderRadius: '50%', border: `2px solid ${C.border}`, borderTopColor: COLORS.accent, animation: 'spin 0.7s linear infinite' }} />
           )}
           {role === 'admin' && (
-            <button onClick={() => setShowSettings(true)} title="Recruitment settings" style={{ background: COLORS.bgCard, color: COLORS.textMuted, border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: '7px 10px', fontSize: 14, cursor: 'pointer' }}>⚙</button>
+            <button onClick={() => setShowSettings(true)} title="Recruitment settings" aria-label="Recruitment settings" style={{ height: 44, background: C.card, color: C.muted, border: `1px solid ${C.border}`, borderRadius: 10, padding: '0 14px', fontSize: 15, cursor: 'pointer' }}>⚙</button>
           )}
           <TimeFramePicker value={frame} onChange={setFrame} options={TIMEFRAME_OPTIONS} />
         </div>
-      </div>
+      </header>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      {settingsWarning && <p style={{ color: C.amber, fontSize: 12, margin: 0 }}>⚠ Recruitment settings — {settingsWarning} (using defaults)</p>}
+      {error && <p style={{ color: C.amber, fontSize: 12, margin: 0 }}>⚠ Connection error — {error.message}</p>}
 
-      <DiagnosisTile diagnosis={diagnosis} />
-
-      {/* Status banner */}
-      <div style={{
-        borderRadius: 12, padding: '18px 22px', background: statusStyle.bg, border: `1px solid ${statusStyle.border}`,
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16,
-      }}>
-        <div>
-          <div style={{ fontSize: 18, fontWeight: 800, color: statusStyle.text }}>
-            {statusTitle}: {data.placements} of {fmtTarget(teamPlacementTarget)} placements this {periodLabel}
-          </div>
-          <div style={{ fontSize: 13, color: statusStyle.subtext, opacity: 0.85, marginTop: 4 }}>
-            Projected {periodLabel}-end: {projected} · Team breakeven: {teamBreakeven.toFixed(1)} · Last {periodLabel}: {data.prevPlacements}
-          </div>
+      {/* Today's actions */}
+      <Section title="Today’s actions" aside="Who to talk to and what about · auto-built from the numbers below">
+        <div style={{ ...CARD, overflow: 'hidden' }}>
+          {actions.length === 0 && <div style={{ padding: '16px 20px', fontSize: 14, color: C.muted }}>Nothing flagged today.</div>}
+          {actions.map((a, i) => (
+            <div key={i} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 16, padding: '16px 20px', borderBottom: i < actions.length - 1 ? `1px solid ${C.rowBorder}` : undefined }}>
+              <Chip tone={LEVEL_TONE[a.level]} width={84}>{a.level}</Chip>
+              <div style={{ flex: '1 1 420px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div style={{ fontSize: 16, fontWeight: 600 }}>{a.who}<span style={{ color: C.faint }}> · </span>{a.title}</div>
+                <div style={{ fontSize: 14, color: C.muted, lineHeight: 1.45 }}>{a.detail}</div>
+              </div>
+              <div style={{ ...TODO, flex: '0 1 260px', fontSize: 14, padding: '10px 12px' }}>{a.action}</div>
+            </div>
+          ))}
         </div>
-        <div style={{ fontSize: 36, fontWeight: 800, color: statusStyle.text, fontFamily: MONO }}>
-          {pct(data.placements, teamPlacementTarget)}%
-        </div>
-      </div>
+      </Section>
 
-      {/* Hiring trigger */}
-      {hiring && (() => {
-        const s = HIRING_STYLE[hiring.state];
-        const full = hiring.activeJobs >= hiring.slots;
-        const title =
-          full ? 'Hire now · team full'
-          : hiring.state === 'no-data' ? 'Hiring trigger · growth data unavailable'
-          : hiring.weeksUntilFull === null ? 'Capacity OK'
-          : `${hiring.state === 'hire-now' ? 'Hire now' : hiring.state === 'hire-soon' ? 'Hire soon' : 'Capacity OK'} · ${hiring.weeksUntilFull.toFixed(1)} weeks until full`;
-        const g = hiring.growthPerWeek;
-        const growthText =
-          g === null ? 'Jobs opened/closed not available yet.'
-          : g > 0 ? `Jobs growing by ${g.toFixed(1)} a week.`
-          : g < 0 ? `Jobs falling by ${Math.abs(g).toFixed(1)} a week.`
-          : 'Jobs flat.';
-        const over = hiring.activeJobs - hiring.slots;
-        return (
-          <div style={{
-            borderRadius: 12, padding: '16px 22px', background: s.bg, border: `1px solid ${s.border}`,
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap',
-          }}>
-            <div>
-              <div style={{ fontSize: 16, fontWeight: 800, color: s.text }}>{title}</div>
-              <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 4 }}>
-                {hiring.activeJobs} of {hiring.slots} job slots used{over > 0 && ` (${over} over)`}. {growthText}
+      {/* Are we on track? */}
+      <Section title="Are we on track?" aside={<Tag bg={C.soft}>RESULT · THIS {period.toUpperCase()}</Tag>}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14 }}>
+          <Tile label="PLACEMENTS" chip={<Chip tone={placementsPace}>{PACE_LABEL[placementsPace]}</Chip>}>
+            <Big value={data.placements} color={PACE_COLOR[placementsPace]} unit="placed" />
+            <Line>Need <strong>{placementsNeeded}</strong> by today · <strong>{Math.round(teamTarget)}</strong> by {period} end</Line>
+            <Line muted>{data.placements >= placementsNeeded ? `${data.placements - placementsNeeded} ahead of where we should be` : `${placementsNeeded - data.placements} behind where we should be`}</Line>
+          </Tile>
+          <Tile label={`PROJECTED ${period.toUpperCase()} END`} chip={<Chip tone={projectedTone}>{projectedTone === 'grey' ? 'NO DATA' : projectedTone === 'green' ? 'ON TARGET' : projectedTone === 'amber' ? 'MAKING MONEY' : 'LOSING MONEY'}</Chip>}>
+            <Big value={projected ?? '—'} color={PACE_COLOR[projectedTone]} unit="placements" />
+            <Line>Breakeven <strong>{teamBreakeven.toFixed(1)}</strong> · Target <strong>{Math.round(teamTarget)}</strong></Line>
+            <Line muted>{projected === null ? 'No working days yet' : projected >= teamTarget ? 'On course for target' : projected >= teamBreakeven ? `Above breakeven, ${Math.round(teamTarget) - projected} short of target` : 'Below breakeven at today’s rate'}</Line>
+          </Tile>
+          <Tile label="IN FLIGHT" chip={<Chip tone="grey">NO DATA YET</Chip>}>
+            <Big value="[ ]" color={C.faint} unit="at offer stage" />
+            <Line>What can still land this {period}</Line>
+            <Line muted>Needs offer stage feed from JobAdder</Line>
+          </Tile>
+          <Tile label="FALL-THROUGHS" chip={data.placements === 0 ? <Chip tone="grey">NO DATA</Chip> : <Chip tone={fallThroughs ? 'red' : 'green'}>{fallThroughs ? 'REVIEW' : 'ON TRACK'}</Chip>}>
+            <Big value={data.placements === 0 ? '—' : fallThroughs} color={data.placements === 0 ? C.faint : fallThroughs ? C.red : C.green} unit={`of ${data.placements} placed`} />
+            <Line>Contracts that didn’t stick</Line>
+            <Line muted>Grey when there are no placements</Line>
+          </Tile>
+        </div>
+      </Section>
+
+      {/* Where is it breaking? */}
+      <Section title="Where is it breaking?" aside={<Tag bg={C.blue}>THE ENGINE · DRIVES NEXT {period.toUpperCase()}</Tag>}>
+        {breakText && (
+          <div style={{ background: '#2A1414', border: '1px solid #6B2522', borderRadius: 14, padding: '16px 20px', display: 'flex', flexWrap: 'wrap', gap: '8px 16px', alignItems: 'center' }}>
+            <Chip tone="red">BIGGEST BREAK</Chip>
+            <span style={{ fontSize: 16, fontWeight: 600 }}>{breakText}</span>
+          </div>
+        )}
+        <div style={{ ...CARD, padding: 20, display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'stretch' }}>
+          {engine.map((s, i) => {
+            const next = engine[i + 1];
+            const conv = next && s.value && next.value !== null && i > 0 ? Math.round((next.value / s.value) * 100) : null;
+            const convOk = conv !== null && conv <= 100;
+            return (
+              <div key={s.label} style={{ flex: '1 1 170px', minWidth: 0, display: 'flex', gap: 10, alignItems: 'stretch' }}>
+                <div style={{ flex: '1 1 auto', minWidth: 0, background: C.inset, border: `1px solid ${s.tone === 'red' ? '#6B2522' : C.border}`, borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: C.muted, letterSpacing: '0.4px' }}>{s.label}</span>
+                  <span style={{ fontFamily: NUM_FONT, fontSize: 38, fontWeight: 700, lineHeight: 1, color: s.value === null ? C.faint : PACE_COLOR[s.tone] }}>{s.value === null ? '[ ]' : s.value.toLocaleString()}</span>
+                  <span style={{ fontSize: 14 }}>{s.need}</span>
+                  <span style={{ fontSize: 12, color: C.muted, lineHeight: 1.4 }}>{s.sub}</span>
+                </div>
+                {next && (
+                  <div title={convOk ? 'This period’s counts, not the same candidates' : 'Needs candidates followed stage to stage'} style={{ flex: '0 0 56px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: convOk ? C.soft : C.faint }}>{convOk ? `${conv}%` : '[ ]'}</span>
+                    <svg width="28" height="12" viewBox="0 0 28 12" aria-hidden="true"><path d="M1 6h24M20 1l5 5-5 5" fill="none" stroke={C.faint} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                    <span style={{ fontSize: 11, color: C.faint }}>convert</span>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <p style={{ margin: 0, fontSize: 13, color: C.muted }}>
+          Conversions are this {period}’s counts for now, not the same candidates followed through, so anything over 100% shows as [ ].
+          The weakest stage against today’s number is flagged as the biggest break.
+        </p>
+      </Section>
+
+      {/* Job desk */}
+      <Section title="Job desk" aside="Are jobs with the right people, and are they alive?">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 14 }}>
+          <div style={{ ...CARD, padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+              <span style={LABEL}>JOB LOAD · CAP {cap} EACH</span>
+              <span style={{ fontSize: 12, color: C.muted }}>jobs · stale</span>
+            </div>
+            {[...rows].sort((a, b) => b.jobs.totalOpenJobs - a.jobs.totalOpenJobs).map(r => {
+              const n = r.jobs.totalOpenJobs;
+              return (
+                <div key={r.stat.name} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <span style={{ flex: '0 0 64px', fontSize: 14, fontWeight: 600 }}>{r.stat.name}</span>
+                  <div style={{ flex: '1 1 auto', height: 12, background: C.track, borderRadius: 6, position: 'relative', overflow: 'hidden' }}>
+                    <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${n === 0 ? 3 : Math.min(1, n / loadScale) * 100}%`, background: loadColor(n), borderRadius: 6 }} />
+                    <div style={{ position: 'absolute', left: `${(cap / loadScale) * 100}%`, top: 0, bottom: 0, width: 2, background: C.text }} />
+                  </div>
+                  <span style={{ flex: '0 0 72px', textAlign: 'right', fontSize: 14, fontWeight: 600, color: n === 0 ? C.muted : n >= cap ? C.red : C.text }}>{n} · {r.jobs.stale}</span>
+                </div>
+              );
+            })}
+            <p style={{ margin: 0, fontSize: 12, color: C.muted }}>White line = cap of {cap}. Grey = empty desk.</p>
+            {offBoardJobs > 0 && <p style={{ margin: 0, fontSize: 12, color: C.amber }}>⚠ {offBoardJobs} open jobs aren’t on a recruiter (unassigned or owned by non-recruiters).</p>}
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ ...CARD, padding: 20, display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                <span style={LABEL}>STALE JOBS (36+ DAYS)</span>
+                {stalePct === null ? <Chip tone="grey">NO DATA</Chip> : <Chip tone={stalePct < STALE_LIMIT ? 'green' : 'red'}>{stalePct < STALE_LIMIT ? 'ON TRACK' : 'OFF TRACK'}</Chip>}
+              </div>
+              <Big value={jobsKnown?.stale ?? '—'} color={stalePct === null ? C.faint : stalePct < STALE_LIMIT ? C.green : C.red} unit={jobsKnown ? `of ${jobsKnown.open} open jobs` : undefined} size={44} />
+              <div style={{ fontSize: 14 }}>{staleLimit === null ? 'No job data' : `Target: under ${staleLimit} (${STALE_LIMIT}%)`}</div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 14 }}>
+              <div style={{ ...CARD, padding: 16, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: C.muted }}>NET NEW JOBS / WEEK</span>
+                <span style={{ fontFamily: NUM_FONT, fontSize: 28, fontWeight: 700, color: netNewPerWeek === null ? C.faint : C.text }}>
+                  {netNewPerWeek === null ? '[ ]' : `${netNewPerWeek > 0 ? '+' : ''}${netNewPerWeek.toFixed(1)}`}
+                </span>
+                <span style={{ fontSize: 12, color: C.muted }}>Opened minus closed{netNewPerWeek === null ? ' · needs feed' : ' · 4-week average'}</span>
+              </div>
+              <div style={{ ...CARD, padding: 16, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: C.muted }}>DEAD JOBS</span>
+                <span style={{ fontFamily: NUM_FONT, fontSize: 28, fontWeight: 700, color: C.faint }}>[ ]</span>
+                <span style={{ fontSize: 12, color: C.muted }}>No CV sent in 7 days · needs feed</span>
               </div>
             </div>
-            <div style={{ fontSize: 12, color: COLORS.textMuted, textAlign: 'right' }}>
-              Hire now at ≤ {hiring.hireNowAt} wks ({recruitment.rampWeeks} ramp + {recruitment.bufferWeeks} buffer)<br />
-              {recruitment.recruiters.length} recruiters × {maxJobs} jobs · growth = avg net jobs/week, last 4 weeks
+          </div>
+
+          <div style={{ ...CARD, padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <span style={LABEL}>SHOULD WE HIRE?</span>
+            {hire.tests.map(t => (
+              <div key={t.label} style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                <Chip tone={t.pass === null ? 'grey' : t.pass ? 'green' : 'red'} width={52}>{t.pass === null ? 'N/A' : t.pass ? 'PASS' : 'FAIL'}</Chip>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <span style={{ fontSize: 14, fontWeight: 600 }}>{t.label}</span>
+                  <span style={{ fontSize: 13, color: C.muted }}>{t.now}</span>
+                </div>
+              </div>
+            ))}
+            <div style={{ marginTop: 4, background: C.inset, border: `1px solid ${C.border}`, borderRadius: 10, padding: 14, display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <span style={{ fontSize: 15, fontWeight: 700, color: hire.hire ? C.green : C.amber }}>{hire.hire ? 'Hire' : 'Don’t hire yet'}</span>
+              <span style={{ fontSize: 13, color: C.soft, lineHeight: 1.45 }}>{hireAdvice}</span>
             </div>
           </div>
-        );
-      })()}
-      {settingsWarning && (
-        <p style={{ color: COLORS.warning, fontSize: 12, margin: 0 }}>⚠ Recruitment settings — {settingsWarning} (using defaults)</p>
-      )}
+        </div>
+      </Section>
 
-      {/* Funnel KPI tiles */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr auto 1fr 1fr', gap: 12 }}>
-        {kpiTile('Internal Interviews', pill(ragLabel(internalColor), internalColor),
-          bigValue(data.internalInterviews, teamInternalTarget, internalColor),
-          `Target ${internalTarget} per recruiter · 4/day`, `Last ${periodLabel}: ${data.prevInternalInterviews}`)}
-        {connector(internalToClientPct)}
-        {kpiTile('Client Interviews', pill(ragLabel(clientColor), clientColor),
-          bigValue(data.clientInterviews, teamClientTarget, clientColor),
-          'Target from "What it takes"', `Last ${periodLabel}: ${data.prevClientInterviews}`)}
-        {connector(clientToContractPct)}
-        {kpiTile('Placements', pill(ragLabel(placementColor), placementColor),
-          bigValue(data.placements, fmtTarget(teamPlacementTarget), placementColor),
-          `Breakeven ${teamBreakeven.toFixed(1)} · projected ${projected}`, `Last ${periodLabel}: ${data.prevPlacements}`)}
-        {kpiTile('Stale Jobs (36+ days)', pill(`${stalePct}% stale`, jobsStale > 0 ? COLORS.danger : COLORS.success),
-          bigValue(jobsStale, totalOpenJobs, jobsStale > 0 ? COLORS.danger : COLORS.success),
-          `${jobsFresh} fresh · ${jobsAgeing} ageing`, 'Clear or re-brief')}
-      </div>
-
-      <PlacementsTrendChart
-        months={data.months}
-        recruiters={displayRecruiters.map(r => ({ ...r, target: placementTargetFor(r.name, 'month') }))}
-        breakevenPerRecruiter={breakevenFor(liveHeadcount, 'month')}
-      />
-
-      {/* Fall-through + candidate stock */}
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-        {strip('Fall-through', `Contracts that didn't stick · this ${periodLabel}`,
-          <span style={{ fontSize: 22, fontWeight: 800, fontFamily: MONO, color: data.fallThroughRate === 0 ? COLORS.success : COLORS.danger }}>
-            {data.fallThroughRate}%
-          </span>)}
-        {strip('Candidate Stock', 'Per trade division vs low-stock trigger · awaiting JobAdder ratio',
-          <span style={{ fontSize: 14, fontWeight: 700, color: COLORS.textSecondary }}>[Divisions]</span>)}
-      </div>
-
-      {/* Recruiters table */}
-      {displayRecruiters.length > 0 && (
-        <div style={{ ...CARD_STYLE, overflow: 'hidden' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 18px', borderBottom: `1px solid ${COLORS.border}` }}>
-            <span style={SECTION_LABEL}>Recruiters · vs their target</span>
-            <span style={{ fontSize: 12, color: COLORS.textMuted }}>Tap a recruiter for activity detail</span>
-          </div>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1040 }}>
-              <thead>
-                <tr style={{ borderBottom: `1px solid ${COLORS.border}` }}>
-                  <th style={{ ...th, paddingLeft: 18 }}>Recruiter</th>
-                  <th style={th}>Internal int.</th>
-                  <th style={th}>Int → client</th>
-                  <th style={th}>Client int.</th>
-                  <th style={th}>Client → contract</th>
-                  <th style={th}>Placements</th>
-                  <th style={th}>Fall-through</th>
-                  <th style={th}>Active jobs / {maxJobs}</th>
-                  <th style={{ ...th, width: '22%' }}>Open jobs</th>
-                  <th style={{ ...th, paddingRight: 18 }}>Last {periodLabel}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {displayRecruiters.map(r => {
-                  const aging = jobAgingFor(r.name);
-                  const isOpen = expanded === r.name;
-                  const t = targetsFor(r.name);
-                  // Manually-booked isn't tracked directly — derived as the remainder of total
-                  // internal interviews (Airtable) after subtracting bot bookings (Calendly).
-                  const rManualBooked = r.internalInterviewsBotBooked !== undefined
-                    ? Math.max(0, r.internalInterviews - r.internalInterviewsBotBooked) : undefined;
-                  const rShowUp = showUpRate(r.internalInterviews, r.noShows);
-                  const rInternalColor = rag(r.internalInterviews, internalTarget);
-                  const rClientColor = rag(r.clientInterviews, t.client);
-                  const rPlacementColor = rag(r.placements, t.placement, breakevenPerRecruiter);
-                  const tier = tierFor(r.name);
-                  const rateNote = [
-                    t.limitedData && 'limited data',
-                    t.teamRateUsed && 'team rate used',
-                  ].filter(Boolean).join(', ');
-
-                  return [
-                    <tr
-                      key={r.name}
-                      onClick={() => setExpanded(isOpen ? null : r.name)}
-                      style={{ cursor: 'pointer', background: isOpen ? COLORS.bgSubtle : undefined }}
-                    >
-                      <td style={{ ...td, paddingLeft: 18, fontSize: 16, fontWeight: 800 }}>
-                        {r.name} <span style={{ fontSize: 10, color: COLORS.textMuted }}>{isOpen ? '▾' : '▸'}</span>
-                        {startedLabel(r.name) && (
-                          <div style={{ fontSize: 11, fontWeight: 400, color: COLORS.textMuted, marginTop: 2 }}>{startedLabel(r.name)}</div>
-                        )}
-                        {tier && (
-                          <div style={{ fontSize: 11, fontWeight: 400, color: COLORS.textSecondary, marginTop: 2 }}>
-                            {tier.tier} · {tier.kicker ? `$${tier.kicker}/placement` : 'no kicker'}
-                            <div style={{ color: COLORS.textMuted }}>
-                              {tier.kind === 'sourcer'
-                                ? `${r.sourcedSubmissions}/${tier.next?.submissions ?? '—'} sourced subs · ${r.sourcedPlacements}/${tier.next?.placements ?? '—'} placed`
-                                : `${r.placements3m}${tier.next ? `/${tier.next.placements}` : ''} placed, last 3 mo`}
-                              {tier.next && ` → ${tier.next.tier}`}
-                            </div>
-                          </div>
-                        )}
-                      </td>
-                      <td style={td}>{cellValue(r.internalInterviews, internalTarget, rInternalColor)}</td>
-                      <td style={pctCell}>{pct(r.clientInterviews, r.internalInterviews)}%</td>
-                      <td style={td}>{cellValue(r.clientInterviews, t.client, rClientColor)}</td>
-                      <td style={pctCell}>{pct(r.placements, r.clientInterviews)}%</td>
-                      <td style={td}>{cellValue(r.placements, fmtTarget(t.placement), rPlacementColor)}</td>
-                      <td style={{ ...pctCell, color: r.fallThroughRate === 0 ? COLORS.success : COLORS.danger }}>{r.fallThroughRate}%</td>
-                      <td style={td}>{cellValue(aging.totalOpenJobs, maxJobs, loadColor(aging.totalOpenJobs))}</td>
-                      <td style={td}>
-                        {stackedBar(aging.fresh, aging.ageing, aging.stale)}
-                        <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 6 }}>
-                          {aging.totalOpenJobs} jobs ·{' '}
-                          <strong style={{ color: aging.stale > 0 ? COLORS.danger : COLORS.textPrimary }}>{aging.stale} stale</strong>
-                        </div>
-                      </td>
-                      <td style={{ ...td, paddingRight: 18, fontFamily: MONO, color: COLORS.textSecondary }}>{r.prevPlacements}</td>
-                    </tr>,
-                    <tr key={`${r.name}-wit`} style={{ borderBottom: isOpen ? undefined : `1px solid ${COLORS.border}` }}>
-                      <td colSpan={10} style={{ padding: '0 18px 14px' }}>
-                        <div style={{
-                          background: WIT_BG, borderRadius: 8, padding: '10px 14px',
-                          display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap',
-                        }}>
-                          <span style={{ fontSize: 13, fontWeight: 700, color: WIT_TEXT }}>
-                            {tier?.kind === 'sourcer'
-                              ? '◎ Sourcer: books internal interviews for their Placers, no placement target'
-                              : `◎ What it takes: ${t.internal} internal · ${t.client} client interviews for ${fmtTarget(t.placement)} placements`}
-                          </span>
-                          <span style={{ fontSize: 11, color: COLORS.textSecondary, fontFamily: MONO }}>
-                            4-mo rates: {Math.round(t.i2c * 100)}% · {Math.round(t.c2c * 100)}%{rateNote && ` (${rateNote})`}
-                          </span>
-                        </div>
-                      </td>
-                    </tr>,
-                    isOpen && (
-                      <tr key={`${r.name}-detail`} style={{ borderBottom: `1px solid ${COLORS.border}`, background: COLORS.bgSubtle }}>
-                        <td colSpan={10} style={{ padding: '16px 18px' }}>
-                          <div style={{ display: 'flex', gap: 16 }}>
-                            {miniStat(r.phoneInterviews, 'Manual calls')}
-                            {miniStat(rManualBooked ?? '—', 'Internals manually booked')}
-                            {miniStat(r.referenceChecks ?? '—', 'Reference checks')}
-                            {miniStat(r.candidatesPitched ?? '—', 'Pitched to client')}
-                            {miniStat(rShowUp !== undefined ? `${rShowUp}%` : '—', 'Show-up rate',
-                              `${r.noShows} no-show${r.noShows === 1 ? '' : 's'}`, rShowUp !== undefined ? rag(rShowUp, 80) : COLORS.textPrimary)}
-                          </div>
-                        </td>
-                      </tr>
-                    ),
-                  ];
-                })}
-                {unassignedJobs && unassignedJobs.totalOpenJobs > 0 && (
-                  <tr style={{ borderBottom: `1px solid ${COLORS.border}` }}>
-                    <td style={{ ...td, paddingLeft: 18, fontSize: 16, fontWeight: 800, color: COLORS.textSecondary }}>
-                      Unassigned
-                      <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.danger, marginTop: 2 }}>⚠ Gap: no owner in JobAdder</div>
-                    </td>
-                    {[0, 1, 2, 3, 4, 5].map(i => <td key={i} style={{ ...td, color: COLORS.textMuted }}>—</td>)}
-                    <td style={td}>{cellValue(unassignedJobs.totalOpenJobs, '—', COLORS.danger)}</td>
-                    <td style={td}>
-                      {stackedBar(unassignedJobs.fresh, unassignedJobs.ageing, unassignedJobs.stale)}
-                      <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 6 }}>
-                        {unassignedJobs.totalOpenJobs} jobs ·{' '}
-                        <strong style={{ color: unassignedJobs.stale > 0 ? COLORS.danger : COLORS.textPrimary }}>{unassignedJobs.stale} stale</strong>
-                      </div>
-                    </td>
-                    <td style={{ ...td, paddingRight: 18, color: COLORS.textMuted }}>—</td>
-                  </tr>
-                )}
-                {hiring && (
-                  <tr style={{ borderBottom: `1px solid ${COLORS.border}`, background: COLORS.bgSubtle }}>
-                    <td style={{ ...td, paddingLeft: 18, fontSize: 16, fontWeight: 800 }}>
-                      Team
-                      <div style={{ fontSize: 11, fontWeight: 400, color: COLORS.textMuted, marginTop: 2 }}>
-                        {recruitment.recruiters.length} recruiters{unassignedJobs?.totalOpenJobs ? ' + unassigned' : ''}
-                      </div>
-                    </td>
-                    {[0, 1, 2, 3, 4, 5].map(i => <td key={i} style={{ ...td, color: COLORS.textMuted }}>—</td>)}
-                    <td style={td}>{cellValue(hiring.activeJobs, hiring.slots, hiring.state === 'no-data' ? COLORS.textPrimary : HIRING_STYLE[hiring.state].text)}</td>
-                    <td style={{ ...td, color: COLORS.textMuted }}>—</td>
-                    <td style={{ ...td, paddingRight: 18, color: COLORS.textMuted }}>—</td>
-                  </tr>
-                )}
-                <tr>
-                  <td colSpan={10} style={{ padding: '14px 18px 4px' }}>
-                    <div style={{ background: WIT_BG, border: `1px solid ${WIT_BORDER}`, borderRadius: 8, padding: '12px 14px' }}>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: WIT_TEXT }}>
-                        ◎ TEAM – What it takes: {teamInternalNeeded} internal · {teamClientTarget} client interviews for {fmtTarget(teamPlacementTarget)} placements
-                      </span>
-                      <span style={{ fontSize: 11, color: COLORS.textSecondary }}> (sum of recruiters)</span>
+      {/* Who do I talk to? */}
+      <Section title="Who do I talk to?" aside="Each number shows done / needed by today · tap a name for detail">
+        <div style={{ ...CARD, overflowX: 'auto' }}>
+          <div style={{ minWidth: 1180 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: BOARD_COLS, gap: 12, padding: '14px 20px', borderBottom: `1px solid ${C.border}`, ...LABEL, fontSize: 12 }}>
+              <span>PLACER</span><span>STATUS</span><span>PLACED</span><span>CLIENT INT.</span><span>INTERNAL INT.</span><span>JOBS · STALE</span><span>BIGGEST BREAK</span><span>ACTION</span>
+            </div>
+            {placers.map(r => {
+              const b = biggestBreak(r.board, data.rolling);
+              const p = pace(r.board.placements.done, r.board.placements.needed);
+              const isOpen = expanded === r.stat.name;
+              const n = r.jobs.totalOpenJobs;
+              const showUp = r.stat.internalInterviews + r.stat.noShows > 0
+                ? `${Math.round((r.stat.internalInterviews / (r.stat.internalInterviews + r.stat.noShows)) * 100)}%` : '—';
+              const detail = (value: ReactNode, label: string) => (
+                <div style={{ minWidth: 110 }}>
+                  <div style={{ fontFamily: NUM_FONT, fontSize: 18, fontWeight: 700 }}>{value}</div>
+                  <div style={{ fontSize: 12, color: C.muted }}>{label}</div>
+                </div>
+              );
+              return (
+                <div key={r.stat.name} style={{ borderBottom: `1px solid ${C.rowBorder}`, background: isOpen ? C.inset : undefined }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: BOARD_COLS, gap: 12, padding: '16px 20px', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                      <button onClick={() => setExpanded(isOpen ? null : r.stat.name)} aria-expanded={isOpen}
+                        style={{ all: 'unset', cursor: 'pointer', fontSize: 16, fontWeight: 700, color: C.text }}>
+                        {r.stat.name} <span style={{ fontSize: 11, color: C.faint }}>{isOpen ? '▾' : '▸'}</span>
+                      </button>
+                      <span style={{ fontSize: 12, color: C.muted }}>{roleLabel(r.stat.name)}</span>
                     </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+                    <Chip tone={p}>{PACE_LABEL[p]}</Chip>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      {doneNeed(r.board.placements, 22)}
+                      <span style={{ fontSize: 12, color: C.muted }}>{Math.round(r.placementTarget * 10) / 10} for {period}</span>
+                    </div>
+                    {doneNeed(r.board.client)}
+                    {doneNeed(r.board.internal)}
+                    <span style={{ fontFamily: NUM_FONT, fontSize: 20, fontWeight: 700, color: n === 0 || n >= cap ? C.red : C.green }}>{n} · {r.jobs.stale}</span>
+                    <span style={{ fontSize: 14, lineHeight: 1.4, color: b ? C.text : C.muted }}>{b?.detail ?? 'Nothing below par.'}</span>
+                    <span style={TODO}>{b?.action ?? 'Keep going'}</span>
+                  </div>
+                  {isOpen && (
+                    <div style={{ padding: '0 20px 18px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: C.blue }}>
+                        ◎ What it takes: {r.wit.internal} internal · {r.wit.client} client interviews for {Math.round(r.placementTarget * 10) / 10} placements
+                        <span style={{ fontWeight: 400, color: C.muted }}> · 4-month rates {Math.round(r.wit.i2c * 100)}% int → client · {Math.round(r.wit.c2c * 100)}% client → contract</span>
+                      </div>
+                      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                        {detail(r.stat.phoneInterviews, 'Manual calls')}
+                        {detail(r.stat.internalInterviewsBotBooked ?? '—', 'Internals bot-booked')}
+                        {detail(r.stat.candidatesPitched ?? '—', 'CVs sent (pitched)')}
+                        {detail(r.stat.referenceChecks ?? '—', 'Reference checks')}
+                        {detail(showUp, `Show-up · ${r.stat.noShows} no-shows`)}
+                        {detail(r.stat.placements === 0 ? '—' : `${r.stat.fallThroughRate}%`, 'Fall-through')}
+                        {detail(r.stat.placements3m, 'Placed, last 3 months')}
+                        {detail(r.stat.prevPlacements, `Placed last ${period}`)}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {sourcers.length > 0 && (
+              <div style={{ display: 'grid', gridTemplateColumns: SOURCER_COLS, gap: 12, padding: '14px 20px', borderBottom: `1px solid ${C.border}`, background: '#17181B', ...LABEL, fontSize: 12 }}>
+                <span>SOURCER</span><span>STATUS</span><span>INTERVIEWS BOOKED FOR PLACERS</span><span>SOURCED CVS SENT</span><span>ACTION</span>
+              </div>
+            )}
+            {sourcers.map(r => {
+              const tier = tierFor(r.stat.name);
+              const subsTarget = tier?.next?.submissions;
+              const subs = subsTarget ? { done: r.stat.sourcedSubmissions, needed: need(subsTarget) } : null;
+              const p = subs ? pace(subs.done, subs.needed) : 'grey';
+              return (
+                <div key={r.stat.name} style={{ display: 'grid', gridTemplateColumns: SOURCER_COLS, gap: 12, padding: '16px 20px', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                    <span style={{ fontSize: 16, fontWeight: 700 }}>{r.stat.name}</span>
+                    <span style={{ fontSize: 12, color: C.muted }}>{tier?.tier ?? 'Sourcer'}</span>
+                  </div>
+                  <Chip tone={p}>{PACE_LABEL[p]}</Chip>
+                  <span style={{ fontFamily: NUM_FONT, fontSize: 20, fontWeight: 700, color: C.faint }}>
+                    [target] <span style={{ fontSize: 13, fontWeight: 500, color: C.muted }}>needs a number</span>
+                  </span>
+                  <span style={{ fontFamily: NUM_FONT, fontSize: 20, fontWeight: 700, color: subs ? PACE_COLOR[p] : C.faint }}>
+                    {subs ? `${subs.done} / ${subs.needed}` : r.stat.sourcedSubmissions}
+                    {subsTarget && <span style={{ fontSize: 13, fontWeight: 500, color: C.muted }}> · {subsTarget} for {tier?.next?.tier}</span>}
+                  </span>
+                  <span style={TODO}>Set daily sourcing target</span>
+                </div>
+              );
+            })}
           </div>
-          <div style={{ padding: '12px 18px', fontSize: 12, color: COLORS.textSecondary }}>
-            <strong style={{ color: COLORS.success }}>Green</strong> at or above target ·{' '}
-            <strong style={{ color: COLORS.warning }}>Orange</strong> below target, above breakeven (activity 75–99%) ·{' '}
-            <strong style={{ color: COLORS.danger }}>Red</strong> below breakeven (activity under 75%)
-            <br />
-            Active jobs: <strong style={{ color: COLORS.success }}>green</strong> under {maxJobs - 2} ·{' '}
-            <strong style={{ color: COLORS.warning }}>amber</strong> {maxJobs - 2}–{maxJobs - 1} ·{' '}
-            <strong style={{ color: COLORS.danger }}>red</strong> at {maxJobs} (full)
+        </div>
+      </Section>
+
+      {/* Trend */}
+      <Section title="Trend" aside="Team placements per month · weekly once the feed allows">
+        <div style={{ ...CARD, padding: '24px 20px 20px' }}>
+          <div style={{ position: 'relative', height: 220, display: 'flex', alignItems: 'flex-end', gap: 16, padding: '0 104px 0 8px', borderBottom: `1px solid ${C.greyFill}` }}>
+            <div style={{ position: 'absolute', left: 0, right: 0, bottom: barH(monthlyTarget), borderTop: `2px dashed ${C.green}` }} />
+            <span style={{ position: 'absolute', right: 0, bottom: barH(monthlyTarget) + 4, fontSize: 12, color: C.green, fontWeight: 600 }}>Target {Math.round(monthlyTarget)}</span>
+            <div style={{ position: 'absolute', left: 0, right: 0, bottom: barH(monthlyBreakeven), borderTop: `2px dashed ${C.amber}` }} />
+            <span style={{ position: 'absolute', right: 0, bottom: barH(monthlyBreakeven) + 4, fontSize: 12, color: C.amber, fontWeight: 600 }}>Breakeven {monthlyBreakeven.toFixed(1)}</span>
+            {trend.map((t, i) => {
+              const current = i === trend.length - 1;
+              const color = t.value >= monthlyTarget ? C.green : t.value >= monthlyBreakeven ? C.soft : C.red;
+              return (
+                <div key={t.month} style={{ flex: '1 1 0', minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', gap: 6, height: '100%' }}>
+                  <span style={{ fontSize: 14, fontWeight: 700 }}>{current ? `${t.value} so far` : t.value}</span>
+                  <div style={{ width: '60%', maxWidth: 64, height: barH(t.value), background: current ? 'transparent' : color, border: current ? `2px dashed ${C.soft}` : 'none', borderRadius: '6px 6px 0 0', boxSizing: 'border-box' }} />
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ display: 'flex', gap: 16, padding: '8px 104px 0 8px' }}>
+            {trend.map(t => <span key={t.month} style={{ flex: '1 1 0', minWidth: 0, textAlign: 'center', fontSize: 12, color: C.muted }}>{t.month}</span>)}
           </div>
         </div>
-      )}
+      </Section>
 
-      <p style={{ fontSize: 12, color: COLORS.textMuted, margin: 0, lineHeight: 1.6 }}>
-        Calculation: Client interviews needed = placement target ÷ 4-month client → contract rate (round up). Internal needed = client
-        needed ÷ 4-month int → client rate (round up). 4-month rates use the last 4 full months; where a recruiter has no rate yet, the
-        team rate is used. Client int. target in the row = client interviews needed. Internal int. target stays at {INTERNAL_TARGET_MONTHLY}/month
-        ({INTERNAL_TARGET_WEEKLY}/week).
-      </p>
+      <footer style={{ display: 'flex', flexWrap: 'wrap', gap: '10px 20px', fontSize: 13, color: C.muted, borderTop: `1px solid ${C.border}`, paddingTop: 18 }}>
+        <span><strong style={{ color: C.green }}>Green</strong> at or ahead of today’s number</span>
+        <span><strong style={{ color: C.amber }}>Amber</strong> 75–99% of today’s number</span>
+        <span><strong style={{ color: C.red }}>Red</strong> under 75%</span>
+        <span><strong style={{ color: C.soft }}>Grey</strong> no activity or no data</span>
+      </footer>
 
-      {/* Recruitment bot — team */}
-      <div style={{ ...CARD_STYLE, padding: 18, display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={SECTION_LABEL}>Recruitment Bot · Team</span>
-        </div>
-        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-          {miniStat(voiceCallData?.teamLeads ?? '—', 'Leads contacted', `Unique numbers the bot dialled · last ${periodLabel}: ${voiceCallData?.prevTeamLeads ?? '—'}`, COLORS.textPrimary, 30)}
-          {miniStat(voiceCallData?.teamAnswered ?? '—', 'Answered', `Unique numbers that picked up · last ${periodLabel}: ${voiceCallData?.prevTeamAnswered ?? '—'}`, COLORS.textPrimary, 30)}
-          {miniStat(voiceCallData?.teamBooked ?? '—', 'Internal interviews booked', `Booked by the bot · last ${periodLabel}: ${voiceCallData?.prevTeamBooked ?? '—'}`, COLORS.textPrimary, 30)}
-          {miniStat(noShows, 'No-shows', `JobAdder "No Show-up" · last ${periodLabel}: ${prevNoShows}`, COLORS.textPrimary, 30)}
-          {miniStat(showUpPct !== undefined ? `${showUpPct}%` : '—', 'Show-up rate', 'Showed ÷ (showed + no-shows)',
-            showUpPct !== undefined ? rag(showUpPct, 80) : COLORS.textPrimary, 30)}
-        </div>
-      </div>
-
-      {error && (
-        <p style={{ color: COLORS.warning, fontSize: 12, margin: 0 }}>⚠ Connection error — {error?.message}</p>
-      )}
       {showSettings && <RecruitmentSettingsPanel settings={recruitment} onClose={() => setShowSettings(false)} />}
     </div>
   );
