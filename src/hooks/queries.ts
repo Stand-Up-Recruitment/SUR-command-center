@@ -14,6 +14,7 @@ import { fetchMetaSpendByFrame, fetchMetaCampaignBreakdown, fetchMetaAdBreakdown
 import { fetchVoiceCallKPIs } from '../services/voiceCalls';
 import { fetchJobAdderStageKPIs, hasJobAdderStageCredentials } from '../services/jobadderStages';
 import { fetchJobAging, hasOpenJobsCredentials } from '../services/jobadderJobs';
+import { fetchStageCohorts, hasStageCohortCredentials } from '../services/stageCohorts';
 import { fetchRetentionPlacements, hasRetentionCredentials } from '../services/jobadderRetention';
 import { fetchFirstSubmitKPIs, hasFirstSubmitCredentials } from '../services/firstSubmit';
 import { monthWindow } from '../lib/nzTime';
@@ -52,6 +53,16 @@ export function useJobAdderStageKPIs(frame: TimeFrame = 'month') {
     queryFn: () => fetchJobAdderStageKPIs(frame),
     enabled: hasJobAdderStageCredentials,
     placeholderData: keepPreviousData,
+  });
+}
+
+export function useStageCohorts(frame: TimeFrame = 'month') {
+  return useQuery({
+    queryKey: ['recruitment-stage-cohorts', frame],
+    queryFn: () => fetchStageCohorts(frame),
+    enabled: hasStageCohortCredentials,
+    placeholderData: keepPreviousData,
+    staleTime: 10 * 60_000, // the table behind it refreshes hourly
   });
 }
 
