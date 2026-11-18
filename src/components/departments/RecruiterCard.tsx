@@ -3,7 +3,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import { TimeFramePicker } from '../shared/TimeFramePicker';
 import { Skeleton } from '../shared/Skeleton';
 import {
-  useRecruiterKPIs, useJobAging, useVoiceCallKPIs, useJobAdderStageKPIs, useRecruitmentSettings, useSaveRecruitmentSettings,
+  useRecruiterKPIs, useJobAging, useVoiceCallKPIs, useJobAdderStageKPIs, useStageCohorts, useRecruitmentSettings, useSaveRecruitmentSettings,
 } from '../../hooks/queries';
 import { COLORS } from '../../styles/tokens';
 import { useAuthRole } from '../auth/AuthContext';
@@ -13,7 +13,7 @@ import {
   type BoardRow, type ActionLevel,
 } from '../../lib/recruitment';
 import { workingDays, neededByToday, pace, PACE_LABEL, type Pace } from '../../lib/workingDays';
-import type { RecruiterStat, RecruitmentSettings, RollingRates, TimeFrame } from '../../types';
+import type { Cohort, RecruiterStat, RecruitmentSettings, RollingRates, TimeFrame } from '../../types';
 
 // Layout and colours follow the "Recruitment tab v2" mockup (Claude Design, 19 Nov 2026).
 
@@ -197,6 +197,7 @@ export function RecruiterCard() {
   const { data: jobAgingData } = useJobAging();
   const { data: voiceCallData } = useVoiceCallKPIs(frame);
   const { data: jobAdderStageData } = useJobAdderStageKPIs(frame);
+  const { data: cohortData } = useStageCohorts(frame);
   const { data: settingsData, error: settingsError, isLoading: settingsLoading } = useRecruitmentSettings();
   const role = useAuthRole();
   const [showSettings, setShowSettings] = useState(false);
@@ -219,7 +220,6 @@ export function RecruiterCard() {
       ...(jobAdderStageData && { noShows: js?.noShows ?? 0, prevNoShows: js?.prevNoShows ?? 0 }),
       ...(js && {
         referenceChecks: js.referenceChecks,
-        candidatesPitched: js.candidatesPitched,
         internalInterviewsBotBooked: js.internalInterviewsBotBooked,
       }),
     };
@@ -263,7 +263,9 @@ export function RecruiterCard() {
   // ── Where is it breaking? ──
   const teamInternalTarget = internalTarget * recruiters.length;
   const teamClientTarget = rows.reduce((s, r) => s + r.wit.client, 0);
-  const cvsSent = jobAdderStageData ? recruiters.reduce((s, r) => s + (r.candidatesPitched ?? 0), 0) : null;
+  // First arrival per application at "CV Submitted to Client" in JobAdder (stage cohorts webhook).
+  const cvsSent = cohortData ? cohortData.team.cv : null;
+  const cohortFor = (name: string) => cohortData?.byRecruiter.find(c => firstName(c.name) === firstName(name));
   const noShows = recruiters.reduce((s, r) => s + r.noShows, 0);
   const showUpPct = data.internalInterviews + noShows > 0 ? Math.round((data.internalInterviews / (data.internalInterviews + noShows)) * 100) : null;
   const bot = voiceCallData
@@ -271,7 +273,8 @@ export function RecruiterCard() {
     : null;
   const botOff = botLooksOff(bot);
 
-  type Stage = { label: string; value: number | null; needed?: number; need: string; sub: string; tone: Pace };
+  // conv = 28-day cohort from this stage to the next one (same applications followed through).
+  type Stage = { label: string; value: number | null; needed?: number; need: string; sub: string; tone: Pace; conv?: Cohort };
   const counted = (label: string, value: number, target: number, sub: string): Stage => {
     const needed = need(target);
     return { label, value, needed, need: `Need ${needed} by today`, sub, tone: pace(value, needed) };
@@ -282,10 +285,10 @@ export function RecruiterCard() {
       need: bot === null ? 'No bot data' : botOff ? 'Bot looks OFF' : 'Bot is ON',
       sub: voiceCallData ? `Last ${period} ${voiceCallData.prevTeamLeads.toLocaleString()} · ${voiceCallData.teamAnswered} answered · ${voiceCallData.teamBooked} booked` : 'Bot stats unavailable',
     },
-    counted('INTERNAL INTERVIEWS HELD', data.internalInterviews, teamInternalTarget,
-      showUpPct === null ? 'Show-up: no data' : `Show-up ${showUpPct}% (target ${SHOW_UP_TARGET}%)`),
-    { label: 'CVS SENT TO CLIENTS', value: cvsSent, tone: 'grey', need: cvsSent === null ? 'Not tracked yet' : 'No target yet', sub: 'Target set after 4 weeks of data' },
-    counted('CLIENT INTERVIEWS', data.clientInterviews, teamClientTarget, `${period === 'week' ? 'Week' : 'Month'} target ${teamClientTarget}`),
+    { ...counted('INTERNAL INTERVIEWS HELD', data.internalInterviews, teamInternalTarget,
+      showUpPct === null ? 'Show-up: no data' : `Show-up ${showUpPct}% (target ${SHOW_UP_TARGET}%)`), conv: cohortData?.team.cohorts.internalToCv },
+    { label: 'CVS SENT TO CLIENTS', value: cvsSent, tone: 'grey', need: cvsSent === null ? 'No data' : 'No target yet', sub: 'Applications reaching CV Submitted in JobAdder · target after 4 weeks', conv: cohortData?.team.cohorts.cvToClient },
+    { ...counted('CLIENT INTERVIEWS', data.clientInterviews, teamClientTarget, `${period === 'week' ? 'Week' : 'Month'} target ${teamClientTarget}`), conv: cohortData?.team.cohorts.clientToPlaced },
     counted('PLACEMENTS', data.placements, teamTarget, `${period === 'week' ? 'Week' : 'Month'} target ${Math.round(teamTarget)}`),
   ];
   const breakStage = engine
@@ -419,8 +422,7 @@ export function RecruiterCard() {
         <div style={{ ...CARD, padding: 20, display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'stretch' }}>
           {engine.map((s, i) => {
             const next = engine[i + 1];
-            const conv = next && s.value && next.value !== null && i > 0 ? Math.round((next.value / s.value) * 100) : null;
-            const convOk = conv !== null && conv <= 100;
+            const conv = s.conv && s.conv.n > 0 ? Math.round((s.conv.converted / s.conv.n) * 100) : null;
             return (
               <div key={s.label} style={{ flex: '1 1 170px', minWidth: 0, display: 'flex', gap: 10, alignItems: 'stretch' }}>
                 <div style={{ flex: '1 1 auto', minWidth: 0, background: C.inset, border: `1px solid ${s.tone === 'red' ? '#6B2522' : C.border}`, borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -430,10 +432,10 @@ export function RecruiterCard() {
                   <span style={{ fontSize: 12, color: C.muted, lineHeight: 1.4 }}>{s.sub}</span>
                 </div>
                 {next && (
-                  <div title={convOk ? 'This period’s counts, not the same candidates' : 'Needs candidates followed stage to stage'} style={{ flex: '0 0 56px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-                    <span style={{ fontSize: 14, fontWeight: 700, color: convOk ? C.soft : C.faint }}>{convOk ? `${conv}%` : '[ ]'}</span>
+                  <div title={conv !== null ? `${s.conv!.converted} of ${s.conv!.n} applications that reached this stage in the last 28 days reached the next` : 'Not tracked stage to stage yet'} style={{ flex: '0 0 56px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: conv !== null ? C.soft : C.faint }}>{conv !== null ? `${conv}%` : '[ ]'}</span>
                     <svg width="28" height="12" viewBox="0 0 28 12" aria-hidden="true"><path d="M1 6h24M20 1l5 5-5 5" fill="none" stroke={C.faint} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                    <span style={{ fontSize: 11, color: C.faint }}>convert</span>
+                    <span style={{ fontSize: 11, color: C.faint }}>{conv !== null ? `${s.conv!.converted} of ${s.conv!.n}` : 'convert'}</span>
                   </div>
                 )}
               </div>
@@ -441,8 +443,8 @@ export function RecruiterCard() {
           })}
         </div>
         <p style={{ margin: 0, fontSize: 13, color: C.muted }}>
-          Conversions are this {period}’s counts for now, not the same candidates followed through, so anything over 100% shows as [ ].
-          The weakest stage against today’s number is flagged as the biggest break.
+          Conversions follow the same applications from one JobAdder status to the next, for those that reached the first one in the last 28 days,
+          so they can never go above 100%. They only see stages the team sets in JobAdder. The weakest stage against today’s number is flagged as the biggest break.
         </p>
       </Section>
 
@@ -490,8 +492,10 @@ export function RecruiterCard() {
               </div>
               <div style={{ ...CARD, padding: 16, display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <span style={{ fontSize: 12, fontWeight: 600, color: C.muted }}>DEAD JOBS</span>
-                <span style={{ fontFamily: NUM_FONT, fontSize: 28, fontWeight: 700, color: C.faint }}>[ ]</span>
-                <span style={{ fontSize: 12, color: C.muted }}>No CV sent in 7 days · needs feed</span>
+                <span style={{ fontFamily: NUM_FONT, fontSize: 28, fontWeight: 700, color: !cohortData ? C.faint : cohortData.deadJobs.length ? C.red : C.green }}>
+                  {cohortData ? cohortData.deadJobs.length : '[ ]'}
+                </span>
+                <span style={{ fontSize: 12, color: C.muted }}>No CV sent in 7 days (open 7+ days){cohortData ? ' · re-brief or close' : ' · no data'}</span>
               </div>
             </div>
           </div>
@@ -565,7 +569,7 @@ export function RecruiterCard() {
                       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
                         {detail(r.stat.phoneInterviews, 'Manual calls')}
                         {detail(r.stat.internalInterviewsBotBooked ?? '—', 'Internals bot-booked')}
-                        {detail(r.stat.candidatesPitched ?? '—', 'CVs sent (pitched)')}
+                        {detail(cohortFor(r.stat.name)?.cv ?? '—', 'CVs sent')}
                         {detail(r.stat.referenceChecks ?? '—', 'Reference checks')}
                         {detail(showUp, `Show-up · ${r.stat.noShows} no-shows`)}
                         {detail(r.stat.placements === 0 ? '—' : `${r.stat.fallThroughRate}%`, 'Fall-through')}

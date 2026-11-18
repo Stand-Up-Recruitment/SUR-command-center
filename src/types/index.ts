@@ -108,6 +108,27 @@ export interface JobAdderStageKPIs {
   byRecruiter: JobAdderStageStat[];
 }
 
+// ─── Stage cohorts (n8n "Recruiter KPI - Stage Cohorts", from JobAdder status-change notes) ──
+// Each application counts once per stage (its first arrival). Cohorts follow the applications that
+// first reached a stage in the last 28 days to the next stage, so a rate can never pass 100%.
+export interface Cohort { n: number; converted: number }
+
+export interface StageCohortStat {
+  internal: number; cv: number; client: number;
+  prevInternal: number; prevCv: number; prevClient: number;
+  cohorts: { internalToCv: Cohort; cvToClient: Cohort; clientToPlaced: Cohort };
+}
+
+export interface DeadJob { jobId: number; jobTitle: string; owner: string; daysOpen: number; daysSinceCv: number | null }
+
+export interface StageCohortKPIs {
+  generatedAt: string;
+  cohortWindowDays: number;
+  team: StageCohortStat;
+  byRecruiter: (StageCohortStat & { name: string })[];
+  deadJobs: DeadJob[];  // open 7+ days, no CV sent in the last 7 days
+}
+
 export interface RecruiterKPIs {
   phoneInterviews: number;
   prevPhoneInterviews: number;
