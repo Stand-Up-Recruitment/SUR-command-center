@@ -1,6 +1,6 @@
 // Recruiter capacity / hiring trigger, shared by the Recruitment tab and the settings API.
 // Placement targets, breakeven and pace, shared by the Recruitment tab and the Overview.
-import type { JobAgingKPIs, RecruiterKPIs, RecruiterStat, RecruitmentSettings, TimeFrame } from '../types';
+import type { JobAgingKPIs, RecruiterKPIs, RecruiterStat, RecruitmentSettings, RollingRates, TimeFrame } from '../types';
 
 // Breakeven cost model — update these when Les's costs change (same pattern as
 // RECRUITER_COUNT in services/airtable.ts's LTGP calc).
@@ -181,4 +181,123 @@ export function sourcedTally(rows: SourcingRow[], placedCandidateNames: string[]
     out.set(firstName(first.Name!), t);
   }
   return out;
+}
+
+// ─── Recruitment tab v2: biggest break, today's actions, hire check ─────────────
+
+export interface StageCount { done: number; needed: number }
+
+export interface BoardRow {
+  name: string;
+  kind: 'placer' | 'sourcer';
+  jobs: number;
+  internal: StageCount;
+  client: StageCount;
+  placements: StageCount;
+  rolling: RollingRates;   // own 4-month rates
+}
+
+export interface Break { stage: string; detail: string; action: string }
+
+/**
+ * A Placer's weakest point: an empty desk first, else whichever is furthest below par —
+ * internal or client interviews vs needed by today, or their 4-month int → client /
+ * client → contract rate vs the team's. Rates above 100% can't be real, so they're skipped.
+ * null = nothing below par.
+ */
+export function biggestBreak(r: BoardRow, team: RollingRates): Break | null {
+  if (r.jobs === 0) return { stage: 'No jobs', detail: 'No jobs on their desk.', action: 'Give them jobs today' };
+  const rate = (own: number, par: number) => (r.rolling.monthsOfData && par > 0 && own <= 1 ? own / par : null);
+  const vs = (s: StageCount) => (s.needed > 0 ? s.done / s.needed : null);
+  const pctOf = (n: number) => `${Math.round(n * 100)}%`;
+  const candidates: (Break & { ratio: number | null })[] = [
+    { stage: 'Internal interviews', detail: `Internal interviews. ${r.internal.done} vs ${r.internal.needed} needed.`, action: 'Book interviews this week', ratio: vs(r.internal) },
+    { stage: 'Client interviews', detail: `Client interviews. ${r.client.done} vs ${r.client.needed} needed.`, action: '1:1 on CVs sent', ratio: vs(r.client) },
+    { stage: 'Int → client', detail: `Int → client. ${pctOf(r.rolling.intToClient)} vs team ${pctOf(team.intToClient)} (4 months).`, action: 'Review CVs sent to clients', ratio: rate(r.rolling.intToClient, team.intToClient) },
+    { stage: 'Closing', detail: `Closing. ${pctOf(r.rolling.clientToContract)} of client interviews become contracts vs team ${pctOf(team.clientToContract)}.`, action: 'Closing coaching', ratio: rate(r.rolling.clientToContract, team.clientToContract) },
+  ];
+  const worst = candidates
+    .filter((c): c is Break & { ratio: number } => c.ratio !== null && c.ratio < 1)
+    .sort((a, b) => a.ratio - b.ratio)[0];
+  return worst ? { stage: worst.stage, detail: worst.detail, action: worst.action } : null;
+}
+
+export type ActionLevel = 'FIX NOW' | 'THIS WEEK' | '1:1' | 'WATCH';
+export interface TodayAction { level: ActionLevel; who: string; title: string; detail: string; action: string }
+
+export interface ActionInputs {
+  rows: BoardRow[];
+  team: RollingRates;
+  cap: number;
+  jobs: { stale: number; open: number } | null;     // null = no job data
+  showUpPct: number | null;                         // null = no interview data
+  bot: { dials: number; expected: number; prev: number } | null;  // expected = last period's dials pro-rated to today
+  period: string;                                   // 'week' | 'month', for copy
+}
+
+const LEVEL_ORDER: ActionLevel[] = ['FIX NOW', 'THIS WEEK', '1:1', 'WATCH'];
+export const SHOW_UP_TARGET = 70;
+export const STALE_LIMIT = 25;
+
+const list = (names: string[]) => names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
+
+/** "Bot off" proxy. shortcut: under 10% of last period's pace, until the bot sends ON/OFF + last-dial time. */
+export const botLooksOff = (bot: ActionInputs['bot']) => bot !== null && bot.expected >= 20 && bot.dials < bot.expected * 0.1;
+
+/** The ranked "Today's actions" list (brief v2 rules). */
+export function todaysActions(i: ActionInputs): TodayAction[] {
+  const out: TodayAction[] = [];
+  if (i.bot && botLooksOff(i.bot)) {
+    out.push({ level: 'FIX NOW', who: 'Bot', title: 'Recruitment bot looks off', detail: `${i.bot.dials} leads dialled this ${i.period} vs ${i.bot.prev} last ${i.period}.`, action: 'Turn the bot back on today' });
+  }
+  const placers = i.rows.filter(r => r.kind === 'placer');
+  const empty = placers.filter(p => p.jobs === 0);
+  const full = i.rows.filter(r => r.jobs >= i.cap);
+  if (empty.length && full.length) {
+    out.push({
+      level: 'FIX NOW', who: 'Manager', title: 'Jobs sitting with the wrong people',
+      detail: `${list(empty.map(e => e.name))} ${empty.length === 1 ? 'has' : 'have'} 0 jobs. ${list(full.map(f => `${f.name} ${f.jobs}`))} against a cap of ${i.cap}.`,
+      action: `Move stale jobs to ${list(empty.map(e => e.name))}`,
+    });
+  }
+  if (i.jobs && i.jobs.open > 0 && (i.jobs.stale / i.jobs.open) * 100 > STALE_LIMIT) {
+    out.push({ level: 'THIS WEEK', who: 'All Placers', title: `${i.jobs.stale} of ${i.jobs.open} jobs are stale`, detail: `Jobs open 36+ days. Target is under ${Math.floor((i.jobs.open * STALE_LIMIT) / 100)}.`, action: 'Clear or re-brief every stale job' });
+  }
+  if (i.showUpPct !== null && i.showUpPct < SHOW_UP_TARGET) {
+    out.push({ level: 'THIS WEEK', who: 'Team', title: `Show-up rate ${i.showUpPct}%`, detail: `Target ${SHOW_UP_TARGET}%. Booked candidates aren't turning up to internal interviews.`, action: 'Confirm interviews the day before' });
+  }
+  const flagged = full.length ? new Set(empty.map(e => e.name)) : new Set<string>(); // already in the FIX NOW line
+  for (const r of placers.filter(p => !flagged.has(p.name))) {
+    const p = r.placements;
+    if (p.needed > 0 && p.done / p.needed < 0.75) {
+      const b = biggestBreak(r, i.team);
+      out.push({ level: '1:1', who: r.name, title: `${p.done} placed, needs ${p.needed} by today`, detail: b?.detail ?? 'No single stage stands out.', action: b?.action ?? 'Review pipeline' });
+    } else if (p.needed > 0 && p.done >= p.needed && r.internal.needed > 0 && r.internal.done / r.internal.needed < 0.75) {
+      out.push({ level: 'WATCH', who: r.name, title: 'On track now, empty next month', detail: `${p.done} placed (on pace) but ${r.internal.done} internal interviews vs ${r.internal.needed} needed.`, action: 'Book interviews to refill pipeline' });
+    }
+  }
+  return out.sort((a, b) => LEVEL_ORDER.indexOf(a.level) - LEVEL_ORDER.indexOf(b.level));
+}
+
+export interface HireTest { label: string; pass: boolean | null; now: string }
+
+/** "Should we hire?": HIRE only when all three tests pass. pass null = no data (counts as not passed). */
+export function shouldWeHire(
+  load: { jobs: number; people: number; empty: number } | null, jobs: { stale: number; open: number } | null, netNewPerWeek: number | null,
+): { hire: boolean; tests: HireTest[] } {
+  const avg = load && load.people ? load.jobs / load.people : null;
+  const stalePct = jobs && jobs.open ? Math.round((jobs.stale / jobs.open) * 100) : null;
+  const tests: HireTest[] = [
+    {
+      label: 'Desk is full: average 6+ jobs each', pass: avg === null ? null : avg >= 6,
+      now: !load || avg === null ? 'No job data' : `${load.jobs} jobs across ${load.people} Placers (${avg.toFixed(1)} each)${load.empty ? `, but ${load.empty} have none` : ''}`,
+    },
+    { label: `Stale jobs under ${STALE_LIMIT}%`, pass: stalePct === null ? null : stalePct < STALE_LIMIT, now: stalePct === null ? 'No job data' : `Now ${stalePct}% (${jobs!.stale} of ${jobs!.open})` },
+    // shortcut: one 4-week net figure, not "positive every week for 4 weeks"; needs weekly opened/closed.
+    {
+      label: 'New jobs growing 4 weeks in a row', pass: netNewPerWeek === null ? null : netNewPerWeek > 0,
+      now: netNewPerWeek === null ? 'Needs opened / closed feed' : `${netNewPerWeek > 0 ? '+' : ''}${netNewPerWeek.toFixed(1)} a week, 4-week average`,
+    },
+  ];
+  return { hire: tests.every(t => t.pass === true), tests };
 }
