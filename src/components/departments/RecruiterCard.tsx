@@ -5,12 +5,12 @@ import { Skeleton } from '../shared/Skeleton';
 import { C, PACE_COLOR, NUM_FONT, CARD, LABEL, TODO } from '../shared/v2Theme';
 import { Chip, Section, Tag, Big, Tile, Line } from '../shared/v2Layout';
 import {
-  useRecruiterKPIs, useJobAging, useVoiceCallKPIs, useJobAdderStageKPIs, useStageCohorts, useRecruitmentSettings, useSaveRecruitmentSettings,
+  useRecruiterKPIs, useJobAging, useVoiceCallKPIs, useJobAdderStageKPIs, useStageCohorts, useRecruitmentSettings, useSaveRecruitmentSettings, usePlacementPlan,
 } from '../../hooks/queries';
 import { COLORS } from '../../styles/tokens';
 import { useAuthRole } from '../auth/AuthContext';
 import {
-  DEFAULT_RECRUITMENT_SETTINGS, hiringTrigger, teamRecruiters, placementTargetFor, tierFor, breakevenPerRecruiter as breakevenFor,
+  DEFAULT_RECRUITMENT_SETTINGS, hiringTrigger, teamRecruiters, placementTargetFor, tierFor, teamBreakeven as breakevenFor,
   biggestBreak, todaysActions, shouldWeHire, botLooksOff, SHOW_UP_TARGET, STALE_LIMIT,
   type BoardRow, type ActionLevel,
 } from '../../lib/recruitment';
@@ -22,6 +22,8 @@ import type { Cohort, RecruiterStat, RecruitmentSettings, RollingRates, TimeFram
 // 4 internal interviews a day per recruiter → 20/week, 80/month.
 const INTERNAL_TARGET_WEEKLY = 20;
 const INTERNAL_TARGET_MONTHLY = 80;
+
+const fmt1 = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
 
 const LEVEL_TONE: Record<ActionLevel, Pace | 'blue'> = { 'FIX NOW': 'red', 'THIS WEEK': 'amber', '1:1': 'blue', 'WATCH': 'grey' };
 
@@ -147,6 +149,8 @@ export function RecruiterCard() {
   const role = useAuthRole();
   const [showSettings, setShowSettings] = useState(false);
   const [now] = useState(Date.now); // page load time; the tab is reloaded daily
+  const { plan } = usePlacementPlan();
+  const targets = { mustMake: plan.mustMake, breakeven: plan.breakeven };
 
   if (isLoading || settingsLoading) return <RecruiterSkeleton />;
   if (!data) return null;
@@ -182,7 +186,7 @@ export function RecruiterCard() {
   const internalTarget = frame === 'week' ? INTERNAL_TARGET_WEEKLY : INTERNAL_TARGET_MONTHLY;
   const rows = recruiters.map(r => {
     const kind = tierFor(r.name)?.kind ?? 'placer';
-    const placementTarget = placementTargetFor(r.name, frame);
+    const placementTarget = placementTargetFor(r.name, frame, recruiters, targets);
     const wit = whatItTakes(placementTarget, r.rolling, data.rolling);
     const jobs = jobsFor(r.name);
     const board: BoardRow = {
@@ -197,8 +201,8 @@ export function RecruiterCard() {
   const sourcers = rows.filter(r => r.board.kind === 'sourcer');
 
   // ── Are we on track? ──
-  const teamTarget = recruiters.reduce((s, r) => s + placementTargetFor(r.name, frame), 0);
-  const teamBreakeven = breakevenFor(recruiters.length, frame) * recruiters.length;
+  const teamTarget = recruiters.reduce((s, r) => s + placementTargetFor(r.name, frame, recruiters, targets), 0);
+  const teamBreakeven = breakevenFor(frame, targets);
   const placementsNeeded = need(teamTarget);
   const placementsPace = pace(data.placements, placementsNeeded);
   // Run-rate on working days; swap for placements + offers × offer→contract rate once offers are fed.
@@ -282,8 +286,8 @@ export function RecruiterCard() {
     .map((month, i) => ({ month, value: everyone.some(r => r.monthlyPlacements[i] != null) ? everyone.reduce((s, r) => s + (r.monthlyPlacements[i] ?? 0), 0) : null }))
     .filter((t): t is { month: string; value: number } => t.value !== null)
     .filter((_, i, all) => all.slice(0, i + 1).some(x => x.value > 0)); // drop leading empty months
-  const monthlyTarget = recruiters.reduce((s, r) => s + placementTargetFor(r.name, 'month'), 0);
-  const monthlyBreakeven = breakevenFor(recruiters.length, 'month') * recruiters.length;
+  const monthlyTarget = recruiters.reduce((s, r) => s + placementTargetFor(r.name, 'month', recruiters, targets), 0);
+  const monthlyBreakeven = breakevenFor('month', targets);
   const trendMax = Math.max(monthlyTarget, ...trend.map(t => t.value), 1);
   const barH = (v: number) => Math.round((v / trendMax) * 210);
 
@@ -342,7 +346,7 @@ export function RecruiterCard() {
           </Tile>
           <Tile label={`PROJECTED ${period.toUpperCase()} END`} chip={<Chip tone={projectedTone}>{projectedTone === 'grey' ? 'NO DATA' : projectedTone === 'green' ? 'ON TARGET' : projectedTone === 'amber' ? 'MAKING MONEY' : 'LOSING MONEY'}</Chip>}>
             <Big value={projected ?? '—'} color={PACE_COLOR[projectedTone]} unit="placements" />
-            <Line>Breakeven <strong>{teamBreakeven.toFixed(1)}</strong> · Target <strong>{Math.round(teamTarget)}</strong></Line>
+            <Line>Breakeven <strong>{fmt1(teamBreakeven)}</strong> · Target <strong>{Math.round(teamTarget)}</strong></Line>
             <Line muted>{projected === null ? 'No working days yet' : projected >= teamTarget ? 'On course for target' : projected >= teamBreakeven ? `Above breakeven, ${Math.round(teamTarget) - projected} short of target` : 'Below breakeven at today’s rate'}</Line>
           </Tile>
           <Tile label="IN FLIGHT" chip={<Chip tone="grey">NO DATA YET</Chip>}>
@@ -567,7 +571,7 @@ export function RecruiterCard() {
             <div style={{ position: 'absolute', left: 0, right: 0, bottom: barH(monthlyTarget), borderTop: `2px dashed ${C.green}` }} />
             <span style={{ position: 'absolute', right: 0, bottom: barH(monthlyTarget) + 4, fontSize: 12, color: C.green, fontWeight: 600 }}>Target {Math.round(monthlyTarget)}</span>
             <div style={{ position: 'absolute', left: 0, right: 0, bottom: barH(monthlyBreakeven), borderTop: `2px dashed ${C.amber}` }} />
-            <span style={{ position: 'absolute', right: 0, bottom: barH(monthlyBreakeven) + 4, fontSize: 12, color: C.amber, fontWeight: 600 }}>Breakeven {monthlyBreakeven.toFixed(1)}</span>
+            <span style={{ position: 'absolute', right: 0, bottom: barH(monthlyBreakeven) + 4, fontSize: 12, color: C.amber, fontWeight: 600 }}>Breakeven {fmt1(monthlyBreakeven)}</span>
             {trend.map((t, i) => {
               const current = i === trend.length - 1;
               const color = t.value >= monthlyTarget ? C.green : t.value >= monthlyBreakeven ? C.soft : C.red;

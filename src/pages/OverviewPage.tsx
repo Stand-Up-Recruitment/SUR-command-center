@@ -9,7 +9,7 @@ import { useAuthRole } from '../components/auth/AuthContext';
 import {
   useMarketingMonth, useOrganicMonth, useMarketingSettings, useSalesMonth, useSalesSettings,
   useRecruiterKPIs, useJobAging, useRecruitmentSettings, useRetentionPlacements, useRetentionSettings, useXeroFinanceData,
-  useOverviewSettings, useSaveOverviewSettings, useFirstSubmitKPIs,
+  useOverviewSettings, useSaveOverviewSettings, useFirstSubmitKPIs, usePlacementPlan,
 } from '../hooks/queries';
 import { timeBoundaries } from '../services/airtable';
 import { monthWindow, recentMonthKeys, currentMonthKey } from '../lib/nzTime';
@@ -17,7 +17,8 @@ import { marketingDiagnosis } from '../components/departments/marketingMetrics';
 import { salesDiagnosis, targetsFor, DEFAULT_TARGET_PER_SALESPERSON } from '../components/departments/salesMetrics';
 import { DEFAULT_RECRUITMENT_SETTINGS, hiringTrigger, teamRecruiters, recruitmentPace } from '../lib/recruitment';
 import { diagnoseRecruitment, diagnoseRetention, type AttentionItem, type Diagnosis } from '../lib/diagnosis';
-import { financeSummary, DEFAULT_NET_PROFIT_TARGET } from '../lib/finance';
+import { financeSummary } from '../lib/finance';
+import { DEFAULT_PLAN_SETTINGS } from '../lib/placementPlan';
 import { summariseRetention, DEFAULT_RETENTION_SETTINGS } from '../lib/retention';
 import type { Rag } from '../lib/rag';
 import type { OverviewSettings } from '../types';
@@ -39,7 +40,10 @@ interface Dept {
 // ─── Settings panel ───────────────────────────────────────────────────────────
 function SettingsPanel({ settings, onClose }: { settings: OverviewSettings; onClose: () => void }) {
   const save = useSaveOverviewSettings();
-  const [target, setTarget] = useState(String(settings.netProfitTarget));
+  const plan = { ...DEFAULT_PLAN_SETTINGS, ...(settings.planAnnualPlacements ? settings : {}) };
+  const [annual, setAnnual] = useState(String(plan.planAnnualPlacements));
+  const [fallOver, setFallOver] = useState(String(plan.planFallOverPct));
+  const [year, setYear] = useState(String(plan.planYear));
   const [headline, setHeadline] = useState(settings.constraintHeadline);
   const [detail, setDetail] = useState(settings.constraintDetail);
   const [confirmedBy, setConfirmedBy] = useState(settings.confirmedBy);
@@ -54,7 +58,7 @@ function SettingsPanel({ settings, onClose }: { settings: OverviewSettings; onCl
 
   const submit = () => {
     save.mutate(
-      { settings: { netProfitTarget: Number(target), constraintHeadline: headline, constraintDetail: detail, confirmedBy }, adminPassword: password },
+      { settings: { planAnnualPlacements: Number(annual), planFallOverPct: Number(fallOver), planYear: Number(year), constraintHeadline: headline, constraintDetail: detail, confirmedBy }, adminPassword: password },
       { onSuccess: onClose },
     );
   };
@@ -63,7 +67,10 @@ function SettingsPanel({ settings, onClose }: { settings: OverviewSettings; onCl
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }} onClick={onClose}>
       <div style={{ background: BG2, border: `1px solid ${BORDER}`, borderRadius: 12, padding: '1.25rem', width: 380 }} onClick={e => e.stopPropagation()}>
         <div style={{ fontSize: 15, fontWeight: 600, color: TEXT, marginBottom: 14 }}>Overview settings</div>
-        {field('Net profit target (NZD per month)', <input style={input} type="number" min={1} step={1000} value={target} onChange={e => setTarget(e.target.value)} />)}
+        {field('Annual placement plan (placements made)', <input style={input} type="number" min={1} step={1} value={annual} onChange={e => setAnnual(e.target.value)} />)}
+        {field('Planned fall-over (%)', <input style={input} type="number" min={0} max={99} step={1} value={fallOver} onChange={e => setFallOver(e.target.value)} />)}
+        {field('Plan year (1 Jan – 31 Dec)', <input style={input} type="number" min={2026} step={1} value={year} onChange={e => setYear(e.target.value)} />)}
+        <div style={{ fontSize: 11, color: MUTED, margin: '-4px 0 12px' }}>Every tab's placement targets, breakeven and projected net profit come from this plan.</div>
         {field('Current constraint (headline)', <input style={input} placeholder="e.g. Candidate supply" value={headline} onChange={e => setHeadline(e.target.value)} />)}
         {field('Detail', <input style={input} placeholder="e.g. Short on: electricians, carpenters" value={detail} onChange={e => setDetail(e.target.value)} />)}
         {field('Confirmed by', <input style={input} placeholder="e.g. Les" value={confirmedBy} onChange={e => setConfirmedBy(e.target.value)} />)}
@@ -155,7 +162,8 @@ export function OverviewPage() {
   const fin = useXeroFinanceData();
   const { data: firstSubmit } = useFirstSubmitKPIs();
   const { data: settings } = useOverviewSettings();
-  const npTarget = settings?.netProfitTarget ?? DEFAULT_NET_PROFIT_TARGET;
+  const { plan } = usePlacementPlan();
+  const targets = { mustMake: plan.mustMake, breakeven: plan.breakeven };
 
   // Marketing
   const m = mkt.data;
@@ -185,7 +193,7 @@ export function OverviewPage() {
   const { start, now: nowMs } = timeBoundaries('month');
   // Defaults when the settings API is down or answers without settings (e.g. vite dev serves no /api).
   const recruitmentSettings = recSettings.data?.recruiters ? recSettings.data : DEFAULT_RECRUITMENT_SETTINGS;
-  const pace = r ? recruitmentPace(r, teamRecruiters(r, jobs, recruitmentSettings.recruiters), 'month', start, nowMs) : null;
+  const pace = r ? recruitmentPace(r, teamRecruiters(r, jobs, recruitmentSettings.recruiters), 'month', start, nowMs, targets) : null;
   const hiring = jobs ? hiringTrigger(jobs, recruitmentSettings) : null;
   const full = hiring ? hiring.activeJobs >= hiring.slots : false;
   const recruitment: Dept = {
@@ -216,12 +224,12 @@ export function OverviewPage() {
   };
 
   // Finance (live month)
-  const f = fin.data ? financeSummary(fin.data, npTarget, now) : null;
+  const f = fin.data ? financeSummary(fin.data, now, pace && { ...pace, ...targets }) : null;
   const finance: Dept = {
     name: 'Finance', path: '/finance', loading: fin.isLoading, currentOnly: true,
     diagnosis: f?.diagnosis ?? null,
     numbers: [
-      { label: 'Net profit', value: f?.netProfitMtd != null ? k(f.netProfitMtd) : '—', suffix: `/ ${k(npTarget)} a month` },
+      { label: 'Net profit', value: f?.netProfitMtd != null ? k(f.netProfitMtd) : '—', suffix: 'this month' },
       { label: 'Cash runway', value: f?.runwayWeeks != null ? f.runwayWeeks.toFixed(0) : '—', suffix: 'weeks' },
     ],
   };
@@ -295,7 +303,7 @@ export function OverviewPage() {
               {pace ? `${pace.projected} of ${fmtTarget(pace.target)} placements` : '— placements'}
               {' · '}
               {f?.projectedNetProfit != null ? k(f.projectedNetProfit) : '—'}
-            </b> net profit of <b style={{ color: TEXT }}>{k(npTarget)} a month</b>
+            </b> net profit · plan delivers <b style={{ color: TEXT }}>{plan.projectedNetProfit != null ? k(plan.projectedNetProfit) : '—'} a month</b>
           </span>
           <span title="AU companies with an open job: days from the company being created in JobAdder to its first CV submitted">
             New client to first CV:{' '}
@@ -344,13 +352,13 @@ export function OverviewPage() {
                 {/* Keyed on the unique month name: single letters repeat (J = Jan/Jun/Jul) and would merge on hover. */}
                 <XAxis dataKey="month" tickFormatter={(m: string) => m[0]} tick={{ fontSize: 10, fill: MUTED }} axisLine={false} tickLine={false} interval={0} />
                 <YAxis yAxisId="p" hide allowDecimals={false} />
-                <YAxis yAxisId="np" hide domain={[(min: number) => Math.min(0, min), (max: number) => Math.max(max, npTarget * 1.1)]} />
+                <YAxis yAxisId="np" hide domain={[(min: number) => Math.min(0, min), (max: number) => Math.max(max, (plan.projectedNetProfit ?? 0) * 1.1)]} />
                 <Tooltip
                   contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${BORDER}`, background: BG2 }}
                   labelStyle={{ color: TEXT }}
                   formatter={(v, n) => [v == null ? '—' : n === 'Net profit' ? money0(Number(v)) : int(Number(v)), String(n)]}
                 />
-                <ReferenceLine yAxisId="np" y={npTarget} stroke={MUTED} strokeDasharray="4 4" />
+                {plan.projectedNetProfit != null && <ReferenceLine yAxisId="np" y={plan.projectedNetProfit} stroke={MUTED} strokeDasharray="4 4" />}
                 <Bar yAxisId="p" dataKey="placements" name="Placements" fill={RD} maxBarSize={28} />
                 <Line yAxisId="np" dataKey="netProfit" name="Net profit" stroke={TEXT} strokeWidth={2} dot={false} connectNulls />
               </ComposedChart>
@@ -358,7 +366,7 @@ export function OverviewPage() {
             <div style={{ display: 'flex', gap: 14, fontSize: 11, color: MUTED, marginTop: 6 }}>
               <span><span style={{ display: 'inline-block', width: 9, height: 9, background: RD, marginRight: 5 }} />Placements</span>
               <span><span style={{ display: 'inline-block', width: 9, height: 9, background: TEXT, marginRight: 5 }} />Net profit</span>
-              <span><span style={{ display: 'inline-block', width: 9, height: 9, border: `1px dashed ${MUTED}`, marginRight: 5 }} />{k(npTarget)} a month target</span>
+              <span><span style={{ display: 'inline-block', width: 9, height: 9, border: `1px dashed ${MUTED}`, marginRight: 5 }} />Plan net profit {plan.projectedNetProfit != null ? k(plan.projectedNetProfit) : '—'} a month</span>
             </div>
           </div>
         </Panel>

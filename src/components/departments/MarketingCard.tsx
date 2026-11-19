@@ -8,7 +8,7 @@ import { AM, RD, BG, BG2, BORDER, TEXT, MUTED, NZ, money0, money2, int, kShort }
 import { Grid } from '../shared/monthLayout';
 import { C, PACE_COLOR, NUM_FONT, CARD, LABEL, TODO } from '../shared/v2Theme';
 import { Chip, Section, Tag, Big, Tile, Line as TextLine } from '../shared/v2Layout';
-import { useMarketingMonth, useOrganicMonth, useMarketingSettings, useSaveMarketingSettings, useMetaBreakdown, useVoiceCallKPIs, useMetaAdSets, useMarketingDemand } from '../../hooks/queries';
+import { useMarketingMonth, useOrganicMonth, useMarketingSettings, useSaveMarketingSettings, useMetaBreakdown, useVoiceCallKPIs, useMetaAdSets, useMarketingDemand, useXeroFinanceData, useCacKPIs } from '../../hooks/queries';
 import { useAuthRole } from '../auth/AuthContext';
 import { monthWindow, recentMonthKeys, currentMonthKey, type MonthWindow } from '../../lib/nzTime';
 import { rate, type RagContext } from '../../lib/rag';
@@ -352,6 +352,12 @@ export function MarketingCard() {
   const { data: voice } = useVoiceCallKPIs('month');
   const { data: adSetRows, error: adSetError } = useMetaAdSets();
   const { data: demand, error: demandError, isLoading: demandLoading } = useMarketingDemand();
+  // Placement CAC (moved from Finance): same central 90-day calculation and inputs as Finance's LTGP:CAC.
+  const { data: xero } = useXeroFinanceData();
+  const { data: cac } = useCacKPIs(
+    xero && xero.ausRevenue > 0 ? (xero.ausGrossProfit / xero.ausRevenue) * 100 : undefined,
+    xero?.jobBoardAdvertising90d, xero?.prevJobBoardAdvertising90d, xero?.audNzdMonthlyRates,
+  );
   const budget = settings?.monthlyBudget ?? null;
   const postsPerWeek = settings?.postsPerWeek ?? 7;
 
@@ -452,6 +458,12 @@ export function MarketingCard() {
           <CountTile label="QUALIFIED CANDIDATES" unit="candidates" c={qual} pw={pw} />
           <CostTile label="COST PER BOOKED CALL" unit="per call" c={callCost} prev={h.prev.costPerBookedCall} target={t?.costPerBookedCall} fmt={money0} pw={pw} />
           <CostTile label="COST PER QUALIFIED CANDIDATE" unit="each" c={qualCost} prev={h.prev.costPerQualifiedCandidate} target={t?.costPerQualifiedCandidate} fmt={money2} pw={pw} />
+          <Tile label="PLACEMENT CAC · LAST 90 DAYS" chip={null}>
+            <Big value={cac ? money0(cac.placementCac) : '—'} color={cac?.hasPrevPeriod ? ragColor(cac.placementCac <= cac.prevPlacementCac ? 'green' : 'red') : C.text} unit="per placement" />
+            <TextLine muted>{cac?.hasPrevPeriod
+              ? `Prior 90 days ${money0(cac.prevPlacementCac)} · ${cac.placementCac >= cac.prevPlacementCac ? '+' : '−'}${money0(Math.abs(cac.placementCac - cac.prevPlacementCac))}`
+              : 'Client + candidate acquisition spend ÷ placements signed'}</TextLine>
+          </Tile>
         </div>
       </Section>
 

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import {
   fetchRecruiterKPIs,
@@ -7,6 +8,8 @@ import {
   fetchMarketingMonth,
   fetchSalesMonth,
   fetchClientPlacements,
+  fetchPlacementFees,
+  AUD_TO_NZD_APPROX,
 } from '../services/airtable';
 import { fetchClientInvoices, hasClientInvoicesCredentials } from '../services/clientInvoices';
 import { fetchXeroFinanceData, hasXeroCredentials } from '../services/xero';
@@ -19,6 +22,9 @@ import { fetchRetentionPlacements, hasRetentionCredentials } from '../services/j
 import { fetchFirstSubmitKPIs, hasFirstSubmitCredentials } from '../services/firstSubmit';
 import { monthWindow, nzDate, addDays } from '../lib/nzTime';
 import type { DemandSignals } from '../lib/demand';
+import {
+  DEFAULT_PLAN_SETTINGS, placementPlan, liveFallOver, grossProfitPerPlacement, avgMonthlyCosts, planYearToDate, type PlacementPlan,
+} from '../lib/placementPlan';
 import type { TimeFrame, LTGPFrame, OrganicMonth, MarketingSettings, SalesSettings, RecruitmentSettings, OverviewSettings, RetentionSettings } from '../types';
 
 const hasAirtableKey    = Boolean(import.meta.env.VITE_AIRTABLE_API_KEY);
@@ -297,6 +303,31 @@ export function useSaveOverviewSettings() {
       }),
     onSuccess: data => qc.setQueryData(['overview-settings'], data),
   });
+}
+
+export function usePlacementFees() {
+  return useQuery({
+    queryKey: ['placement-fees'],
+    queryFn: fetchPlacementFees,
+    enabled: hasSalesCredentials,
+    staleTime: 10 * 60_000,
+  });
+}
+
+/** The annual placement plan every tab reads. Until the live fall-over rate loads (Retention webhook, ~25s) it uses the planned rate. */
+export function usePlacementPlan(): { plan: PlacementPlan; ytd: ReturnType<typeof planYearToDate> | null } {
+  const { data: settings } = useOverviewSettings();
+  const ret = useRetentionPlacements();
+  const fees = usePlacementFees();
+  const fin = useXeroFinanceData();
+  const s = { ...DEFAULT_PLAN_SETTINGS, ...(settings?.planAnnualPlacements ? settings : {}) };
+  const [today] = useState(() => nzDate(Date.now())); // page load date
+  const plan = placementPlan(s, {
+    fallOver: ret.data ? liveFallOver(ret.data, today) : null,
+    gp: fees.data ? grossProfitPerPlacement(fees.data, fin.data?.audNzdMonthlyRates, today, AUD_TO_NZD_APPROX) : null,
+    costs: fin.data ? avgMonthlyCosts(fin.data.monthlyTrend) : null,
+  });
+  return { plan, ytd: ret.data ? planYearToDate(ret.data, s, today) : null };
 }
 
 /** Campaign table + per-ad rows for the Paid lane drill-down; only fetched once opened. */

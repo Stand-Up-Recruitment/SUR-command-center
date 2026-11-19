@@ -244,34 +244,36 @@ export function diagnoseRetention(s: RetentionSummary, settings: RetentionSettin
 
 // ─── Finance tab ──────────────────────────────────────────────────────────────
 /**
- * Off if projected net profit is under 75% of target or runway under 4 weeks; Watch if
- * projected net profit is under target or runway under 8 weeks. The profit check is grey
- * for days 1–7 like every other tab; runway is judged every day.
+ * Placement pace against the placement plan: projected month end >= must make green, >= breakeven
+ * amber, else red (grey for days 1-7 like every other tab). Runway: under 4 weeks red, under 8 amber,
+ * judged every day. Projected net profit is reported, not judged.
  */
 export function diagnoseFinance(input: {
-  tooEarly: boolean; projectedNetProfit: number | null; target: number; runwayWeeks: number | null;
+  tooEarly: boolean; projectedNetProfit: number | null; runwayWeeks: number | null;
+  pace: { placements: number; projected: number; mustMake: number; breakeven: number | null } | null;
 }): Diagnosis {
-  const { tooEarly, projectedNetProfit: np, target, runwayWeeks: rw } = input;
-  const k = (n: number) => `$${Math.round(n / 1000)}k`;
-  const npRag: Rag = tooEarly || np == null || target <= 0 ? 'grey' : np < target * 0.75 ? 'red' : np < target ? 'amber' : 'green';
+  const { tooEarly, projectedNetProfit: np, runwayWeeks: rw, pace } = input;
+  const k = (n: number) => `${n < 0 ? '-' : ''}$${Math.round(Math.abs(n) / 1000)}k`;
+  const paceRag: Rag = tooEarly || !pace ? 'grey'
+    : pace.projected >= pace.mustMake ? 'green' : pace.breakeven != null && pace.projected >= pace.breakeven ? 'amber' : 'red';
   const rwRag: Rag = rw == null ? 'grey' : rw < 4 ? 'red' : rw < 8 ? 'amber' : 'green';
-  const npText = np != null ? `Net profit on pace for ${k(np)} of ${k(target)} a month` : '';
+  const paceText = pace ? `Placements on pace for ${pace.projected} of ${pace.mustMake} a month${pace.breakeven != null ? ` (breakeven ${pace.breakeven})` : ''}` : '';
   const rwText = rw != null ? `Cash covers ${rw.toFixed(0)} weeks of costs` : '';
-  const items = flaggedFirst([{ rag: npRag, text: npText }, { rag: rwRag, text: rwText }]).map(c => ({ rag: c.rag, text: c.text }));
+  const npText = np != null ? `Net profit on pace for ${k(np)} this month` : '';
+  const items = flaggedFirst([{ rag: paceRag, text: paceText }, { rag: rwRag, text: rwText }]).map(c => ({ rag: c.rag, text: c.text }));
 
   if (!items.length && tooEarly) {
-    return { ...EARLY, summary: rwText ? `Too early for profit. ${rwText}` : EARLY.summary };
+    return { ...EARLY, summary: rwText ? `Too early for placement pace. ${rwText}` : EARLY.summary };
   }
   const tone: Rag = items.some(i => i.rag === 'red') ? 'red'
     : items.length ? 'amber'
-    : npRag === 'green' || rwRag === 'green' ? 'green' : 'grey';
-  const pace = np != null && target > 0 ? `On pace for ${Math.round((np / target) * 100)}% of profit target` : '';
+    : paceRag === 'green' || rwRag === 'green' ? 'green' : 'grey';
   return {
     ...plain(tone),
     tone,
-    text: [npText && `${npText} (projected month end, Australia).`, rwText && `${rwText} (available cash ÷ average weekly costs, last 4 weeks).`]
+    text: [paceText && `${paceText}.`, rwText && `${rwText} (available cash / average weekly costs, last 4 weeks).`, npText && `${npText} (projected month end, Australia).`]
       .filter(Boolean).join(' ') || 'Finance data not available.',
-    summary: [pace, rwText].filter(Boolean).join('. ') || 'Finance data not available',
+    summary: [paceText, rwText].filter(Boolean).join('. ') || 'Finance data not available',
     items,
   };
 }
