@@ -80,7 +80,7 @@ async function recruitment(f: TimeFrame) {
   ]);
   const s = { ...DEFAULT_RECRUITMENT_SETTINGS, ...sRes };
   const { start, now } = timeBoundaries(f);
-  const pace = recruitmentPace(data, teamRecruiters(data, jobs), f, start, now);
+  const pace = recruitmentPace(data, teamRecruiters(data, jobs, s.recruiters), f, start, now);
   const hiring = hiringTrigger(jobs, s);
   const diagnosis = diagnoseRecruitment({
     ...pace, periodLabel: f,

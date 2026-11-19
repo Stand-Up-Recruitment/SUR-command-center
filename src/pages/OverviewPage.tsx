@@ -183,8 +183,10 @@ export function OverviewPage() {
   // Recruitment (live month)
   const r = rec.data;
   const { start, now: nowMs } = timeBoundaries('month');
-  const pace = r ? recruitmentPace(r, teamRecruiters(r, jobs), 'month', start, nowMs) : null;
-  const hiring = jobs ? hiringTrigger(jobs, recSettings.data ?? DEFAULT_RECRUITMENT_SETTINGS) : null;
+  // Defaults when the settings API is down or answers without settings (e.g. vite dev serves no /api).
+  const recruitmentSettings = recSettings.data?.recruiters ? recSettings.data : DEFAULT_RECRUITMENT_SETTINGS;
+  const pace = r ? recruitmentPace(r, teamRecruiters(r, jobs, recruitmentSettings.recruiters), 'month', start, nowMs) : null;
+  const hiring = jobs ? hiringTrigger(jobs, recruitmentSettings) : null;
   const full = hiring ? hiring.activeJobs >= hiring.slots : false;
   const recruitment: Dept = {
     name: 'Recruitment', path: '/recruitment', loading: rec.isLoading || recSettings.isLoading, currentOnly: true,
