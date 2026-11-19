@@ -373,9 +373,9 @@ type MonthCashRow = { weekLabel: string; isForecast: boolean; isPast: boolean; i
 const rowNet = (r: MonthCashRow) =>
   (r.isPast ? r.actual ?? 0 : r.isThisWeek ? (r.actual ?? 0) + (r.stillDue ?? 0) : r.expected) - (r.outflow ?? 0);
 
-function MonthCashCard({ title, monthLabel, rows, cashFlowHasDetail, forecastOutflow }: {
+function MonthCashCard({ title, monthLabel, rows, cashFlowHasDetail }: {
   title: string; monthLabel: string; rows: MonthCashRow[];
-  cashFlowHasDetail: boolean; forecastOutflow: number | null;
+  cashFlowHasDetail: boolean;
 }) {
   const th = { fontSize: 10, fontWeight: 700, color: MUTED, padding: '4px 6px', borderBottom: `.5px solid ${BORDER}` } as const;
   const td = { padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, textAlign: 'right' as const, whiteSpace: 'nowrap' as const };
@@ -421,32 +421,15 @@ function MonthCashCard({ title, monthLabel, rows, cashFlowHasDetail, forecastOut
         </table>
       )}
       {rows.length > 0 && (() => {
-        // Finished weeks count what actually came in; the current and future
-        // weeks count what's expected, so the month total is a best estimate.
+        // See rowNet: finished weeks actual, this week so far + still due, future weeks expected.
         const netCashFlow = rows.reduce((sum, r) => sum + rowNet(r), 0);
-        const signed = (n: number) => `${n >= 0 ? '+' : '−'}${fmtNZD(Math.abs(n))}`;
-        const part = (r: MonthCashRow) => r.isPast
-          ? `${r.weekLabel}: ${fmtNZD(r.actual ?? 0)} received − ${fmtNZD(r.outflow ?? 0)} out`
-          : r.isThisWeek
-            ? `${r.weekLabel}: ${fmtNZD(r.actual ?? 0)} received so far + ${fmtNZD(r.stillDue ?? 0)} still due − ${fmtNZD(r.outflow ?? 0)} out so far`
-            : `${r.weekLabel}: ${fmtNZD(r.expected)} expected − ${fmtNZD(r.outflow ?? 0)} forecast out`;
         return (
-          <>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, paddingTop: 8, borderTop: `.5px solid ${BORDER}` }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: MUTED }}>Net cash flow</span>
-              <span style={{ fontSize: 13, fontWeight: 700, color: netCashFlow >= 0 ? NZ : RD, whiteSpace: 'nowrap' }}>{signed(netCashFlow)}</span>
-            </div>
-            <details style={{ fontSize: 10, color: MUTED, marginTop: 6 }}>
-              <summary style={{ cursor: 'pointer' }}>Show the working</summary>
-              <div style={{ lineHeight: 1.6, marginTop: 4 }}>
-                {rows.map((r, i) => <div key={i}>{part(r)} = {signed(rowNet(r))}</div>)}
-                <div style={{ marginTop: 4 }}>
-                  Finished weeks use cash actually received; this week uses cash received so far plus unpaid invoices still expected this week;
-                  future weeks use expected receipts. Forecast outflow {forecastOutflow != null ? `${fmtNZD(forecastOutflow)}/week` : '—'} = average cash out of the last 4 finished weeks + {fmtNZD(OUTFLOW_BUFFER)}.
-                </div>
-              </div>
-            </details>
-          </>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, paddingTop: 8, borderTop: `.5px solid ${BORDER}` }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: MUTED }}>Net cash flow</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: netCashFlow >= 0 ? NZ : RD, whiteSpace: 'nowrap' }}>
+              {netCashFlow >= 0 ? '+' : '−'}{fmtNZD(Math.abs(netCashFlow))}
+            </span>
+          </div>
         );
       })()}
     </Card>
@@ -500,9 +483,9 @@ function CashPositionSection({
       {hasCombined && (
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 10 }}>
-            <MonthCashCard title="Previous month" monthLabel={monthBuckets.previous.label} rows={monthBuckets.previous.rows} cashFlowHasDetail={cashFlowHasDetail} forecastOutflow={forecastOutflow} />
-            <MonthCashCard title="Current month" monthLabel={monthBuckets.current.label} rows={monthBuckets.current.rows} cashFlowHasDetail={cashFlowHasDetail} forecastOutflow={forecastOutflow} />
-            <MonthCashCard title="Next month" monthLabel={monthBuckets.next.label} rows={monthBuckets.next.rows} cashFlowHasDetail={cashFlowHasDetail} forecastOutflow={forecastOutflow} />
+            <MonthCashCard title="Previous month" monthLabel={monthBuckets.previous.label} rows={monthBuckets.previous.rows} cashFlowHasDetail={cashFlowHasDetail} />
+            <MonthCashCard title="Current month" monthLabel={monthBuckets.current.label} rows={monthBuckets.current.rows} cashFlowHasDetail={cashFlowHasDetail} />
+            <MonthCashCard title="Next month" monthLabel={monthBuckets.next.label} rows={monthBuckets.next.rows} cashFlowHasDetail={cashFlowHasDetail} />
           </div>
           <NoteBox>
             Expected Receive = Australian Xero invoices plus Airtable scheduled instalments (not yet invoiced), each moved from its due date by that client's average days late (Clients tab; due date + 7 days if the client has no payment history; early payers count as on time).
