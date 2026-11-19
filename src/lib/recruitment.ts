@@ -98,8 +98,9 @@ export function hiringTrigger(jobs: JobAgingKPIs, s: RecruitmentSettings): Hirin
 /**
  * Recruiters shown on the tab: everyone with KPI rows, plus anyone with open jobs (job aging
  * is a live snapshot, not tied to the period). Matched by first name, sorted by name.
+ * Pass `listed` (the settings recruiter list) to keep only current recruiters, e.g. drop someone who left.
  */
-export function teamRecruiters(data: RecruiterKPIs, jobs: JobAgingKPIs | undefined): RecruiterStat[] {
+export function teamRecruiters(data: RecruiterKPIs, jobs: JobAgingKPIs | undefined, listed?: { name: string }[]): RecruiterStat[] {
   const out: RecruiterStat[] = [...data.byRecruiter];
   for (const stat of jobs?.byRecruiter ?? []) {
     if (isNonRecruiter(stat.name)) continue;
@@ -114,7 +115,8 @@ export function teamRecruiters(data: RecruiterKPIs, jobs: JobAgingKPIs | undefin
       });
     }
   }
-  return out.sort((a, b) => a.name.localeCompare(b.name));
+  const keep = listed && new Set(listed.map(r => firstName(r.name)));
+  return out.filter(r => !keep || keep.has(firstName(r.name))).sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export function placementTargetFor(name: string, frame: TimeFrame): number {

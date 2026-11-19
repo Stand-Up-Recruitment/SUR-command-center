@@ -211,9 +211,13 @@ export function RecruiterCard() {
   const need = (target: number) => neededByToday(target, wd);
   const firstName = (n: string) => n.trim().split(' ')[0].toLowerCase();
 
+  // Defaults when the settings API is down or answers without settings (e.g. vite dev serves no /api).
+  const recruitment: RecruitmentSettings = settingsData?.recruiters ? settingsData : DEFAULT_RECRUITMENT_SETTINGS;
+  const settingsWarning = settingsError?.message ?? settingsData?.error;
+
   // Merge JobAdder pipeline-stage KPIs (separate webhook) by first name. Copies each row so
-  // the React Query cache isn't mutated.
-  const recruiters: RecruiterStat[] = teamRecruiters(data, jobAgingData).map(r => {
+  // the React Query cache isn't mutated. Only people on the settings recruiter list are shown.
+  const recruiters: RecruiterStat[] = teamRecruiters(data, jobAgingData, recruitment.recruiters).map(r => {
     const js = jobAdderStageData?.byRecruiter.find(s => firstName(s.name) === firstName(r.name));
     return {
       ...r,
@@ -225,9 +229,6 @@ export function RecruiterCard() {
     };
   });
 
-  // Defaults when the settings API is down or answers without settings (e.g. vite dev serves no /api).
-  const recruitment: RecruitmentSettings = settingsData?.recruiters ? settingsData : DEFAULT_RECRUITMENT_SETTINGS;
-  const settingsWarning = settingsError?.message ?? settingsData?.error;
   const cap = recruitment.maxActiveJobs;
   const jobsFor = (name: string) =>
     jobAgingData?.byRecruiter?.find(r => firstName(r.name) === firstName(name)) ?? { totalOpenJobs: 0, fresh: 0, ageing: 0, stale: 0 };
@@ -331,8 +332,9 @@ export function RecruiterCard() {
   };
 
   // ── Trend: team placements per month, months with data only ──
+  const everyone = teamRecruiters(data, jobAgingData); // includes people who have left, so history stays whole
   const trend = data.months
-    .map((month, i) => ({ month, value: recruiters.some(r => r.monthlyPlacements[i] != null) ? recruiters.reduce((s, r) => s + (r.monthlyPlacements[i] ?? 0), 0) : null }))
+    .map((month, i) => ({ month, value: everyone.some(r => r.monthlyPlacements[i] != null) ? everyone.reduce((s, r) => s + (r.monthlyPlacements[i] ?? 0), 0) : null }))
     .filter((t): t is { month: string; value: number } => t.value !== null)
     .filter((_, i, all) => all.slice(0, i + 1).some(x => x.value > 0)); // drop leading empty months
   const monthlyTarget = recruiters.reduce((s, r) => s + placementTargetFor(r.name, 'month'), 0);
