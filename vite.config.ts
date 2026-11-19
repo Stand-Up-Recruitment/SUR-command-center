@@ -8,25 +8,37 @@ export default defineConfig(({ mode }) => {
   const allEnv = loadEnv(mode, process.cwd(), '')
   const { N8N_DASH_TOKEN } = allEnv
 
-  // Dev stand-in for the Vercel function api/marketing-demand.ts (it joins n8n and Airtable server-side).
-  const marketingDemandDev: Plugin = {
-    name: 'marketing-demand-dev',
+  // Dev stand-ins for these Vercel functions (otherwise Vite serves their source). They use the
+  // real .env, so a save from the dev Edit targets panel writes the live settings, as in production.
+  const DEV_FUNCTIONS = ['marketing-demand', 'marketing-settings']
+  const vercelFunctionsDev: Plugin = {
+    name: 'vercel-functions-dev',
     configureServer(server) {
       // Node's 250 ms per-address connect attempt times out on some local networks; give it 2 s.
       setDefaultAutoSelectFamilyAttemptTimeout(2000)
-      server.middlewares.use('/api/marketing-demand', async (_req, res) => {
-        Object.assign(process.env, allEnv)
-        const { GET } = await server.ssrLoadModule('/api/marketing-demand.ts')
-        const r: Response = await GET()
-        res.statusCode = r.status
-        res.setHeader('Content-Type', 'application/json')
-        res.end(await r.text())
-      })
+      for (const fn of DEV_FUNCTIONS) {
+        server.middlewares.use(`/api/${fn}`, async (req, res) => {
+          Object.assign(process.env, allEnv)
+          const handlers = await server.ssrLoadModule(`/api/${fn}.ts`)
+          const handler = handlers[req.method ?? 'GET']
+          if (!handler) { res.statusCode = 405; res.end(); return }
+          const chunks: Buffer[] = []
+          for await (const c of req) chunks.push(c as Buffer)
+          const r: Response = await handler(new Request(`http://localhost${req.originalUrl ?? req.url}`, {
+            method: req.method,
+            headers: req.headers as Record<string, string>,
+            body: chunks.length ? Buffer.concat(chunks) : undefined,
+          }))
+          res.statusCode = r.status
+          res.setHeader('Content-Type', 'application/json')
+          res.end(await r.text())
+        })
+      }
     },
   }
 
   return {
-    plugins: [react(), tailwindcss(), marketingDemandDev],
+    plugins: [react(), tailwindcss(), vercelFunctionsDev],
     server: {
       // Dev stand-in for the Vercel function in api/voice-stats.ts.
       proxy: {

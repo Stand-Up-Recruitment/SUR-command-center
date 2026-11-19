@@ -4,7 +4,7 @@ import type { MonthWindow } from '../../lib/nzTime.js';
 import { rate, rateVsTarget, pctChange, isTooEarly, proRata, type Rag, type RagContext } from '../../lib/rag.js';
 import { pace, type Pace } from '../../lib/workingDays.js';
 import { diagnose, type DiagMetric, type Diagnosis } from '../../lib/diagnosis.js';
-import type { MarketingMonth, OrganicChannel, OrganicMonth, MarketingSettings, MarketingTargets, MetaAdSetDay } from '../../types';
+import type { MarketingMonth, OrganicChannel, OrganicMonth, MarketingSettings, MarketingTargets, MetaAdSetDay, SpikeRule } from '../../types';
 import { addDays } from '../../lib/nzTime.js';
 import { tradeOf, type DemandSignals } from '../../lib/demand.js';
 
@@ -130,8 +130,10 @@ export function budgetCheck(spend: number, budget: number | null, w: MonthWindow
 
 // ─── Brinda's ad set check (brief: ad spike rule) ─────────────────────────────
 // Cost per lead (client) or per application (candidate) over the last 3 days vs that ad set's
-// own 14-day normal. SPIKE: 50%+ above normal, or 0 results with spend over 2× its normal cost.
-// WATCH: 20–49% above. STRONG: 20%+ below with 3+ results. Under $50 in 3 days: too little data.
+// own 14-day normal. SPIKE: spikePct+ above normal, or 0 results with spend over 2× its normal cost.
+// WATCH: watchPct+ above. STRONG: watchPct+ below with 3+ results. Under minSpend in 3 days: too
+// little data. Thresholds are editable in Edit targets; these are the brief's starting numbers.
+export const DEFAULT_SPIKE_RULE: SpikeRule = { spikePct: 50, watchPct: 20, minSpend: 50 };
 export type AdSetStatus = 'SPIKE' | 'WATCH' | 'STRONG' | 'OK' | 'NO NORMAL' | 'LOW DATA';
 export interface AdSetCheck {
   id: string; adset: string; group: 'client' | 'candidate';
@@ -141,7 +143,7 @@ export interface AdSetCheck {
 const STATUS_ORDER: AdSetStatus[] = ['SPIKE', 'WATCH', 'STRONG', 'OK', 'NO NORMAL', 'LOW DATA'];
 const NAMING = /^(CAND|CLIENT)_([^_\s]+)_([^_\s]+)/i;
 
-export function adSetChecks(rows: MetaAdSetDay[], today: string): AdSetCheck[] {
+export function adSetChecks(rows: MetaAdSetDay[], today: string, rule: SpikeRule = DEFAULT_SPIKE_RULE): AdSetCheck[] {
   const recentFrom = addDays(today, -2), normalFrom = addDays(today, -16);
   const by = new Map<string, { adset: string; group: 'client' | 'candidate'; s3: number; r3: number; s14: number; r14: number }>();
   for (const r of rows) {
@@ -157,11 +159,11 @@ export function adSetChecks(rows: MetaAdSetDay[], today: string): AdSetCheck[] {
     const cost3 = a.r3 > 0 ? a.s3 / a.r3 : null;
     const changePct = normal != null && cost3 != null ? (cost3 / normal - 1) * 100 : null;
     const status: AdSetStatus =
-      a.s3 < 50 ? 'LOW DATA'
+      a.s3 < rule.minSpend ? 'LOW DATA'
       : normal == null ? 'NO NORMAL'
       : cost3 == null ? (a.s3 > 2 * normal ? 'SPIKE' : 'OK')
-      : changePct! >= 50 ? 'SPIKE' : changePct! >= 20 ? 'WATCH'
-      : changePct! <= -20 && a.r3 >= 3 ? 'STRONG' : 'OK';
+      : changePct! >= rule.spikePct ? 'SPIKE' : changePct! >= rule.watchPct ? 'WATCH'
+      : changePct! <= -rule.watchPct && a.r3 >= 3 ? 'STRONG' : 'OK';
     const named = NAMING.exec(a.adset);
     out.push({
       id, adset: a.adset, group: a.group, spend3: a.s3, results3: a.r3, cost3, normal, changePct, status,

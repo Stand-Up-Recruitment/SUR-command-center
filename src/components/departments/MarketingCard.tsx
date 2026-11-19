@@ -15,7 +15,7 @@ import { rate, type RagContext } from '../../lib/rag';
 import { pace, PACE_LABEL, type Pace } from '../../lib/workingDays';
 import {
   postsTarget, marketingActions, biggestMarketingBreak, countCheck, costCheck, budgetCheck,
-  adSetChecks, type CountCheck, type CostCheck, type MktLevel, type AdSetStatus,
+  adSetChecks, DEFAULT_SPIKE_RULE, type CountCheck, type CostCheck, type MktLevel, type AdSetStatus,
 } from './marketingMetrics';
 import type { MarketingMonth, MarketingSettings, MarketingTargets, MetaAdRow } from '../../types';
 
@@ -58,6 +58,8 @@ function SettingsPanel({ settings, suggested, onClose }: { settings: MarketingSe
     costPerQualifiedCandidate: str(settings.targets.costPerQualifiedCandidate),
   });
   const [nonTrade, setNonTrade] = useState(settings.nonTradeCategories.join('\n'));
+  const rule0 = settings.spikeRule ?? DEFAULT_SPIKE_RULE;
+  const [rule, setRule] = useState({ spikePct: String(rule0.spikePct), watchPct: String(rule0.watchPct), minSpend: String(rule0.minSpend) });
   const [password, setPassword] = useState('');
   const input = { background: BG, border: `1px solid ${BORDER}`, borderRadius: 6, color: TEXT, padding: '8px 10px', fontSize: 13, width: '100%', boxSizing: 'border-box' as const };
   const label = { fontSize: 11, color: MUTED };
@@ -76,6 +78,7 @@ function SettingsPanel({ settings, suggested, onClose }: { settings: MarketingSe
             costPerQualifiedCandidate: numOrNull(targets.costPerQualifiedCandidate),
           },
           nonTradeCategories: nonTrade.split('\n').map(c => c.trim()).filter(Boolean),
+          spikeRule: { spikePct: Number(rule.spikePct), watchPct: Number(rule.watchPct), minSpend: Number(rule.minSpend) },
         },
         adminPassword: password,
       },
@@ -108,6 +111,21 @@ function SettingsPanel({ settings, suggested, onClose }: { settings: MarketingSe
               onChange={e => setTargets(t => ({ ...t, [f.key]: e.target.value }))} />
           </div>
         ))}
+
+        <div style={{ fontSize: 12, fontWeight: 600, color: TEXT, margin: '6px 0 4px' }}>Ad set spike rule</div>
+        <div style={{ ...label, marginBottom: 8 }}>Last 3 days’ cost per lead (or application) vs that ad set’s own 14-day normal. Strong = the watch % below normal, with 3+ results.</div>
+        <div style={{ display: 'flex', gap: 10 }}>
+          {([
+            ['spikePct', 'Spike at % above'],
+            ['watchPct', 'Watch at % above'],
+            ['minSpend', 'Min $ in 3 days'],
+          ] as const).map(([k, l]) => (
+            <div key={k} style={{ flex: 1 }}>
+              <label style={label}>{l}</label>
+              <input style={{ ...input, margin: '4px 0 12px' }} type="number" min={0} value={rule[k]} onChange={e => setRule(r => ({ ...r, [k]: e.target.value }))} />
+            </div>
+          ))}
+        </div>
 
         <label style={label}>Categories that are NOT a skilled trade (one per line). Everything else, for an NZ citizen, counts as qualified.</label>
         <textarea style={{ ...input, margin: '4px 0 12px', height: 120, fontFamily: 'inherit' }} value={nonTrade} onChange={e => setNonTrade(e.target.value)} />
@@ -250,7 +268,7 @@ const LEVEL_TONE: Record<MktLevel, Pace | 'blue'> = { 'FIX NOW': 'red', PUSH: 'b
 const STATUS_TONE: Record<AdSetStatus, Pace> = { SPIKE: 'red', WATCH: 'amber', STRONG: 'green', OK: 'grey', 'NO NORMAL': 'grey', 'LOW DATA': 'grey' };
 const STATUS_ACTION: Record<AdSetStatus, string> = {
   SPIKE: 'Pause or refresh creative', WATCH: 'Check creative and audience', STRONG: 'Scale budget', OK: '',
-  'NO NORMAL': 'No results in the 14 days before', 'LOW DATA': 'Under $50 in 3 days',
+  'NO NORMAL': 'No results in the 14 days before', 'LOW DATA': 'Too little spend in 3 days',
 };
 const ragColor = (r: Pace) => (r === 'grey' ? C.text : PACE_COLOR[r]);
 const div0 = (a: number, b: number) => (b > 0 ? a / b : 0);
@@ -374,7 +392,8 @@ export function MarketingCard() {
   const t = settings?.targets;
   const h = m.handoff;
   const { cur, prev } = m.paid;
-  const adSets = adSetRows ? adSetChecks(adSetRows.rows, adSetRows.today) : undefined;
+  const spikeRule = settings?.spikeRule ?? DEFAULT_SPIKE_RULE;
+  const adSets = adSetRows ? adSetChecks(adSetRows.rows, adSetRows.today, spikeRule) : undefined;
   const flagged = adSets?.filter(a => a.status === 'SPIKE' || a.status === 'WATCH').length;
   const clientSpend3 = (trade: string) => (adSets ?? []).filter(a => a.group === 'client' && a.trade === trade).reduce((t, a) => t + a.spend3, 0);
   const actions = marketingActions(m, organic, settings, w, { adSets, demand: demand?.error ? undefined : demand });
@@ -489,7 +508,7 @@ export function MarketingCard() {
       </Section>
 
       {/* 4. Paid ads, Brinda's check */}
-      <Section title="Paid ads · Brinda’s morning check" aside="Every ad set against its own normal · worst first">
+      <Section title="Paid ads · Brinda’s morning check" aside={`Every ad set against its own normal · spike ${spikeRule.spikePct}%+ · watch ${spikeRule.watchPct}%+ · worst first`}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
           <Tile label="SPEND VS BUDGET" chip={null}>
             <Big size={34} value={`${money0(cur.totalSpend)} / ${budget ? money0(budget) : '[ ]'}`} color={budget ? ragColor(spend.rag) : C.faint} />

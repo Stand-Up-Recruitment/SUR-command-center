@@ -21,6 +21,11 @@ const c = Object.fromEntries(adSetChecks(rows, '2026-11-20').map(x => [x.id, x])
 assert.equal(c.a.status, 'SPIKE'); assert.equal(c.a.normal, 30); assert.equal(c.a.cost3, 200); assert.equal(c.a.named, true); assert.equal(c.a.trade, 'Carpenter / Builder');
 assert.equal(c.b.status, 'STRONG'); assert.equal(c.b.named, false); assert.equal(c.b.trade, 'Electrician');
 assert.equal(c.c.status, 'LOW DATA');
+// Editable thresholds: with a 1000% spike line the +567% carpenter set drops to WATCH; minSpend 0 lets the $15 set through.
+const strict = Object.fromEntries(adSetChecks(rows, '2026-11-20', { spikePct: 1000, watchPct: 20, minSpend: 20 }).map(x => [x.id, x]));
+assert.equal(strict.a.status, 'WATCH'); assert.equal(strict.c.status, 'LOW DATA');
+const loose = Object.fromEntries(adSetChecks(rows, '2026-11-20', { spikePct: 50, watchPct: 20, minSpend: 0 }).map(x => [x.id, x]));
+assert.equal(loose.c.status, 'NO NORMAL');
 assert.equal(tradeOf('Roof Plumber'), 'Roofer'); assert.equal(tradeOf('Livestock Transport Operator'), 'Truck Driver'); assert.equal(tradeOf('HR Intern'), null);
 assert.deepEqual(regionsOf('QLD Other'), ['Queensland']); assert.ok(regionsOf('Perth, Regional Australia').length === 8);
 const d = buildDemand([{ title: 'Electrician', location: 'Brisbane', createdAt: '2026-10-01' }, { title: 'Electrician', location: 'Perth', createdAt: '2026-11-15' }],

@@ -548,11 +548,18 @@ export interface MarketingTargets {
   costPerQualifiedCandidate: number | null;
 }
 
+export interface SpikeRule {
+  spikePct: number;   // SPIKE at this % or more above the ad set's 14-day normal
+  watchPct: number;   // WATCH at this % above; STRONG at this % below (with 3+ results)
+  minSpend: number;   // ignore ad sets under this NZD spend in 3 days
+}
+
 export interface MarketingSettings {
   monthlyBudget: number | null;
   postsPerWeek: number;
   targets: MarketingTargets;
   nonTradeCategories: string[];
+  spikeRule: SpikeRule;
 }
 
 // ─── Recruitment ──────────────────────────────────────────────────────────────
