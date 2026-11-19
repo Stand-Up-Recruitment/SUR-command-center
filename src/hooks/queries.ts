@@ -314,11 +314,8 @@ export function usePlacementFees() {
   });
 }
 
-/**
- * The annual placement plan every tab reads. Until the live fall-over rate loads (Retention webhook,
- * ~25s) it uses the planned rate; `loading` says so.
- */
-export function usePlacementPlan(): { plan: PlacementPlan; ytd: ReturnType<typeof planYearToDate> | null; loading: boolean } {
+/** The annual placement plan every tab reads. Until the live fall-over rate loads (Retention webhook, ~25s) it uses the planned rate. */
+export function usePlacementPlan(): { plan: PlacementPlan; ytd: ReturnType<typeof planYearToDate> | null } {
   const { data: settings } = useOverviewSettings();
   const ret = useRetentionPlacements();
   const fees = usePlacementFees();
@@ -330,7 +327,7 @@ export function usePlacementPlan(): { plan: PlacementPlan; ytd: ReturnType<typeo
     gp: fees.data ? grossProfitPerPlacement(fees.data, fin.data?.audNzdMonthlyRates, today, AUD_TO_NZD_APPROX) : null,
     costs: fin.data ? avgMonthlyCosts(fin.data.monthlyTrend) : null,
   });
-  return { plan, ytd: ret.data ? planYearToDate(ret.data, s, today) : null, loading: ret.isLoading || fees.isLoading || fin.isLoading };
+  return { plan, ytd: ret.data ? planYearToDate(ret.data, s, today) : null };
 }
 
 /** Campaign table + per-ad rows for the Paid lane drill-down; only fetched once opened. */

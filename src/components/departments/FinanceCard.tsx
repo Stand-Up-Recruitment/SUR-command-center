@@ -500,13 +500,11 @@ function CashPositionSection({
 
 // ─── Placement targets (the plan, set on the Overview ⚙) ─────────────────────
 
-function PlacementTargetsSection({ plan, ytd, pace, loading }: {
+function PlacementTargetsSection({ plan, ytd, pace }: {
   plan: PlacementPlan; ytd: ReturnType<typeof planYearToDate> | null;
-  pace: { placements: number; projected: number } | null; loading: boolean;
+  pace: { placements: number; projected: number } | null;
 }) {
-  const { settings: st, fallOver, gp, costs } = plan;
-  const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
-  const keep = 1 - fallOver.rate;
+  const st = plan.settings;
   const paceColor = !pace ? MUTED : pace.projected >= plan.mustMake ? NZ : plan.breakeven != null && pace.projected >= plan.breakeven ? AM : RD;
   return (
     <>
@@ -537,25 +535,6 @@ function PlacementTargetsSection({ plan, ytd, pace, loading }: {
           );
         })}
       </div>
-      <NoteBox>
-        <div style={{ fontWeight: 700, marginBottom: 2 }}>The working{loading ? ' (still loading some inputs)' : ''}</div>
-        <div>Must stick = {st.planAnnualPlacements} × (1 − {st.planFallOverPct}%) ÷ 12 = <b>{plan.mustStick.toFixed(1)}</b></div>
-        <div>
-          Live fall-over rate = {fallOver.live ? `${fallOver.fell} of ${fallOver.started} placements that started in the last 6 months fell over = ${pct(fallOver.rate)}` : `not loaded yet, using the planned ${st.planFallOverPct}%`}
-        </div>
-        <div>Must make = {plan.mustStick.toFixed(2)} ÷ (1 − {pct(fallOver.rate)}) = {(plan.mustStick / keep).toFixed(2)}, rounded up = <b>{plan.mustMake}</b></div>
-        <div>
-          Gross profit per placement = {gp ? `${fmtNZD(gp.value)}, the average full fee of ${gp.count} placements that started in the last 6 months and stuck (Live or Completed in Airtable, NZD). Not reduced for fall-overs` : '—'}
-        </div>
-        <div>Average monthly costs = {costs ? `${fmtNZD(costs.value)} (Australian operating expenses, ${costs.months.join(', ')})` : '—'}</div>
-        <div>
-          Breakeven = {costs && gp ? `${fmtNZD(costs.value)} ÷ ${fmtNZD(gp.value)} = ${(costs.value / gp.value).toFixed(2)}, ÷ (1 − ${pct(fallOver.rate)}) = ${(costs.value / gp.value / keep).toFixed(2)}, rounded up = ` : '— = '}<b>{plan.breakeven ?? '—'}</b>
-        </div>
-        <div>
-          Projected net profit = {plan.mustStick.toFixed(2)} stick × {gp ? fmtNZD(gp.value) : '—'} − {costs ? fmtNZD(costs.value) : '—'} = <b>{plan.projectedNetProfit != null ? fmtNZD(plan.projectedNetProfit) : '—'}</b> a month
-        </div>
-        <div>Targets update by themselves as the live fall-over rate, fees and costs change.</div>
-      </NoteBox>
     </>
   );
 }
@@ -600,7 +579,7 @@ export function FinanceCard() {
   const { data, error } = useXeroFinanceData();
   const { data: scheduledInvoices } = useScheduledInvoices();
   const { data: clientInvoices } = useClientInvoices();
-  const { plan, ytd, loading: planLoading } = usePlacementPlan();
+  const { plan, ytd } = usePlacementPlan();
   const { data: rec } = useRecruiterKPIs('month');
   const { data: jobs } = useJobAging();
   const { data: recSettings } = useRecruitmentSettings();
@@ -723,7 +702,7 @@ export function FinanceCard() {
   return (
     <div style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
       <DiagnosisTile diagnosis={summary.diagnosis} />
-      <PlacementTargetsSection plan={plan} ytd={ytd} pace={pace} loading={planLoading} />
+      <PlacementTargetsSection plan={plan} ytd={ytd} pace={pace} />
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
         <select
           value={month}
