@@ -1,20 +1,25 @@
-// Vercel function: editable Overview settings (net profit target + the current constraint).
+// Vercel function: editable Overview settings (the annual placement plan + the current constraint).
 // GET  /api/overview-settings
-// PUT  /api/overview-settings  { netProfitTarget, constraintHeadline, constraintDetail, confirmedBy }  — header x-admin-password
+// PUT  /api/overview-settings  { planAnnualPlacements, planFallOverPct, planYear, constraintHeadline, constraintDetail, confirmedBy }  — header x-admin-password
 // confirmedAt is set to today (NZ) whenever the headline, detail or confirmed-by name changes.
 import { supabase } from './_lib/supabase.js';
 import { nzDate } from '../src/lib/nzTime.js';
-import { DEFAULT_NET_PROFIT_TARGET } from '../src/lib/finance.js';
+import { DEFAULT_PLAN_SETTINGS } from '../src/lib/placementPlan.js';
 import type { OverviewSettings } from '../src/types/index.js';
 
 const DEFAULTS: OverviewSettings = {
-  netProfitTarget: DEFAULT_NET_PROFIT_TARGET, constraintHeadline: '', constraintDetail: '', confirmedBy: '', confirmedAt: null,
+  ...DEFAULT_PLAN_SETTINGS, constraintHeadline: '', constraintDetail: '', confirmedBy: '', confirmedAt: null,
 };
 
-type Row = { net_profit_target: number; constraint_headline: string; constraint_detail: string; confirmed_by: string; confirmed_at: string | null };
+type Row = {
+  plan_annual_placements?: number; plan_fall_over_pct?: number | string; plan_year?: number;
+  constraint_headline: string; constraint_detail: string; confirmed_by: string; confirmed_at: string | null;
+};
 
 const fromRow = (r: Row | null): OverviewSettings => ({
-  netProfitTarget: r?.net_profit_target ?? DEFAULTS.netProfitTarget,
+  planAnnualPlacements: r?.plan_annual_placements ?? DEFAULTS.planAnnualPlacements,
+  planFallOverPct: r?.plan_fall_over_pct != null ? Number(r.plan_fall_over_pct) : DEFAULTS.planFallOverPct,
+  planYear: r?.plan_year ?? DEFAULTS.planYear,
   constraintHeadline: r?.constraint_headline ?? DEFAULTS.constraintHeadline,
   constraintDetail: r?.constraint_detail ?? DEFAULTS.constraintDetail,
   confirmedBy: r?.confirmed_by ?? DEFAULTS.confirmedBy,
@@ -38,9 +43,17 @@ export async function PUT(request: Request): Promise<Response> {
   if (!db) return Response.json({ error: 'Supabase not configured' }, { status: 502 });
 
   const body = await request.json().catch(() => null) as Partial<OverviewSettings> | null;
-  const target = body?.netProfitTarget;
-  if (!(Number.isInteger(target) && target! > 0)) {
-    return Response.json({ error: 'netProfitTarget must be a whole number > 0' }, { status: 400 });
+  const annual = body?.planAnnualPlacements;
+  const fallOver = body?.planFallOverPct;
+  const year = body?.planYear;
+  if (!(Number.isInteger(annual) && annual! > 0)) {
+    return Response.json({ error: 'Annual placement plan must be a whole number > 0' }, { status: 400 });
+  }
+  if (!(typeof fallOver === 'number' && fallOver >= 0 && fallOver < 100)) {
+    return Response.json({ error: 'Planned fall-over must be between 0 and 99%' }, { status: 400 });
+  }
+  if (!(Number.isInteger(year) && year! >= 2026 && year! <= 2100)) {
+    return Response.json({ error: 'Plan year must be a year, e.g. 2027' }, { status: 400 });
   }
   const text = (v: unknown) => (typeof v === 'string' ? v.trim() : null);
   const headline = text(body?.constraintHeadline);
@@ -57,11 +70,13 @@ export async function PUT(request: Request): Promise<Response> {
   const confirmedAt = constraintChanged ? nzDate(Date.now()) : before.confirmedAt;
 
   const { error } = await db.from('overview_settings').upsert({
-    id: 1, net_profit_target: target, constraint_headline: headline, constraint_detail: detail,
+    id: 1, plan_annual_placements: annual, plan_fall_over_pct: fallOver, plan_year: year,
+    constraint_headline: headline, constraint_detail: detail,
     confirmed_by: confirmedBy, confirmed_at: confirmedAt, updated_at: new Date().toISOString(),
   });
   if (error) return Response.json({ error: error.message }, { status: 502 });
   return Response.json({
-    netProfitTarget: target!, constraintHeadline: headline, constraintDetail: detail, confirmedBy, confirmedAt,
+    planAnnualPlacements: annual!, planFallOverPct: fallOver, planYear: year!,
+    constraintHeadline: headline, constraintDetail: detail, confirmedBy, confirmedAt,
   } satisfies OverviewSettings);
 }

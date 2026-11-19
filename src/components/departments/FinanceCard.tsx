@@ -1,9 +1,15 @@
 import { useState } from 'react';
 import { Skeleton } from '../shared/Skeleton';
-import { useXeroFinanceData, useScheduledInvoices, useCacKPIs, useOverviewSettings } from '../../hooks/queries';
-import { AUD_TO_NZD_APPROX } from '../../services/airtable';
-import { availableCash as availableCashOf, financeSummary, DEFAULT_NET_PROFIT_TARGET, type FinanceSummary } from '../../lib/finance';
-import { monthWindow, currentMonthKey, recentMonthKeys, type MonthWindow } from '../../lib/nzTime';
+import {
+  useXeroFinanceData, useScheduledInvoices, useCacKPIs, usePlacementPlan, useRecruiterKPIs, useJobAging, useRecruitmentSettings, useClientInvoices,
+} from '../../hooks/queries';
+import { AUD_TO_NZD_APPROX, timeBoundaries } from '../../services/airtable';
+import { availableCash as availableCashOf, financeSummary, forecastWeeklyOutflow, OUTFLOW_BUFFER, type FinanceSummary } from '../../lib/finance';
+import { monthWindow, currentMonthKey, recentMonthKeys, addDays, type MonthWindow } from '../../lib/nzTime';
+import { recruitmentPace, teamRecruiters, DEFAULT_RECRUITMENT_SETTINGS } from '../../lib/recruitment';
+import { avgDaysLateByClient } from '../../lib/clientScorecard';
+import { companyKey } from '../../lib/companyKey';
+import type { PlacementPlan, planYearToDate } from '../../lib/placementPlan';
 import { DiagnosisTile } from '../shared/DiagnosisTile';
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, Cell,
@@ -56,27 +62,6 @@ function KP({ label, value, sub, accent, valueColor }: {
   );
 }
 
-// KP card with an optional static sub-line and an optional % delta sub-line
-function KPDelta({ label, value, valueColor, accent, sub, deltaPct, invert }: {
-  label: string; value: string; valueColor?: string; accent?: string; sub?: string;
-  deltaPct?: { value: number; label: string } | null;
-  invert?: boolean;
-}) {
-  const isGood = deltaPct ? (invert ? deltaPct.value <= 0 : deltaPct.value >= 0) : true;
-  return (
-    <div style={{ background: BG, border: `.5px solid ${BORDER}`, borderRadius: 8, borderTop: accent ? `3px solid ${accent}` : undefined, padding: '.875rem 1rem' }}>
-      <div style={{ fontSize: 11, color: MUTED, marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: 21, fontWeight: 500, color: valueColor ?? TEXT, lineHeight: 1.1 }}>{value}</div>
-      {sub && <div style={{ fontSize: 11, color: MUTED, marginTop: 3 }}>{sub}</div>}
-      {deltaPct != null && (
-        <div style={{ fontSize: 11, color: isGood ? NZ : RD, marginTop: 3 }}>
-          {deltaPct.value >= 0 ? '↑ +' : '↓ '}{Math.abs(deltaPct.value).toFixed(1)}% {deltaPct.label}
-        </div>
-      )}
-    </div>
-  );
-}
-
 type MonthMetric = 'revenue' | 'grossProfit' | 'opex' | 'netProfit';
 type MonthFigures = Partial<Record<MonthMetric, number>>;
 type MonthCompare = {
@@ -93,10 +78,9 @@ function KPMonth({ label, value, valueColor, accent, metric, compare, invert }: 
   const cur = compare.current?.[metric];
   const prev = compare.samePoint?.[metric];
   const lastTotal = compare.lastTotal?.[metric];
-  // Divide by |prev| so ▲ always means "went up", even when last month's
-  // figure was negative (e.g. a net loss).
-  const pct = cur != null && prev ? ((cur - prev) / Math.abs(prev)) * 100 : null;
-  const pctColor = pct == null ? MUTED : (invert ? pct <= 0 : pct >= 0) ? NZ : RD;
+  // Dollar difference: a % breaks when last month was negative (e.g. a net loss).
+  const diff = cur != null && prev != null ? cur - prev : null;
+  const diffColor = diff == null ? MUTED : (invert ? diff <= 0 : diff >= 0) ? NZ : RD;
   return (
     <div style={{ background: BG, border: `.5px solid ${BORDER}`, borderRadius: 8, borderTop: accent ? `3px solid ${accent}` : undefined, padding: '.875rem 1rem' }}>
       <div style={{ fontSize: 11, color: MUTED, marginBottom: 4 }}>{label}</div>
@@ -105,8 +89,8 @@ function KPMonth({ label, value, valueColor, accent, metric, compare, invert }: 
         {compare.currentName} {compare.isCurrent ? 'so far' : 'total'}: {cur != null ? fmtNZD(cur) : '—'}
       </div>
       <div style={{ fontSize: 11, color: MUTED, marginTop: 3 }}>
-        <span style={{ color: pctColor }}>
-          {pct == null ? '—' : `${pct >= 0 ? '▲' : '▼'} ${Math.abs(pct).toFixed(0)}%`}
+        <span style={{ color: diffColor }}>
+          {diff == null ? '—' : `${diff >= 0 ? '▲ +' : '▼ −'}${fmtNZD(Math.abs(diff))}`}
         </span>
         {compare.isCurrent
           ? ` vs ${compare.lastName} at the same point · ${compare.lastName} total ${lastTotal != null ? fmtNZD(lastTotal) : '—'}`
@@ -176,7 +160,7 @@ function FinanceSkeleton() {
 
 // ─── Section components ───────────────────────────────────────────────────────
 
-function TwelveMonthTrendChart({ data }: { data: XeroFinanceData['monthlyTrend'] }) {
+function TwelveMonthTrendChart({ data, plan }: { data: XeroFinanceData['monthlyTrend']; plan: PlacementPlan }) {
   const [view, setView] = useState<'monthly' | 'overall'>('monthly');
 
   if (!data || data.length === 0) return null;
@@ -207,6 +191,12 @@ function TwelveMonthTrendChart({ data }: { data: XeroFinanceData['monthlyTrend']
         <div>
           <div style={{ fontSize: 13, fontWeight: 500, color: TEXT, marginBottom: 2 }}>12-Month Trend</div>
           <div style={{ fontSize: 11, color: MUTED }}>Revenue (bars) · Net profit (line) · Australia only · NZD</div>
+          {view === 'monthly' && (
+            <div style={{ fontSize: 11, color: MUTED }}>
+              <span style={{ color: AM }}>- - Breakeven</span> = revenue that covers average monthly costs ({plan.costs ? fmtNZD(plan.costs.value) : '—'}) ·{' '}
+              <span style={{ color: PU }}>- - Plan</span> = net profit the plan delivers at current costs ({plan.projectedNetProfit != null ? fmtNZD(plan.projectedNetProfit) : '—'})
+            </div>
+          )}
         </div>
         <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
           {(['monthly', 'overall'] as const).map(v => (
@@ -237,9 +227,11 @@ function TwelveMonthTrendChart({ data }: { data: XeroFinanceData['monthlyTrend']
             axisLine={false}
             tickLine={false}
             tickFormatter={fmtAxis}
-            domain={[(min: number) => Math.min(0, min), (max: number) => Math.max(0, max)]}
+            domain={[(min: number) => Math.min(0, min), (max: number) => Math.max(0, max, view === 'monthly' ? (plan.projectedNetProfit ?? 0) * 1.05 : 0)]}
           />
           <ReferenceLine y={0} stroke={BORDER} />
+          {view === 'monthly' && plan.costs && <ReferenceLine y={plan.costs.value} stroke={AM} strokeDasharray="5 4" label={{ value: 'Breakeven', position: 'insideTopLeft', fill: AM, fontSize: 10 }} />}
+          {view === 'monthly' && plan.projectedNetProfit != null && <ReferenceLine y={plan.projectedNetProfit} stroke={PU} strokeDasharray="5 4" label={{ value: 'Plan', position: 'insideTopLeft', fill: PU, fontSize: 10 }} />}
           <Tooltip
             contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${BORDER}`, background: BG2 }}
             labelStyle={{ color: TEXT }}
@@ -282,7 +274,7 @@ function TwelveMonthTrendChart({ data }: { data: XeroFinanceData['monthlyTrend']
   );
 }
 
-function PLSummarySection({ w, totalRevenue, totalGrossProfit, totalOpex, netProfit, lastMonthSamePoint, cac, monthlyTrend }: {
+function PLSummarySection({ w, totalRevenue, totalGrossProfit, totalOpex, netProfit, lastMonthSamePoint, cac, monthlyTrend, plan }: {
   w: MonthWindow;
   totalRevenue: number; totalGrossProfit: number; totalOpex: number; netProfit: number;
   lastMonthSamePoint: XeroFinanceData['lastMonthSamePoint'];
@@ -297,6 +289,7 @@ function PLSummarySection({ w, totalRevenue, totalGrossProfit, totalOpex, netPro
     ltgp: number; costPerPlacedClient: number; ltgpToCac: number;
   } | undefined;
   monthlyTrend: XeroFinanceData['monthlyTrend'];
+  plan: PlacementPlan;
 }) {
   const grossMarginPct = totalRevenue > 0 ? (totalGrossProfit / totalRevenue) * 100 : 0;
   const netMarginPct = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
@@ -318,7 +311,7 @@ function PLSummarySection({ w, totalRevenue, totalGrossProfit, totalOpex, netPro
 
   return (
     <>
-      <SH color={TEXT} label="P&L Summary" sub="Australia only · revenue · gross profit · opex · net profit · client CAC · qualified candidate CAC · placement CAC · LTGP:CAC" />
+      <SH color={TEXT} label="P&L Summary" sub="Australia only · revenue · gross profit · opex · net profit · LTGP:CAC" />
 
       <G4>
         <KPMonth
@@ -356,53 +349,33 @@ function PLSummarySection({ w, totalRevenue, totalGrossProfit, totalOpex, netPro
         />
       </G4>
 
-      <TwelveMonthTrendChart data={monthlyTrend} />
+      <TwelveMonthTrendChart data={monthlyTrend} plan={plan} />
 
       <G4>
-        <KPDelta
-          accent={RD}
-          label="CAC per Signed Client"
-          value={cac ? fmtNZD(cac.cacPerSignedClient) : '—'}
-          valueColor={RD}
-          invert
-          deltaPct={cac?.cacPerSignedClientDeltaPct != null ? { value: cac.cacPerSignedClientDeltaPct, label: 'vs prior 90 days' } : null}
-        />
-        <KPDelta
-          accent={RD}
-          label="CAC per Qualified Candidate"
-          value={cac ? fmtNZD(cac.cacPerQualifiedCandidate) : '—'}
-          valueColor={RD}
-          invert
-          sub="Candidate Meta spend ÷ NZ Citizen + Trade/Occupation candidates"
-          deltaPct={cac?.cacPerQualifiedCandidateDeltaPct != null ? { value: cac.cacPerQualifiedCandidateDeltaPct, label: 'vs prior 90 days' } : null}
-        />
-        <KPDelta
-          accent={RD}
-          label="Placement CAC"
-          value={cac ? fmtNZD(cac.placementCac) : '—'}
-          valueColor={RD}
-          invert
-          deltaPct={cac?.placementCacDeltaPct != null ? { value: cac.placementCacDeltaPct, label: 'vs prior 90 days' } : null}
-        />
         <KP
           accent={PU}
           label="LTGP:CAC"
           value={cac ? `${cac.ltgpToCac.toFixed(1)}:1` : '—'}
           valueColor={PU}
-          sub={cac ? `LTGP ${fmtNZD(cac.ltgp)} · cost per placed client ${fmtNZD(cac.costPerPlacedClient)}` : undefined}
+          sub={cac ? `LTGP ${fmtNZD(cac.ltgp)} · cost per placed client ${fmtNZD(cac.costPerPlacedClient)} · other CAC numbers are on Marketing and Sales` : undefined}
         />
       </G4>
     </>
   );
 }
 
-// expected = what was / is due to come in that week; actual = cash actually
-// received (undefined for forecast weeks); isPast = the week has finished.
-type MonthCashRow = { weekLabel: string; isForecast: boolean; isPast: boolean; expected: number; actual?: number; outflow?: number };
+// expected = what was / is expected to come in that week (due date + the client's average days late);
+// actual = cash actually received (undefined for forecast weeks); isPast = the week has finished;
+// stillDue = this week only: unpaid amounts still expected later this week.
+type MonthCashRow = { weekLabel: string; isForecast: boolean; isPast: boolean; isThisWeek: boolean; expected: number; actual?: number; outflow?: number; stillDue?: number };
 
-function MonthCashCard({ title, monthLabel, rows, cashFlowHasDetail }: {
+/** Net cash flow: finished weeks actual − outflow; this week received so far + still due − outflow; future weeks expected − forecast outflow. */
+const rowNet = (r: MonthCashRow) =>
+  (r.isPast ? r.actual ?? 0 : r.isThisWeek ? (r.actual ?? 0) + (r.stillDue ?? 0) : r.expected) - (r.outflow ?? 0);
+
+function MonthCashCard({ title, monthLabel, rows, cashFlowHasDetail, forecastOutflow }: {
   title: string; monthLabel: string; rows: MonthCashRow[];
-  cashFlowHasDetail: boolean;
+  cashFlowHasDetail: boolean; forecastOutflow: number | null;
 }) {
   const th = { fontSize: 10, fontWeight: 700, color: MUTED, padding: '4px 6px', borderBottom: `.5px solid ${BORDER}` } as const;
   const td = { padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, textAlign: 'right' as const, whiteSpace: 'nowrap' as const };
@@ -450,14 +423,30 @@ function MonthCashCard({ title, monthLabel, rows, cashFlowHasDetail }: {
       {rows.length > 0 && (() => {
         // Finished weeks count what actually came in; the current and future
         // weeks count what's expected, so the month total is a best estimate.
-        const netCashFlow = rows.reduce((sum, r) => sum + (r.isPast ? (r.actual ?? 0) : r.expected) - (r.outflow ?? 0), 0);
+        const netCashFlow = rows.reduce((sum, r) => sum + rowNet(r), 0);
+        const signed = (n: number) => `${n >= 0 ? '+' : '−'}${fmtNZD(Math.abs(n))}`;
+        const part = (r: MonthCashRow) => r.isPast
+          ? `${r.weekLabel}: ${fmtNZD(r.actual ?? 0)} received − ${fmtNZD(r.outflow ?? 0)} out`
+          : r.isThisWeek
+            ? `${r.weekLabel}: ${fmtNZD(r.actual ?? 0)} received so far + ${fmtNZD(r.stillDue ?? 0)} still due − ${fmtNZD(r.outflow ?? 0)} out so far`
+            : `${r.weekLabel}: ${fmtNZD(r.expected)} expected − ${fmtNZD(r.outflow ?? 0)} forecast out`;
         return (
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, paddingTop: 8, borderTop: `.5px solid ${BORDER}` }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: MUTED }}>Net cash flow</span>
-            <span style={{ fontSize: 13, fontWeight: 700, color: netCashFlow >= 0 ? NZ : RD, whiteSpace: 'nowrap' }}>
-              {netCashFlow >= 0 ? '+' : '−'}{fmtNZD(Math.abs(netCashFlow))}
-            </span>
-          </div>
+          <>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, paddingTop: 8, borderTop: `.5px solid ${BORDER}` }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: MUTED }}>Net cash flow</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: netCashFlow >= 0 ? NZ : RD, whiteSpace: 'nowrap' }}>{signed(netCashFlow)}</span>
+            </div>
+            <details style={{ fontSize: 10, color: MUTED, marginTop: 6 }}>
+              <summary style={{ cursor: 'pointer' }}>Show the working</summary>
+              <div style={{ lineHeight: 1.6, marginTop: 4 }}>
+                {rows.map((r, i) => <div key={i}>{part(r)} = {signed(rowNet(r))}</div>)}
+                <div style={{ marginTop: 4 }}>
+                  Finished weeks use cash actually received; this week uses cash received so far plus unpaid invoices still expected this week;
+                  future weeks use expected receipts. Forecast outflow {forecastOutflow != null ? `${fmtNZD(forecastOutflow)}/week` : '—'} = average cash out of the last 4 finished weeks + {fmtNZD(OUTFLOW_BUFFER)}.
+                </div>
+              </div>
+            </details>
+          </>
         );
       })()}
     </Card>
@@ -465,12 +454,12 @@ function MonthCashCard({ title, monthLabel, rows, cashFlowHasDetail }: {
 }
 
 function CashPositionSection({
-  cashKpis, bankAccounts, monthlyTrend, ausReceivables, cashFlowHasDetail,
-  monthBuckets, hasCombined,
+  cashKpis, bankAccounts, ausReceivables, cashFlowHasDetail,
+  monthBuckets, hasCombined, forecastOutflow,
 }: {
   cashKpis: { closingDate: string };
   bankAccounts: Array<{ name: string; balance: number }> | undefined;
-  monthlyTrend: XeroFinanceData['monthlyTrend'];
+  forecastOutflow: number | null;
   ausReceivables: XeroFinanceData['ausReceivables'];
   cashFlowHasDetail: boolean;
   monthBuckets: { previous: { label: string; rows: MonthCashRow[] }; current: { label: string; rows: MonthCashRow[] }; next: { label: string; rows: MonthCashRow[] } };
@@ -482,15 +471,6 @@ function CashPositionSection({
   const availableCash = availableCashOf(accounts) ?? 0;
   const totalInBank = accounts.reduce((sum, a) => sum + a.balance, 0);
 
-  // Cash cover = available cash ÷ average AU opex (same basis as the Operating
-  // Expenses card) over the last 3 full months. Actuals only, no forecast.
-  const fullMonthOpex = (monthlyTrend ?? [])
-    .filter(m => !m.isCurrentMonth && m.opex != null)
-    .slice(-3)
-    .map(m => m.opex as number);
-  const avgMonthlyOpex = fullMonthOpex.length === 3 ? fullMonthOpex.reduce((a, b) => a + b, 0) / 3 : null;
-  const cashCover = avgMonthlyOpex && avgMonthlyOpex > 0 ? availableCash / avgMonthlyOpex : null;
-
   const overdueCount = ausReceivables?.overdueCount ?? 0;
 
   return (
@@ -500,16 +480,12 @@ function CashPositionSection({
           ? `Actuals · forecast · as at ${fmtDate(cashKpis.closingDate)}`
           : 'Actuals · forecast'} />
 
-      <G4>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 10, marginBottom: '.875rem' }}>
         <KP accent={availableCash >= 0 ? NZ : RD}
             label="Available cash"
             value={bankAccounts ? fmtNZD(availableCash) : '—'}
-            sub={bankAccounts ? `Total in bank ${fmtNZD(totalInBank)}` : undefined}
+            sub={bankAccounts ? `Ops + Profit accounts only, excluding the GST/Tax and Employee Entitlements accounts · total in bank ${fmtNZD(totalInBank)}` : undefined}
             valueColor={availableCash >= 0 ? NZ : RD} />
-        <KP accent={AUS}
-            label="Cash cover"
-            value={cashCover != null ? `${cashCover.toFixed(1)} months` : '—'}
-            sub={`Average spend ${avgMonthlyOpex != null ? fmtNZD(avgMonthlyOpex) : '—'}/month · how long available cash lasts if nothing comes in`} />
         <KP accent={AM}
             label="Owed to us"
             value={ausReceivables ? fmtNZD(ausReceivables.owedTotal) : '—'}
@@ -518,42 +494,106 @@ function CashPositionSection({
             label="Overdue"
             value={ausReceivables ? `${fmtNZD(ausReceivables.overdueTotal)} · ${overdueCount} invoice${overdueCount === 1 ? '' : 's'}` : '—'}
             valueColor={ausReceivables && ausReceivables.overdueTotal > 0 ? RD : MUTED} />
-      </G4>
+      </div>
 
       {/* Previous / current / next month cash outlook, side by side */}
       {hasCombined && (
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 10 }}>
-            <MonthCashCard title="Previous month" monthLabel={monthBuckets.previous.label} rows={monthBuckets.previous.rows} cashFlowHasDetail={cashFlowHasDetail} />
-            <MonthCashCard title="Current month" monthLabel={monthBuckets.current.label} rows={monthBuckets.current.rows} cashFlowHasDetail={cashFlowHasDetail} />
-            <MonthCashCard title="Next month" monthLabel={monthBuckets.next.label} rows={monthBuckets.next.rows} cashFlowHasDetail={cashFlowHasDetail} />
+            <MonthCashCard title="Previous month" monthLabel={monthBuckets.previous.label} rows={monthBuckets.previous.rows} cashFlowHasDetail={cashFlowHasDetail} forecastOutflow={forecastOutflow} />
+            <MonthCashCard title="Current month" monthLabel={monthBuckets.current.label} rows={monthBuckets.current.rows} cashFlowHasDetail={cashFlowHasDetail} forecastOutflow={forecastOutflow} />
+            <MonthCashCard title="Next month" monthLabel={monthBuckets.next.label} rows={monthBuckets.next.rows} cashFlowHasDetail={cashFlowHasDetail} forecastOutflow={forecastOutflow} />
           </div>
-          <NoteBox>Expected Receive = Australian Xero invoices due that week plus Airtable scheduled instalments (not yet invoiced). This week also includes overdue invoices. Actual Received = Australian cash received (Xero, ex GST).</NoteBox>
+          <NoteBox>
+            Expected Receive = Australian Xero invoices plus Airtable scheduled instalments (not yet invoiced), each moved from its due date by that client's average days late (Clients tab; due date + 7 days if the client has no payment history; early payers count as on time).
+            An unpaid invoice whose expected date has passed moves into next week. Actual Received = Australian cash received (Xero, ex GST).
+            Future weeks' Outflow = average cash out of the last 4 finished weeks + {fmtNZD(OUTFLOW_BUFFER)}{forecastOutflow != null ? ` (${fmtNZD(forecastOutflow)}/week)` : ''}.
+          </NoteBox>
         </>
       )}
     </>
   );
 }
 
-// ─── Profit target & runway (read by the Overview) ────────────────────────────
+// ─── Placement targets (the plan, set on the Overview ⚙) ─────────────────────
+
+function PlacementTargetsSection({ plan, ytd, pace, loading }: {
+  plan: PlacementPlan; ytd: ReturnType<typeof planYearToDate> | null;
+  pace: { placements: number; projected: number } | null; loading: boolean;
+}) {
+  const { settings: st, fallOver, gp, costs } = plan;
+  const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
+  const keep = 1 - fallOver.rate;
+  const paceColor = !pace ? MUTED : pace.projected >= plan.mustMake ? NZ : plan.breakeven != null && pace.projected >= plan.breakeven ? AM : RD;
+  return (
+    <>
+      <SH color={TEXT} label="Placement targets"
+        sub={`Plan ${st.planYear}: ${st.planAnnualPlacements} placements made, ${st.planFallOverPct}% planned fall-over · set on the Overview (⚙) · used by every tab`} />
+      <G4>
+        <KP accent={paceColor} label="Must make per month" value={String(plan.mustMake)} valueColor={paceColor}
+            sub={pace ? `This month: ${pace.placements} made, on pace for ${pace.projected}` : 'Placements made this month: —'} />
+        <KP accent={PU} label="Must stick per month" value={plan.mustStick.toFixed(1)} sub={`${Math.round(plan.mustStick * 12)} a year`} />
+        <KP accent={AM} label="Breakeven per month" value={plan.breakeven != null ? String(plan.breakeven) : '—'} sub="Placements made that cover costs" />
+        <KP accent={plan.projectedNetProfit != null && plan.projectedNetProfit >= 0 ? NZ : RD} label="Projected net profit"
+            value={plan.projectedNetProfit != null ? `${fmtNZD(plan.projectedNetProfit)}/month` : '—'}
+            valueColor={plan.projectedNetProfit != null && plan.projectedNetProfit >= 0 ? NZ : RD}
+            sub="The result if the plan is hit, at current costs" />
+      </G4>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 10, marginBottom: '.875rem' }}>
+        {([['Placements made', ytd?.made, ytd?.madeTarget ?? st.planAnnualPlacements, NZ], ['Placements stuck', ytd?.stuck, ytd?.stuckTarget ?? Math.round(st.planAnnualPlacements * (1 - st.planFallOverPct / 100)), PU]] as const).map(([label, done, target, color]) => {
+          const started = ytd?.started ?? false;
+          return (
+            <div key={label} style={{ background: BG, border: `.5px solid ${BORDER}`, borderRadius: 8, padding: '.875rem 1rem' }}>
+              <div style={{ fontSize: 11, color: MUTED, marginBottom: 4 }}>{label} · {st.planYear} year to date</div>
+              <div style={{ fontSize: 21, fontWeight: 500, color: TEXT }}>{started && done != null ? done : '—'} <span style={{ fontSize: 13, color: MUTED }}>of {target}</span></div>
+              <div style={{ height: 6, background: BG2, borderRadius: 3, marginTop: 8, overflow: 'hidden' }}>
+                <div style={{ width: `${started && done != null ? Math.min(100, (done / target) * 100) : 0}%`, height: '100%', background: color }} />
+              </div>
+              <div style={{ fontSize: 11, color: MUTED, marginTop: 4 }}>{started ? (label === 'Placements stuck' ? 'Made minus those that have fallen over so far' : 'Signed since 1 Jan') : `Starts 1 Jan ${st.planYear}`}</div>
+            </div>
+          );
+        })}
+      </div>
+      <NoteBox>
+        <div style={{ fontWeight: 700, marginBottom: 2 }}>The working{loading ? ' (still loading some inputs)' : ''}</div>
+        <div>Must stick = {st.planAnnualPlacements} × (1 − {st.planFallOverPct}%) ÷ 12 = <b>{plan.mustStick.toFixed(1)}</b></div>
+        <div>
+          Live fall-over rate = {fallOver.live ? `${fallOver.fell} of ${fallOver.started} placements that started in the last 6 months fell over = ${pct(fallOver.rate)}` : `not loaded yet, using the planned ${st.planFallOverPct}%`}
+        </div>
+        <div>Must make = {plan.mustStick.toFixed(2)} ÷ (1 − {pct(fallOver.rate)}) = {(plan.mustStick / keep).toFixed(2)}, rounded up = <b>{plan.mustMake}</b></div>
+        <div>
+          Gross profit per placement = {gp ? `${fmtNZD(gp.value)}, the average full fee of ${gp.count} placements that started in the last 6 months and stuck (Live or Completed in Airtable, NZD). Not reduced for fall-overs` : '—'}
+        </div>
+        <div>Average monthly costs = {costs ? `${fmtNZD(costs.value)} (Australian operating expenses, ${costs.months.join(', ')})` : '—'}</div>
+        <div>
+          Breakeven = {costs && gp ? `${fmtNZD(costs.value)} ÷ ${fmtNZD(gp.value)} = ${(costs.value / gp.value).toFixed(2)}, ÷ (1 − ${pct(fallOver.rate)}) = ${(costs.value / gp.value / keep).toFixed(2)}, rounded up = ` : '— = '}<b>{plan.breakeven ?? '—'}</b>
+        </div>
+        <div>
+          Projected net profit = {plan.mustStick.toFixed(2)} stick × {gp ? fmtNZD(gp.value) : '—'} − {costs ? fmtNZD(costs.value) : '—'} = <b>{plan.projectedNetProfit != null ? fmtNZD(plan.projectedNetProfit) : '—'}</b> a month
+        </div>
+        <div>Targets update by themselves as the live fall-over rate, fees and costs change.</div>
+      </NoteBox>
+    </>
+  );
+}
+
+// ─── Net profit & runway (read by the Overview) ───────────────────────────────
 
 function TargetRunwaySection({ s, w }: { s: FinanceSummary; w: MonthWindow }) {
-  const k = (n: number) => `$${Math.round(n / 1000)}k`;
-  const npColor = (n: number | null) => n == null ? MUTED : n >= s.target ? NZ : n >= s.target * 0.75 ? AM : RD;
+  const npColor = (n: number | null) => n == null ? MUTED : n >= 0 ? NZ : RD;
   const rwColor = s.runwayWeeks == null ? MUTED : s.runwayWeeks >= 8 ? NZ : s.runwayWeeks >= 4 ? AM : RD;
   return (
     <>
-      <SH color={TEXT} label="Profit target & runway" sub={`Australia only · ${w.isCurrent ? 'month to date' : 'full month'} · target set on the Overview (⚙)`} />
+      <SH color={TEXT} label="Net profit & runway" sub={`Australia only · ${w.isCurrent ? 'month to date' : 'full month'}`} />
       <G4>
         <KP accent={PU}
             label={w.isCurrent ? 'Net profit this month' : `Net profit · ${w.label}`}
-            value={s.netProfitMtd != null ? fmtNZD(s.netProfitMtd) : '—'}
-            sub={`Target ${k(s.target)} a month`} />
+            value={s.netProfitMtd != null ? fmtNZD(s.netProfitMtd) : '—'} />
         <KP accent={npColor(s.projectedNetProfit)}
             label="Projected month end"
             value={s.projectedNetProfit != null ? fmtNZD(s.projectedNetProfit) : '—'}
             valueColor={npColor(s.projectedNetProfit)}
-            sub={s.projectedNetProfit != null ? `${Math.round((s.projectedNetProfit / s.target) * 100)}% of target · month to date ÷ days elapsed × days in month` : undefined} />
+            sub={s.projectedNetProfit != null ? 'Month to date ÷ days elapsed × days in month' : undefined} />
         <KP accent={rwColor}
             label="Cash runway"
             value={s.runwayWeeks != null ? `${s.runwayWeeks.toFixed(1)} weeks` : '—'}
@@ -570,10 +610,17 @@ function TargetRunwaySection({ s, w }: { s: FinanceSummary; w: MonthWindow }) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
+// Days added to the due date when a client has no payment history.
+const NO_HISTORY_DAYS = 7;
+
 export function FinanceCard() {
   const { data, error } = useXeroFinanceData();
   const { data: scheduledInvoices } = useScheduledInvoices();
-  const { data: overviewSettings } = useOverviewSettings();
+  const { data: clientInvoices } = useClientInvoices();
+  const { plan, ytd, loading: planLoading } = usePlacementPlan();
+  const { data: rec } = useRecruiterKPIs('month');
+  const { data: jobs } = useJobAging();
+  const { data: recSettings } = useRecruitmentSettings();
   const [month, setMonth] = useState(currentMonthKey);
   const w = monthWindow(month);
 
@@ -591,19 +638,23 @@ export function FinanceCard() {
 
   if (!data) return <FinanceSkeleton />;
 
-  const target = overviewSettings?.netProfitTarget ?? DEFAULT_NET_PROFIT_TARGET;
-  // Diagnosis stays on the current month (same as the Overview); the target row follows the dropdown.
-  const summary = financeSummary(data, target, monthWindow(currentMonthKey()));
-  const monthSummary = w.isCurrent ? summary : financeSummary(data, target, w);
+  // Placement pace this month, same count and projection as the Recruitment tab and Overview.
+  const targets = { mustMake: plan.mustMake, breakeven: plan.breakeven };
+  const { start, now: nowMs } = timeBoundaries('month');
+  const recruiterList = recSettings?.recruiters ? recSettings.recruiters : DEFAULT_RECRUITMENT_SETTINGS.recruiters;
+  const pace = rec ? recruitmentPace(rec, teamRecruiters(rec, jobs, recruiterList), 'month', start, nowMs, targets) : null;
+  const placementPace = pace && { placements: pace.placements, projected: pace.projected, ...targets };
+  // Diagnosis stays on the current month (same as the Overview); the net profit row follows the dropdown.
+  const summary = financeSummary(data, monthWindow(currentMonthKey()), placementPace);
+  const monthSummary = w.isCurrent ? summary : financeSummary(data, w, placementPace);
 
   const cashKpis    = data.cashKpis ?? { openingBalance: 0, closingBalance: 0, closingBalanceActual: 0, avgWeeklyOutflow: 0, openingDate: data.asOf, closingDate: data.asOf };
   const cashFlow    = data.cashFlow ?? [];
-  const cashOutlook = data.cashOutlook ?? [];
-  const actualWeeks = cashFlow;
-  const forecastWeeks = cashOutlook;
+  const forecastOutflow = forecastWeeklyOutflow(cashFlow);
+  // Future weeks' outflow = last 4 finished weeks' average + buffer, not the webhook's figure.
   const combined = [
-    ...actualWeeks.map(r => ({ ...r, isForecast: false })),
-    ...forecastWeeks.map(r => ({ ...r, isForecast: true })),
+    ...cashFlow.map(r => ({ ...r, isForecast: false })),
+    ...(data.cashOutlook ?? []).map(r => ({ ...r, isForecast: true, outflow: forecastOutflow ?? r.outflow })),
   ];
 
   const currentIdx = combined.reduce((last, r, i) => (r.isForecast ? last : i), -1);
@@ -611,61 +662,52 @@ export function FinanceCard() {
   // lags a week whenever the webhook data was built before this Monday.
   const todayStr = new Date().toLocaleDateString('en-CA');
   const thisWeekIdx = combined.findIndex(r => r.weekStart && r.weekEnd && r.weekStart <= todayStr && todayStr <= r.weekEnd);
+  // Unpaid amounts whose expected date has passed are expected next week.
+  const rollIdx = (thisWeekIdx >= 0 ? thisWeekIdx : currentIdx) + 1;
 
-  // Scheduled-but-unbilled Airtable invoices (Status = Scheduled, InvoiceID blank).
-  // Each invoice is bucketed into exactly one week — the week its due date falls in —
-  // using each week's real weekStart/weekEnd from the API, falling back to anchoring
-  // on cashKpis.closingDate and stepping 7 days per week if a row lacks real dates.
-  // Overdue invoices (due date already passed) are excluded from every week bucket
-  // and summed separately instead, since they aren't guaranteed cash for any given week.
-  const closing = new Date(cashKpis.closingDate).getTime();
-  const todayMs = new Date().getTime();
-  // Airtable-scheduled-but-not-yet-invoiced amounts already past due; added to
-  // the current week's Expected Receive below.
-  let scheduledOverdue = 0;
-  const scheduledByWeek = combined.map(() => 0);
-  (scheduledInvoices ?? []).forEach(s => {
-    const due = new Date(s.dueDate).getTime();
-    const amountNZD = s.amount * AUD_TO_NZD_APPROX;
-    if (due < todayMs) {
-      scheduledOverdue += amountNZD;
-      return;
-    }
-    for (let i = 0; i < combined.length; i++) {
-      const r = combined[i];
-      const [weekStart, weekEnd] = r.weekStart && r.weekEnd
-        ? [new Date(r.weekStart).getTime(), new Date(r.weekEnd).getTime()]
-        : [closing + (i - currentIdx - 1) * 7 * 86_400_000, closing + (i - currentIdx) * 7 * 86_400_000];
-      if (due >= weekStart && due <= weekEnd) {
-        scheduledByWeek[i] += amountNZD;
-        break; // an invoice belongs to exactly one week — stop at the first match
-      }
-    }
-  });
-
-  const cashFlowHasDetail = actualWeeks.some(d => d.inflow != null || d.outflow != null);
-
-  // Expected Receive per week from Australian Xero invoices (ex GST, NZD):
-  //   past week    → every invoice that was due that week (paid or not)
-  //   current week → same, plus unpaid invoices that went overdue before it
-  //   future week  → invoices still unpaid that fall due that week
-  const ausInvoices = data.ausReceivables?.invoices ?? [];
-  const expectedFromInvoices = (weekStart: string | undefined, weekEnd: string | undefined, i: number) => {
-    if (!weekStart || !weekEnd) return 0;
-    const dueInWeek = ausInvoices.filter(inv => inv.dueDate >= weekStart && inv.dueDate <= weekEnd);
-    if (i === thisWeekIdx) {
-      const overdue = ausInvoices.filter(inv => inv.amountDueExGst > 0 && inv.dueDate < weekStart);
-      return dueInWeek.reduce((sum, inv) => sum + inv.amountExGst, 0)
-        + overdue.reduce((sum, inv) => sum + inv.amountDueExGst, 0);
-    }
-    if (weekEnd < todayStr) return dueInWeek.reduce((sum, inv) => sum + inv.amountExGst, 0);
-    return dueInWeek.reduce((sum, inv) => sum + inv.amountDueExGst, 0);
+  // Week bounds as YYYY-MM-DD; rows without real dates fall back to closing date + 7 days per week.
+  const closing = cashKpis.closingDate.slice(0, 10);
+  const weekBounds = (i: number): [string, string] => {
+    const r = combined[i];
+    return r.weekStart && r.weekEnd ? [r.weekStart, r.weekEnd] : [addDays(closing, (i - currentIdx - 1) * 7 + 1), addDays(closing, (i - currentIdx) * 7)];
   };
+  const weekOf = (date: string) => combined.findIndex((_, i) => { const [a, b] = weekBounds(i); return date >= a && date <= b; });
+  const hasStarted = (i: number) => weekBounds(i)[0] <= todayStr; // finished week or this week
+
+  // Expected date = due date + that client's average days late (Clients tab); no history → due + 7.
+  // Early payers count as on time.
+  const lateBy = clientInvoices ? avgDaysLateByClient(clientInvoices, todayStr) : null;
+  const lateDays = (client: string) => {
+    const d = lateBy?.get(companyKey(client, client));
+    return d == null ? NO_HISTORY_DAYS : Math.max(0, Math.round(d));
+  };
+
+  // expectedByWeek: finished weeks and this week show everything expected then (paid or not);
+  // future weeks show unpaid amounts only. stillDue: unpaid amounts expected later this week.
+  const expectedByWeek = combined.map(() => 0);
+  let stillDue = 0;
+  const place = (exp: string, original: number, unpaid: number) => {
+    const wi = weekOf(exp);
+    if (wi >= 0 && hasStarted(wi)) expectedByWeek[wi] += original;
+    if (unpaid <= 0) return;
+    if (exp < todayStr) { if (rollIdx < combined.length) expectedByWeek[rollIdx] += unpaid; }
+    else if (wi === thisWeekIdx) stillDue += unpaid;
+    else if (wi >= 0) expectedByWeek[wi] += unpaid;
+  };
+  // Australian Xero invoices (ex GST, NZD).
+  for (const inv of data.ausReceivables?.invoices ?? []) {
+    place(addDays(inv.dueDate, lateDays(inv.contact)), inv.amountExGst, inv.amountDueExGst);
+  }
+  // Scheduled-but-unbilled Airtable instalments (Status = Scheduled, InvoiceID blank), AUD → NZD.
+  for (const si of scheduledInvoices ?? []) {
+    const amountNZD = si.amount * AUD_TO_NZD_APPROX;
+    place(addDays(si.dueDate.slice(0, 10), lateDays(si.client)), amountNZD, amountNZD);
+  }
+
+  const cashFlowHasDetail = cashFlow.some(d => d.inflow != null || d.outflow != null);
 
   // Bucket each week into previous/current/next calendar month, anchored on today's real date
   // so "current month" always matches the calendar rather than the (often lagging) Xero closing date.
-  // Uses each week's real weekStart from the API when available, falling back to the
-  // closing-date + 7-days-per-week approximation used for scheduledByWeek above.
   const monthKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}`;
   const today = new Date();
   const prevMonthDate = new Date(today); prevMonthDate.setMonth(prevMonthDate.getMonth() - 1);
@@ -678,18 +720,16 @@ export function FinanceCard() {
     next:     { label: monthName(nextMonthDate), rows: [] as MonthCashRow[] },
   };
   combined.forEach((d, i) => {
-    const weekDate = d.weekStart ? new Date(d.weekStart) : new Date(closing + (i - currentIdx) * 7 * 86_400_000);
-    const expected = expectedFromInvoices(d.weekStart, d.weekEnd, i)
-      + scheduledByWeek[i]
-      + (i === thisWeekIdx ? scheduledOverdue : 0);
+    const weekDate = new Date(`${weekBounds(i)[0]}T00:00:00`);
+    const isThisWeek = i === thisWeekIdx;
     // Actual Received = the week's real cash-basis AU inflow (so far, for the
     // current week); forecast weeks haven't happened yet.
-    const isPast = !d.isForecast && i !== thisWeekIdx;
     const row: MonthCashRow = {
-      weekLabel: d.weekLabel, isForecast: d.isForecast, isPast,
-      expected: Math.round(expected),
+      weekLabel: d.weekLabel, isForecast: d.isForecast, isPast: !d.isForecast && !isThisWeek, isThisWeek,
+      expected: Math.round(expectedByWeek[i]),
       actual: d.isForecast ? undefined : d.inflow,
       outflow: d.outflow,
+      stillDue: isThisWeek ? Math.round(stillDue) : undefined,
     };
     const key = monthKey(weekDate);
     if (key === monthKey(prevMonthDate)) monthBuckets.previous.rows.push(row);
@@ -700,6 +740,7 @@ export function FinanceCard() {
   return (
     <div style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
       <DiagnosisTile diagnosis={summary.diagnosis} />
+      <PlacementTargetsSection plan={plan} ytd={ytd} pace={pace} loading={planLoading} />
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
         <select
           value={month}
@@ -711,16 +752,16 @@ export function FinanceCard() {
       </div>
       <TargetRunwaySection s={monthSummary} w={w} />
 
-      <PLSummarySection w={w} totalRevenue={totalRevenue} totalGrossProfit={totalGrossProfit} totalOpex={totalOpex} netProfit={netProfit} lastMonthSamePoint={data.lastMonthSamePoint} cac={cac} monthlyTrend={data.monthlyTrend} />
+      <PLSummarySection w={w} totalRevenue={totalRevenue} totalGrossProfit={totalGrossProfit} totalOpex={totalOpex} netProfit={netProfit} lastMonthSamePoint={data.lastMonthSamePoint} cac={cac} monthlyTrend={data.monthlyTrend} plan={plan} />
 
       <CashPositionSection
         cashKpis={cashKpis}
         bankAccounts={data.bankAccounts}
-        monthlyTrend={data.monthlyTrend}
         ausReceivables={data.ausReceivables}
         cashFlowHasDetail={cashFlowHasDetail}
         monthBuckets={monthBuckets}
         hasCombined={combined.length > 0}
+        forecastOutflow={forecastOutflow}
       />
 
       {error && (

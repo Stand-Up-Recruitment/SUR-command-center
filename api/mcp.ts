@@ -12,7 +12,7 @@ import { GET as organicGET } from './organic.js';
 import { GET as voiceStatsGET } from './voice-stats.js';
 import {
   fetchSalesMonth, fetchMarketingMonth, fetchRecruiterKPIs, fetchClientPlacements,
-  fetchScheduledInvoices, fetchCacKPIs, timeBoundaries,
+  fetchScheduledInvoices, fetchCacKPIs, timeBoundaries, fetchPlacementFees, AUD_TO_NZD_APPROX,
 } from '../src/services/airtable.js';
 import { fetchMetaCampaignBreakdown, fetchMetaAdBreakdown } from '../src/services/metaAds.js';
 import { fetchVoiceCallKPIs, type VoiceStatsResponse } from '../src/services/voiceCalls.js';
@@ -26,7 +26,10 @@ import { monthWindow, currentMonthKey, nzDate } from '../src/lib/nzTime.js';
 import { hiringTrigger, teamRecruiters, recruitmentPace, DEFAULT_RECRUITMENT_SETTINGS } from '../src/lib/recruitment.js';
 import { summariseRetention, DEFAULT_RETENTION_SETTINGS } from '../src/lib/retention.js';
 import { diagnoseRetention, diagnoseRecruitment, type Diagnosis } from '../src/lib/diagnosis.js';
-import { financeSummary, DEFAULT_NET_PROFIT_TARGET } from '../src/lib/finance.js';
+import { financeSummary } from '../src/lib/finance.js';
+import {
+  DEFAULT_PLAN_SETTINGS, placementPlan, liveFallOver, grossProfitPerPlacement, avgMonthlyCosts, planYearToDate,
+} from '../src/lib/placementPlan.js';
 import { buildScorecard } from '../src/lib/clientScorecard.js';
 import { salesDiagnosis, targetsFor, DEFAULT_TARGET_PER_SALESPERSON } from '../src/components/departments/salesMetrics.js';
 import { marketingDiagnosis } from '../src/components/departments/marketingMetrics.js';
@@ -73,20 +76,37 @@ const voiceStats = (days: number, to?: string) =>
     return body as VoiceStatsResponse;
   });
 
+/** The placement plan, same inputs as the dashboard's usePlacementPlan. */
+async function plan() {
+  const [s, placements, fees, xero] = await Promise.all([
+    settings<OverviewSettings>(overviewSettings), fetchRetentionPlacements(), fetchPlacementFees(), fetchXeroFinanceData(),
+  ]);
+  const ps = { ...DEFAULT_PLAN_SETTINGS, ...(s.planAnnualPlacements ? s : {}) };
+  const today = nzDate(Date.now());
+  return {
+    plan: placementPlan(ps, {
+      fallOver: liveFallOver(placements, today),
+      gp: grossProfitPerPlacement(fees, xero.audNzdMonthlyRates, today, AUD_TO_NZD_APPROX),
+      costs: avgMonthlyCosts(xero.monthlyTrend),
+    }),
+    yearToDate: planYearToDate(placements, ps, today),
+  };
+}
+
 async function recruitment(f: TimeFrame) {
-  const [data, jobs, sRes, stages, voiceBot, firstSubmit] = await Promise.all([
+  const [data, jobs, sRes, stages, voiceBot, firstSubmit, p] = await Promise.all([
     fetchRecruiterKPIs(f), fetchJobAging(), settings<RecruitmentSettings>(recruitmentSettings),
-    soft(fetchJobAdderStageKPIs(f)), soft(fetchVoiceCallKPIs(f, voiceStats)), soft(fetchFirstSubmitKPIs()),
+    soft(fetchJobAdderStageKPIs(f)), soft(fetchVoiceCallKPIs(f, voiceStats)), soft(fetchFirstSubmitKPIs()), plan(),
   ]);
   const s = { ...DEFAULT_RECRUITMENT_SETTINGS, ...sRes };
   const { start, now } = timeBoundaries(f);
-  const pace = recruitmentPace(data, teamRecruiters(data, jobs, s.recruiters), f, start, now);
+  const pace = recruitmentPace(data, teamRecruiters(data, jobs, s.recruiters), f, start, now, { mustMake: p.plan.mustMake, breakeven: p.plan.breakeven });
   const hiring = hiringTrigger(jobs, s);
   const diagnosis = diagnoseRecruitment({
     ...pace, periodLabel: f,
     hiring: { state: hiring.state, weeksUntilFull: hiring.weeksUntilFull, full: hiring.activeJobs >= hiring.slots },
   });
-  return { frame: f, diagnosis, pace, hiringTrigger: hiring, team: data, openJobs: jobs, pipelineStages: stages, voiceBot, daysToFirstCv: firstSubmit };
+  return { frame: f, diagnosis, pace, placementPlan: p.plan, planYearToDate: p.yearToDate, hiringTrigger: hiring, team: data, openJobs: jobs, pipelineStages: stages, voiceBot, daysToFirstCv: firstSubmit };
 }
 
 async function retention() {
@@ -97,15 +117,16 @@ async function retention() {
 }
 
 async function finance(full: boolean) {
-  const [data, s, scheduled] = await Promise.all([
-    fetchXeroFinanceData(), settings<OverviewSettings>(overviewSettings), full ? soft(fetchScheduledInvoices()) : undefined,
+  const [data, rec, scheduled] = await Promise.all([
+    fetchXeroFinanceData(), recruitment('month'), full ? soft(fetchScheduledInvoices()) : undefined,
   ]);
-  const summary = financeSummary(data, s.netProfitTarget ?? DEFAULT_NET_PROFIT_TARGET, monthWindow(currentMonthKey()));
-  if (!full) return { diagnosis: summary.diagnosis, summary };
+  const p = rec.placementPlan;
+  const summary = financeSummary(data, monthWindow(currentMonthKey()), { ...rec.pace, mustMake: p.mustMake, breakeven: p.breakeven });
+  if (!full) return { diagnosis: summary.diagnosis, summary, placementPlan: p };
   // Same inputs the Finance tab passes to its LTGP:CAC row.
   const grossMarginPct = data.ausRevenue > 0 ? (data.ausGrossProfit / data.ausRevenue) * 100 : undefined;
   const cac = await soft(fetchCacKPIs(grossMarginPct, data.jobBoardAdvertising90d, data.prevJobBoardAdvertising90d, data.audNzdMonthlyRates));
-  return { diagnosis: summary.diagnosis, summary, ltgpCac: cac, scheduledInvoices: scheduled, xero: data };
+  return { diagnosis: summary.diagnosis, summary, placementPlan: p, planYearToDate: rec.planYearToDate, ltgpCac: cac, scheduledInvoices: scheduled, xero: data };
 }
 
 /** The Overview page: every department's Diagnosis and the top things needing attention. */

@@ -28,6 +28,7 @@ import { candidateQualifier, DEFAULT_NON_TRADE_CATEGORIES } from '../lib/qualifi
 import { tradeOf } from '../lib/demand.js';
 import { isNonRecruiter, sourcedTally, firstName } from '../lib/recruitment.js';
 import { companyKey } from '../lib/companyKey.js';
+import type { PlacementFee } from '../lib/placementPlan.js';
 
 const API_KEY = env.VITE_AIRTABLE_API_KEY as string;
 const CLIENTS_BASE_ID = env.VITE_AIRTABLE_CLIENTS_BASE_ID as string;
@@ -616,6 +617,24 @@ export async function fetchClientPlacements(): Promise<ClientPlacement[]> {
   }).filter(p => p.client);
 }
 
+/** Every placement's start date, status and fee (AUD), for the plan's gross profit per placement. */
+export async function fetchPlacementFees(): Promise<PlacementFee[]> {
+  if (!CLIENTS_BASE_ID) throw new Error('Airtable credentials not configured');
+  const records = await fetchAllFromBase<{ 'Candidate Start Date'?: string; 'Cancellation Date'?: string; 'Total Amount'?: number; [key: string]: unknown }>(
+    CLIENTS_BASE_ID, PLACEMENTS_TABLE_ID, {},
+  );
+  return records.filter(f => f['Candidate Start Date']).map(f => {
+    // Same BOM-safe "Status" lookup as fetchAusPlacements.
+    const statusKey = Object.keys(f).find(k => k.replace(/^\uFEFF/, '') === 'Status') ?? '';
+    return {
+      startDate: f['Candidate Start Date']!,
+      status: (f[statusKey] as string | undefined) ?? '',
+      cancelled: Boolean(f['Cancellation Date']),
+      feeAud: f['Total Amount'] ?? 0,
+    };
+  });
+}
+
 export async function fetchScheduledInvoices(): Promise<ScheduledInvoice[]> {
   if (!CLIENTS_BASE_ID) throw new Error('Airtable credentials not configured');
 
@@ -624,13 +643,14 @@ export async function fetchScheduledInvoices(): Promise<ScheduledInvoice[]> {
     InvoiceID?: string;
     'Invoice Amount'?: number;
     'Due Date'?: string;
+    'Company Name'?: string[];
   }>(CLIENTS_BASE_ID, INSTALMENTS_TABLE_ID, {
     filterByFormula: `AND({Status} = 'Scheduled', {InvoiceID} = '')`,
   });
 
   return records
     .filter(f => f['Due Date'])
-    .map(f => ({ amount: f['Invoice Amount'] ?? 0, dueDate: f['Due Date']! }));
+    .map(f => ({ amount: f['Invoice Amount'] ?? 0, dueDate: f['Due Date']!, client: f['Company Name']?.[0] ?? '' }));
 }
 
 // ─── CAC ──────────────────────────────────────────────────────────────────────

@@ -1,3 +1,5 @@
+import type { PlanSettings } from '../lib/placementPlan';
+
 // ─── Airtable raw record shape ──────────────────────────────────────────────
 export interface AirtableRecord<T> {
   id: string;
@@ -311,6 +313,7 @@ export interface AusPlacement {
 export interface ScheduledInvoice {
   amount: number;
   dueDate: string; // ISO date
+  client: string;  // Airtable "Company Name"
 }
 
 export interface NZWorkerStats {
@@ -571,8 +574,7 @@ export interface RecruitmentSettings {
 }
 
 // ─── Overview ─────────────────────────────────────────────────────────────────
-export interface OverviewSettings {
-  netProfitTarget: number;       // NZD per month
+export interface OverviewSettings extends PlanSettings {
   constraintHeadline: string;    // e.g. "Candidate supply"
   constraintDetail: string;      // e.g. "Short on: electricians, carpenters"
   confirmedBy: string;

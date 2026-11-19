@@ -1,17 +1,13 @@
 // Recruiter capacity / hiring trigger, shared by the Recruitment tab and the settings API.
-// Placement targets, breakeven and pace, shared by the Recruitment tab and the Overview.
+// Placement targets (split from the placement plan), breakeven and pace, shared by the Recruitment tab and the Overview.
 import type { JobAgingKPIs, RecruiterKPIs, RecruiterStat, RecruitmentSettings, RollingRates, TimeFrame } from '../types';
 
-// Breakeven cost model — update these when Les's costs change (same pattern as
-// RECRUITER_COUNT in services/airtable.ts's LTGP calc).
-export const TOTAL_WEEKLY_OVERHEAD = 14000;   // NZD/week, manual input owned by Les
-export const RECRUITER_WEEKLY_SALARY = 1442;  // NZD/week, ~$75k/year baseline
-export const AVG_FEE_PER_PLACEMENT = 20000;   // NZD, blended flat-fee/% average
 export const WEEKS_PER_MONTH = 4.33;
 
-// Monthly placement targets per recruiter (by first name); anyone not listed gets the default.
-const PLACEMENT_TARGETS_MONTHLY: Record<string, number> = { ayn: 4, ian: 4, lionel: 2 };
-const DEFAULT_PLACEMENT_TARGET_MONTHLY = 2;
+// Each recruiter's share of the team's monthly "must make" (from the placement plan), by first
+// name; anyone not listed gets the default weight. Shares keep the old 4 / 4 / 2 / 2 split.
+const PLACEMENT_WEIGHTS: Record<string, number> = { ayn: 4, ian: 4, lionel: 2 };
+const DEFAULT_PLACEMENT_WEIGHT = 2;
 
 // Career track (Recruiter Career Track, trial v1, Nov 2026), by first name. Update when someone
 // moves up. `next` is the bar for the next tier: Sourcers count sourced submissions + sourced
@@ -119,18 +115,20 @@ export function teamRecruiters(data: RecruiterKPIs, jobs: JobAgingKPIs | undefin
   return out.filter(r => !keep || keep.has(firstName(r.name))).sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export function placementTargetFor(name: string, frame: TimeFrame): number {
-  if (tierFor(name)?.kind === 'sourcer') return 0; // Sourcers book; their Placers place
-  const monthly = PLACEMENT_TARGETS_MONTHLY[firstName(name)] ?? DEFAULT_PLACEMENT_TARGET_MONTHLY;
+const weightOf = (name: string) => (tierFor(name)?.kind === 'sourcer' ? 0 : PLACEMENT_WEIGHTS[firstName(name)] ?? DEFAULT_PLACEMENT_WEIGHT); // Sourcers book; their Placers place
+
+/** The team's monthly targets from the placement plan (must make, breakeven). */
+export interface TeamTargets { mustMake: number; breakeven: number | null }
+
+/** One recruiter's share of the team's must-make this period. */
+export function placementTargetFor(name: string, frame: TimeFrame, team: { name: string }[], t: TeamTargets): number {
+  const total = team.reduce((s, r) => s + weightOf(r.name), 0);
+  const monthly = total > 0 ? (t.mustMake * weightOf(name)) / total : 0;
   return frame === 'week' ? monthly / WEEKS_PER_MONTH : monthly;
 }
 
-/** Placements one recruiter needs this period to cover their salary plus a share of overhead. */
-export function breakevenPerRecruiter(headcount: number, frame: TimeFrame): number {
-  const overheadPerRecruiter = headcount > 0 ? TOTAL_WEEKLY_OVERHEAD / headcount : 0;
-  const weekly = (overheadPerRecruiter + RECRUITER_WEEKLY_SALARY) / AVG_FEE_PER_PLACEMENT;
-  return frame === 'week' ? weekly : weekly * WEEKS_PER_MONTH;
-}
+/** Team breakeven for the period (the plan's monthly breakeven, or 0 until costs/fees load). */
+export const teamBreakeven = (frame: TimeFrame, t: TeamTargets) => (t.breakeven ?? 0) / (frame === 'week' ? WEEKS_PER_MONTH : 1);
 
 export interface RecruitmentPace {
   placements: number;
@@ -141,15 +139,15 @@ export interface RecruitmentPace {
 
 /** `start`/`now` are the period boundaries from timeBoundaries(frame). */
 export function recruitmentPace(
-  data: RecruiterKPIs, recruiters: RecruiterStat[], frame: TimeFrame, start: number, now: number,
+  data: RecruiterKPIs, recruiters: RecruiterStat[], frame: TimeFrame, start: number, now: number, t: TeamTargets,
 ): RecruitmentPace {
   const nowDate = new Date(now);
   const periodDays = frame === 'week' ? 7 : new Date(nowDate.getFullYear(), nowDate.getMonth() + 1, 0).getDate();
   const daysElapsed = Math.max(1, Math.ceil((now - start) / DAY_MS));
   return {
     placements: data.placements,
-    target: recruiters.reduce((s, r) => s + placementTargetFor(r.name, frame), 0),
-    breakeven: breakevenPerRecruiter(recruiters.length, frame) * recruiters.length,
+    target: Math.round(recruiters.reduce((s, r) => s + placementTargetFor(r.name, frame, recruiters, t), 0) * 100) / 100, // shares sum to 15.999… otherwise
+    breakeven: teamBreakeven(frame, t),
     projected: Math.round((data.placements / daysElapsed) * periodDays),
   };
 }

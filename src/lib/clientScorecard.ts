@@ -273,3 +273,15 @@ export function buildScorecard(
     },
   };
 }
+
+/** Average days late per client (companyKey), over paid invoices — the Clients tab's Payment average. */
+export function avgDaysLateByClient(invoices: ClientInvoice[], asAt: string): Map<string, number> {
+  const by = new Map<string, number[]>();
+  for (const inv of invoices) {
+    const { cls, daysLate } = classifyInvoice(inv, asAt);
+    if (cls !== 'paid' || daysLate == null) continue;
+    const k = companyKey(inv.contact, inv.contact);
+    by.set(k, [...(by.get(k) ?? []), daysLate]);
+  }
+  return new Map([...by].map(([k, d]) => [k, d.reduce((a, b) => a + b, 0) / d.length]));
+}
