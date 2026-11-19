@@ -4,7 +4,9 @@ import type { MonthWindow } from '../../lib/nzTime.js';
 import { rate, rateVsTarget, pctChange, isTooEarly, proRata, type Rag, type RagContext } from '../../lib/rag.js';
 import { pace, type Pace } from '../../lib/workingDays.js';
 import { diagnose, type DiagMetric, type Diagnosis } from '../../lib/diagnosis.js';
-import type { MarketingMonth, OrganicChannel, OrganicMonth, MarketingSettings, MarketingTargets } from '../../types';
+import type { MarketingMonth, OrganicChannel, OrganicMonth, MarketingSettings, MarketingTargets, MetaAdSetDay } from '../../types';
+import { addDays } from '../../lib/nzTime.js';
+import { tradeOf, type DemandSignals } from '../../lib/demand.js';
 
 const div0 = (a: number, b: number) => (b > 0 ? a / b : 0);
 
@@ -126,6 +128,49 @@ export function budgetCheck(spend: number, budget: number | null, w: MonthWindow
   return { rag, expected, usedPct: (spend / budget) * 100, duePct: (w.dayOfMonth / w.daysInMonth) * 100 };
 }
 
+// ─── Brinda's ad set check (brief: ad spike rule) ─────────────────────────────
+// Cost per lead (client) or per application (candidate) over the last 3 days vs that ad set's
+// own 14-day normal. SPIKE: 50%+ above normal, or 0 results with spend over 2× its normal cost.
+// WATCH: 20–49% above. STRONG: 20%+ below with 3+ results. Under $50 in 3 days: too little data.
+export type AdSetStatus = 'SPIKE' | 'WATCH' | 'STRONG' | 'OK' | 'NO NORMAL' | 'LOW DATA';
+export interface AdSetCheck {
+  id: string; adset: string; group: 'client' | 'candidate';
+  spend3: number; results3: number; cost3: number | null; normal: number | null; changePct: number | null;
+  status: AdSetStatus; named: boolean; trade: string | null;
+}
+const STATUS_ORDER: AdSetStatus[] = ['SPIKE', 'WATCH', 'STRONG', 'OK', 'NO NORMAL', 'LOW DATA'];
+const NAMING = /^(CAND|CLIENT)_([^_\s]+)_([^_\s]+)/i;
+
+export function adSetChecks(rows: MetaAdSetDay[], today: string): AdSetCheck[] {
+  const recentFrom = addDays(today, -2), normalFrom = addDays(today, -16);
+  const by = new Map<string, { adset: string; group: 'client' | 'candidate'; s3: number; r3: number; s14: number; r14: number }>();
+  for (const r of rows) {
+    if (r.date < normalFrom || r.date > today) continue;
+    const a = by.get(r.adsetId) ?? { adset: r.adset, group: r.group, s3: 0, r3: 0, s14: 0, r14: 0 };
+    if (r.date >= recentFrom) { a.s3 += r.spend; a.r3 += r.results; } else { a.s14 += r.spend; a.r14 += r.results; }
+    by.set(r.adsetId, a);
+  }
+  const out: AdSetCheck[] = [];
+  for (const [id, a] of by) {
+    if (a.s3 + a.s14 === 0) continue;
+    const normal = a.r14 > 0 ? a.s14 / a.r14 : null;
+    const cost3 = a.r3 > 0 ? a.s3 / a.r3 : null;
+    const changePct = normal != null && cost3 != null ? (cost3 / normal - 1) * 100 : null;
+    const status: AdSetStatus =
+      a.s3 < 50 ? 'LOW DATA'
+      : normal == null ? 'NO NORMAL'
+      : cost3 == null ? (a.s3 > 2 * normal ? 'SPIKE' : 'OK')
+      : changePct! >= 50 ? 'SPIKE' : changePct! >= 20 ? 'WATCH'
+      : changePct! <= -20 && a.r3 >= 3 ? 'STRONG' : 'OK';
+    const named = NAMING.exec(a.adset);
+    out.push({
+      id, adset: a.adset, group: a.group, spend3: a.s3, results3: a.r3, cost3, normal, changePct, status,
+      named: Boolean(named), trade: named ? (tradeOf(named[2]) ?? named[2]) : tradeOf(a.adset),
+    });
+  }
+  return out.sort((x, y) => STATUS_ORDER.indexOf(x.status) - STATUS_ORDER.indexOf(y.status) || (y.changePct ?? -Infinity) - (x.changePct ?? -Infinity) || y.spend3 - x.spend3);
+}
+
 export type MktLevel = 'FIX NOW' | 'PUSH' | 'THIS WEEK' | 'SET UP' | 'WATCH';
 export interface MktAction { level: MktLevel; who: string; title: string; detail: string; action: string }
 const LEVEL_ORDER: MktLevel[] = ['FIX NOW', 'PUSH', 'THIS WEEK', 'SET UP', 'WATCH'];
@@ -139,6 +184,7 @@ const CHANNELS = [
 /** Today's actions, ranked. Built only from the numbers the tab shows. */
 export function marketingActions(
   m: MarketingMonth, organic: OrganicMonth | undefined, settings: MarketingSettings | undefined, w: MonthWindow,
+  extra: { adSets?: AdSetCheck[]; demand?: DemandSignals } = {},
 ): MktAction[] {
   const ctx: RagContext = { isCurrent: w.isCurrent, dayOfMonth: w.dayOfMonth };
   const pw = w.prevShortLabel;
@@ -173,6 +219,41 @@ export function marketingActions(
   const qualCost = costCheck(h.cur.costPerQualifiedCandidate, h.prev.costPerQualifiedCandidate, t?.costPerQualifiedCandidate, ctx, pw, money2);
   if (bad(qualCost.rag)) {
     out.push({ level: 'THIS WEEK', who: 'Brinda', title: 'Candidates costing more', detail: `Cost per qualified candidate ${money2(qualCost.cur)} vs ${qualCost.vs}. Qualified ${flat(qual.cur, qual.prev)}.`, action: 'Find the candidate ad sets driving it' });
+  }
+
+  const word = (g: 'client' | 'candidate', n = 2) => (g === 'client' ? (n === 1 ? 'lead' : 'leads') : (n === 1 ? 'application' : 'applications'));
+  for (const a of (extra.adSets ?? []).filter(x => x.status === 'SPIKE').slice(0, 3)) {
+    out.push({
+      level: 'FIX NOW', who: 'Brinda', title: `${a.adset} blew out`,
+      detail: a.cost3 != null
+        ? `Cost per ${word(a.group, 1)} ${money2(a.cost3)} over the last 3 days. Its normal is ${money2(a.normal!)}.`
+        : `${money0(a.spend3)} spent in 3 days with 0 ${word(a.group)}. Its normal is ${money2(a.normal!)} per ${word(a.group, 1)}.`,
+      action: 'Check the ad set, pause or refresh today',
+    });
+  }
+
+  const d = extra.demand;
+  for (const s of (d?.shortages ?? []).slice(0, 2)) {
+    out.push({ level: 'PUSH', who: 'Brinda', title: `Need ${s.trade}`, detail: `${s.openJobs} jobs open, ${s.stale} stale (30+ days), only ${s.readyToGo} Ready-to-Go.`, action: `Push ${s.trade} candidate ads` });
+  }
+  for (const b of (d?.buildUp ?? []).slice(0, 2)) {
+    out.push({ level: 'PUSH', who: 'Brinda', title: `${b.trade} want ${b.region}`, detail: `${b.readyToGo} Ready-to-Go want ${b.region}, ${b.openJobs} open job${b.openJobs === 1 ? '' : 's'} there.`, action: `Run ${b.trade} client ads in ${b.region}` });
+  }
+  if (d?.shortages.length && extra.adSets) {
+    const short = new Set(d.shortages.map(s => s.trade));
+    const off = extra.adSets.filter(a => a.group === 'candidate' && a.spend3 > 0 && a.trade && !short.has(a.trade));
+    const offSpend = off.reduce((t, a) => t + a.spend3, 0);
+    if (offSpend >= 50) {
+      out.push({
+        level: 'THIS WEEK', who: 'Brinda', title: 'Candidate ads pointed away from shortages',
+        detail: `${money0(offSpend)} candidate spend in 3 days on ${[...new Set(off.map(a => a.trade))].join(', ')}. Shortages are ${[...short].join(', ')}.`,
+        action: `Shift budget to ${d.shortages[0].trade}`,
+      });
+    }
+  }
+  const unnamed = (extra.adSets ?? []).filter(a => !a.named);
+  if (unnamed.length) {
+    out.push({ level: 'SET UP', who: 'Brinda', title: 'Ad set names', detail: `${unnamed.length} of ${extra.adSets!.length} ad sets aren’t named Side_Trade_Location (e.g. CAND_Electrician_NZ), so spend can’t be matched to trades reliably.`, action: 'Rename ad sets' });
   }
 
   const missing = [

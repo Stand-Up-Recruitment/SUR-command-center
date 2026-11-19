@@ -469,6 +469,7 @@ export interface MarketingMonth {
   paid: { cur: MetaPaidTotals; prev: MetaPaidTotals };
   cac: { cur: AcquisitionCacs; prev: AcquisitionCacs };
   handoff: { cur: HandoffTotals; prev: HandoffTotals };
+  qualifiedByTrade: { trade: string; count: number }[]; // this window, most first
   spendSeries: { key: string; label: string; client: number; candidate: number }[];
   handoffSeries: {
     key: string; label: string;
@@ -517,6 +518,16 @@ export interface MetaCampaignRow {
   costPerResult: number | null;
   linkClicks: number;
   frequency: number;
+}
+
+export interface MetaAdSetDay {
+  adsetId: string;
+  adset: string;
+  campaign: string;
+  group: 'client' | 'candidate';
+  date: string;                 // YYYY-MM-DD (ad account time)
+  spend: number;
+  results: number;              // leads (client) / applications (candidate)
 }
 
 export interface MetaAdRow {

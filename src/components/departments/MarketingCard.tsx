@@ -8,14 +8,14 @@ import { AM, RD, BG, BG2, BORDER, TEXT, MUTED, NZ, money0, money2, int, kShort }
 import { Grid } from '../shared/monthLayout';
 import { C, PACE_COLOR, NUM_FONT, CARD, LABEL, TODO } from '../shared/v2Theme';
 import { Chip, Section, Tag, Big, Tile, Line as TextLine } from '../shared/v2Layout';
-import { useMarketingMonth, useOrganicMonth, useMarketingSettings, useSaveMarketingSettings, useMetaBreakdown, useVoiceCallKPIs } from '../../hooks/queries';
+import { useMarketingMonth, useOrganicMonth, useMarketingSettings, useSaveMarketingSettings, useMetaBreakdown, useVoiceCallKPIs, useMetaAdSets, useMarketingDemand } from '../../hooks/queries';
 import { useAuthRole } from '../auth/AuthContext';
 import { monthWindow, recentMonthKeys, currentMonthKey, type MonthWindow } from '../../lib/nzTime';
 import { rate, type RagContext } from '../../lib/rag';
 import { pace, PACE_LABEL, type Pace } from '../../lib/workingDays';
 import {
   postsTarget, marketingActions, biggestMarketingBreak, countCheck, costCheck, budgetCheck,
-  type CountCheck, type CostCheck, type MktLevel,
+  adSetChecks, type CountCheck, type CostCheck, type MktLevel, type AdSetStatus,
 } from './marketingMetrics';
 import type { MarketingMonth, MarketingSettings, MarketingTargets, MetaAdRow } from '../../types';
 
@@ -247,6 +247,11 @@ function nextMonthEndLabel(w: MonthWindow) {
 
 // ─── v2 page (Marketing tab v2 brief + mockup, 19 Nov 2026) ───────────────────
 const LEVEL_TONE: Record<MktLevel, Pace | 'blue'> = { 'FIX NOW': 'red', PUSH: 'blue', 'THIS WEEK': 'amber', 'SET UP': 'grey', WATCH: 'grey' };
+const STATUS_TONE: Record<AdSetStatus, Pace> = { SPIKE: 'red', WATCH: 'amber', STRONG: 'green', OK: 'grey', 'NO NORMAL': 'grey', 'LOW DATA': 'grey' };
+const STATUS_ACTION: Record<AdSetStatus, string> = {
+  SPIKE: 'Pause or refresh creative', WATCH: 'Check creative and audience', STRONG: 'Scale budget', OK: '',
+  'NO NORMAL': 'No results in the 14 days before', 'LOW DATA': 'Under $50 in 3 days',
+};
 const ragColor = (r: Pace) => (r === 'grey' ? C.text : PACE_COLOR[r]);
 const div0 = (a: number, b: number) => (b > 0 ? a / b : 0);
 const pctText = (a: number, b: number) => (b > 0 ? `${Math.round((a / b) * 100)}%` : '—');
@@ -300,7 +305,7 @@ function Strip({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-const FEED_ROW = (cols: number, text: string) => (
+const MSG_ROW = (cols: number, text: string) => (
   <tr><td colSpan={cols} style={{ ...TD, color: C.muted }}>{text}</td></tr>
 );
 
@@ -327,6 +332,8 @@ export function MarketingCard() {
   const { data: organic, error: organicError } = useOrganicMonth(month);
   const { data: settings } = useMarketingSettings();
   const { data: voice } = useVoiceCallKPIs('month');
+  const { data: adSetRows, error: adSetError } = useMetaAdSets();
+  const { data: demand, error: demandError, isLoading: demandLoading } = useMarketingDemand();
   const budget = settings?.monthlyBudget ?? null;
   const postsPerWeek = settings?.postsPerWeek ?? 7;
 
@@ -367,7 +374,11 @@ export function MarketingCard() {
   const t = settings?.targets;
   const h = m.handoff;
   const { cur, prev } = m.paid;
-  const actions = marketingActions(m, organic, settings, w);
+  const adSets = adSetRows ? adSetChecks(adSetRows.rows, adSetRows.today) : undefined;
+  const flagged = adSets?.filter(a => a.status === 'SPIKE' || a.status === 'WATCH').length;
+  const clientSpend3 = (trade: string) => (adSets ?? []).filter(a => a.group === 'client' && a.trade === trade).reduce((t, a) => t + a.spend3, 0);
+  const actions = marketingActions(m, organic, settings, w, { adSets, demand: demand?.error ? undefined : demand });
+  const demandMsg = demandLoading ? 'Loading from JobAdder…' : demandError || demand?.error ? `⚠ ${demandError?.message ?? demand?.error}` : null;
   const calls = countCheck(h.cur.callsBooked, h.prev.callsBooked, t?.callsBooked, w);
   const qual = countCheck(h.cur.qualifiedCandidates, h.prev.qualifiedCandidates, t?.qualifiedCandidates, w);
   const callCost = costCheck(h.cur.costPerBookedCall, h.prev.costPerBookedCall, t?.costPerBookedCall, ctx, pw, money0);
@@ -427,28 +438,54 @@ export function MarketingCard() {
 
       {/* 3. Where should the ads point? */}
       <Section title="Where should the ads point?" aside={<Tag bg={C.blue}>DEMAND SIGNALS · FROM JOBADDER</Tag>}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 14 }}>
-          <div style={{ ...CARD, overflowX: 'auto' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', gap: 14 }}>
+          <div style={{ ...CARD, overflowX: 'auto', flex: '1 1 640px' }}>
             <div style={{ padding: '16px 16px 4px' }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>Candidate shortages → push candidate ads</div>
               <Sub>A trade with jobs open 30+ days and fewer than 2 Ready-to-Go per open job</Sub>
             </div>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead><tr>{['TRADE', 'OPEN JOBS', 'STALE', 'READY-TO-GO', 'TELL BRINDA'].map(x => <th key={x} style={TH}>{x}</th>)}</tr></thead>
-              <tbody>{FEED_ROW(5, 'Needs open jobs by trade with days open, and Ready-to-Go by trade (JobAdder).')}</tbody>
+              <tbody>
+                {demandMsg ? MSG_ROW(5, demandMsg) : demand!.shortages.length === 0 ? MSG_ROW(5, 'No shortages: every trade with stale jobs has 2+ Ready-to-Go per job.') : demand!.shortages.map(r => (
+                  <tr key={r.trade}>
+                    <td style={{ ...TD, fontWeight: 600 }}>{r.trade}</td>
+                    <td style={TD}>{r.openJobs}</td>
+                    <td style={{ ...TD, color: C.red, fontWeight: 600 }}>{r.stale}</td>
+                    <td style={{ ...TD, color: C.red, fontWeight: 600 }}>{r.readyToGo}</td>
+                    <td style={{ ...TD, whiteSpace: 'nowrap' }}>Push candidate ads</td>
+                  </tr>
+                ))}
+              </tbody>
             </table>
           </div>
-          <div style={{ ...CARD, overflowX: 'auto' }}>
+          <div style={{ ...CARD, overflowX: 'auto', flex: '1 1 640px' }}>
             <div style={{ padding: '16px 16px 4px' }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>Candidates building up → push client ads</div>
               <Sub>Ready-to-Go in a trade + location more than 2× the open jobs there</Sub>
             </div>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead><tr>{['TRADE → LOCATION', 'READY-TO-GO', 'OPEN JOBS', 'SPEND NOW', 'TELL BRINDA'].map(x => <th key={x} style={TH}>{x}</th>)}</tr></thead>
-              <tbody>{FEED_ROW(5, 'Needs Ready-to-Go by trade and preferred location (JobAdder) and ad sets named Side_Trade_Location.')}</tbody>
+              <thead><tr>{['TRADE → LOCATION', 'READY-TO-GO', 'OPEN JOBS', 'SPEND, 3 DAYS', 'TELL BRINDA'].map(x => <th key={x} style={TH}>{x}</th>)}</tr></thead>
+              <tbody>
+                {demandMsg ? MSG_ROW(5, demandMsg) : demand!.buildUp.length === 0 ? MSG_ROW(5, 'Nothing building up: Ready-to-Go is in line with open jobs everywhere.') : demand!.buildUp.slice(0, 6).map(r => (
+                  <tr key={`${r.trade}|${r.region}`}>
+                    <td style={{ ...TD, fontWeight: 600 }}>{r.trade} → {r.region}</td>
+                    <td style={{ ...TD, color: C.green, fontWeight: 600 }}>{r.readyToGo}</td>
+                    <td style={{ ...TD, color: r.openJobs ? C.text : C.red }}>{r.openJobs}</td>
+                    <td style={{ ...TD, color: adSets && clientSpend3(r.trade) === 0 ? C.red : C.text }}>{adSets ? money0(clientSpend3(r.trade)) : '—'}</td>
+                    <td style={{ ...TD, whiteSpace: 'nowrap' }}>Run client ads here</td>
+                  </tr>
+                ))}
+              </tbody>
             </table>
           </div>
         </div>
+        {demand && !demand.error && (
+          <div style={{ fontSize: 12, color: C.muted }}>
+            {demand.jobsMatched} of {demand.openJobs} open jobs and {demand.readyMatched} of {demand.readyToGo} Ready To Go candidates matched to a trade
+            (job title; candidate’s Airtable category). Locations are grouped by state. {demand.buildUp.length > 6 && `Showing the top 6 of ${demand.buildUp.length}.`}
+          </div>
+        )}
       </Section>
 
       {/* 4. Paid ads, Brinda's check */}
@@ -469,10 +506,35 @@ export function MarketingCard() {
             <TextLine muted>{pw} same day {money2(cpa.cmp)}{cpa.worsePct != null && ` · ${Math.abs(Math.round(cpa.worsePct))}% ${cpa.worsePct > 0 ? 'worse' : 'better'}`}</TextLine>
           </Tile>
           <Tile label="AD SETS FLAGGED" chip={null}>
-            <Big size={34} value="[ ]" color={C.faint} />
-            <TextLine muted>Spiking vs their own normal · needs daily spend and leads per ad set from Meta</TextLine>
+            <Big size={34} value={flagged ?? '—'} color={flagged ? C.red : flagged === 0 ? C.green : C.faint} />
+            <TextLine muted>{adSetError ? `⚠ ${adSetError.message}` : 'Spiking or watch vs their own normal'}</TextLine>
           </Tile>
         </div>
+        {adSets && (
+          <div style={{ ...CARD, overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead><tr>{['AD SET (SIDE_TRADE_LOCATION)', 'STATUS', 'COST / RESULT 3 DAYS', 'ITS NORMAL (14 DAYS)', 'CHANGE', 'ACTION'].map(x => <th key={x} style={TH}>{x}</th>)}</tr></thead>
+              <tbody>
+                {adSets.length === 0 && MSG_ROW(6, 'No ad set spend in the last 17 days.')}
+                {adSets.map(a => (
+                  <tr key={a.id}>
+                    <td style={{ ...TD, fontWeight: 600 }}>
+                      {a.adset}
+                      <Sub>{a.group === 'client' ? 'Client' : 'Candidate'} · {money0(a.spend3)} in 3 days{!a.named && ' · not named Side_Trade_Location'}</Sub>
+                    </td>
+                    <td style={TD}><Chip tone={STATUS_TONE[a.status]}>{a.status}</Chip></td>
+                    <td style={{ ...TD, color: a.status === 'SPIKE' ? C.red : C.text }}>{a.cost3 != null ? money2(a.cost3) : `0 ${a.group === 'client' ? 'leads' : 'apps'}`}</td>
+                    <td style={TD}>{a.normal != null ? money2(a.normal) : '—'}</td>
+                    <td style={{ ...TD, color: a.changePct == null ? C.muted : a.changePct >= 20 ? C.red : a.changePct <= -20 ? C.green : C.text }}>
+                      {a.changePct == null ? '—' : `${a.changePct > 0 ? '+' : ''}${Math.round(a.changePct)}%`}
+                    </td>
+                    <td style={TD}>{STATUS_ACTION[a.status]}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
         <CampaignsAndAds month={month} prevWord={pw} />
       </Section>
 
@@ -551,7 +613,7 @@ export function MarketingCard() {
           <Arrow rate={pctText(cur.candidate.applications, cur.candidate.linkClicks)} />
           <Step label="APPLICATIONS (META)" value={int(cur.candidate.applications)} color={ragColor(cpa.rag)} edge={cpa.rag === 'grey' ? undefined : PACE_COLOR[cpa.rag]}>{money2(cpa.cur)} each<br />{pw} {money2(cpa.cmp)}</Step>
           <Arrow rate={pctText(h.cur.qualifiedCandidates, cur.candidate.applications)} />
-          <Step label="QUALIFIED" value={int(h.cur.qualifiedCandidates)} color={ragColor(qualCost.rag)} edge={qualCost.rag === 'grey' ? undefined : PACE_COLOR[qualCost.rag]}>{money2(qualCost.cur)} each · vs {qualCost.vs}<br />Split by trade needs the Airtable feed · handoff to Recruitment</Step>
+          <Step label="QUALIFIED" value={int(h.cur.qualifiedCandidates)} color={ragColor(qualCost.rag)} edge={qualCost.rag === 'grey' ? undefined : PACE_COLOR[qualCost.rag]}>{money2(qualCost.cur)} each · vs {qualCost.vs}<br />{m.qualifiedByTrade.length ? m.qualifiedByTrade.slice(0, 3).map(q => `${q.trade} ${q.count}`).join(' · ') : 'No trades yet'} · handoff to Recruitment</Step>
         </Strip>
         <div style={{ fontSize: 12, color: C.muted }}>
           Arrows show the share that moved to the next step. Applications → qualified is {pctText(h.cur.qualifiedCandidates, cur.candidate.applications)} of Meta applications (qualified ÷ Meta applications).
