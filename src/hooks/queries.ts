@@ -10,14 +10,15 @@ import {
 } from '../services/airtable';
 import { fetchClientInvoices, hasClientInvoicesCredentials } from '../services/clientInvoices';
 import { fetchXeroFinanceData, hasXeroCredentials } from '../services/xero';
-import { fetchMetaSpendByFrame, fetchMetaCampaignBreakdown, fetchMetaAdBreakdown } from '../services/metaAds';
+import { fetchMetaSpendByFrame, fetchMetaCampaignBreakdown, fetchMetaAdBreakdown, fetchMetaAdSetDaily } from '../services/metaAds';
 import { fetchVoiceCallKPIs } from '../services/voiceCalls';
 import { fetchJobAdderStageKPIs, hasJobAdderStageCredentials } from '../services/jobadderStages';
 import { fetchJobAging, hasOpenJobsCredentials } from '../services/jobadderJobs';
 import { fetchStageCohorts, hasStageCohortCredentials } from '../services/stageCohorts';
 import { fetchRetentionPlacements, hasRetentionCredentials } from '../services/jobadderRetention';
 import { fetchFirstSubmitKPIs, hasFirstSubmitCredentials } from '../services/firstSubmit';
-import { monthWindow } from '../lib/nzTime';
+import { monthWindow, nzDate, addDays } from '../lib/nzTime';
+import type { DemandSignals } from '../lib/demand';
 import type { TimeFrame, LTGPFrame, OrganicMonth, MarketingSettings, SalesSettings, RecruitmentSettings, OverviewSettings, RetentionSettings } from '../types';
 
 const hasAirtableKey    = Boolean(import.meta.env.VITE_AIRTABLE_API_KEY);
@@ -309,5 +310,28 @@ export function useMetaBreakdown(month: string, enabled: boolean) {
     },
     enabled: enabled && hasMetaCredentials,
     staleTime: 10 * 60_000,
+  });
+}
+
+/** Daily spend and results per ad set for the last 17 days (3-day check + 14-day normal). */
+export function useMetaAdSets() {
+  return useQuery({
+    queryKey: ['meta-adsets'],
+    queryFn: async () => {
+      const today = nzDate(Date.now());
+      return { today, rows: await fetchMetaAdSetDaily({ since: addDays(today, -16), until: today }) };
+    },
+    enabled: hasMetaCredentials,
+    staleTime: 10 * 60_000,
+  });
+}
+
+/** Demand signals (JobAdder open jobs + Ready To Go folder, trades from Airtable), via the server function. */
+export function useMarketingDemand() {
+  return useQuery({
+    queryKey: ['marketing-demand'],
+    queryFn: () => getJson<DemandSignals>('/api/marketing-demand'),
+    staleTime: 15 * 60_000,
+    retry: 1,
   });
 }

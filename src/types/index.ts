@@ -469,6 +469,7 @@ export interface MarketingMonth {
   paid: { cur: MetaPaidTotals; prev: MetaPaidTotals };
   cac: { cur: AcquisitionCacs; prev: AcquisitionCacs };
   handoff: { cur: HandoffTotals; prev: HandoffTotals };
+  qualifiedByTrade: { trade: string; count: number }[]; // this window, most first
   spendSeries: { key: string; label: string; client: number; candidate: number }[];
   handoffSeries: {
     key: string; label: string;
@@ -519,6 +520,16 @@ export interface MetaCampaignRow {
   frequency: number;
 }
 
+export interface MetaAdSetDay {
+  adsetId: string;
+  adset: string;
+  campaign: string;
+  group: 'client' | 'candidate';
+  date: string;                 // YYYY-MM-DD (ad account time)
+  spend: number;
+  results: number;              // leads (client) / applications (candidate)
+}
+
 export interface MetaAdRow {
   id: string;
   ad: string;
@@ -537,11 +548,18 @@ export interface MarketingTargets {
   costPerQualifiedCandidate: number | null;
 }
 
+export interface SpikeRule {
+  spikePct: number;   // SPIKE at this % or more above the ad set's 14-day normal
+  watchPct: number;   // WATCH at this % above; STRONG at this % below (with 3+ results)
+  minSpend: number;   // ignore ad sets under this NZD spend in 3 days
+}
+
 export interface MarketingSettings {
   monthlyBudget: number | null;
   postsPerWeek: number;
   targets: MarketingTargets;
   nonTradeCategories: string[];
+  spikeRule: SpikeRule;
 }
 
 // ─── Recruitment ──────────────────────────────────────────────────────────────

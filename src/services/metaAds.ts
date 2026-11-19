@@ -1,4 +1,4 @@
-import type { LTGPFrame, MetaPaidTotals, MetaCampaignRow, MetaAdRow } from '../types';
+import type { MetaAdSetDay, LTGPFrame, MetaPaidTotals, MetaCampaignRow, MetaAdRow } from '../types';
 import { env } from '../lib/env.js';
 
 const META_BASE = 'https://graph.facebook.com/v21.0';
@@ -204,7 +204,7 @@ type Action = { action_type: string; value: string };
 type CampaignRow = {
   campaign_name: string; spend?: string; impressions?: string; frequency?: string;
   actions?: Action[]; conversions?: Action[]; date_start?: string;
-  ad_id?: string; ad_name?: string;
+  ad_id?: string; ad_name?: string; adset_id?: string; adset_name?: string;
 };
 
 export function campaignGroup(name: string | undefined): 'client' | 'candidate' | null {
@@ -218,7 +218,7 @@ function actionValue(actions: Action[] | undefined, type: string): number {
   return parseFloat(actions?.find(a => a.action_type === type)?.value ?? '0');
 }
 
-async function fetchCampaignInsights(range: { since: string; until: string }, fields: string, extra = '', level: 'campaign' | 'ad' = 'campaign'): Promise<CampaignRow[]> {
+async function fetchCampaignInsights(range: { since: string; until: string }, fields: string, extra = '', level: 'campaign' | 'adset' | 'ad' = 'campaign'): Promise<CampaignRow[]> {
   const token = env.VITE_META_TOKEN as string;
   if (!token) throw new Error('Meta token not configured');
   const rows: CampaignRow[] = [];
@@ -342,6 +342,21 @@ export async function fetchMetaAdBreakdown(cur: { since: string; until: string }
       ad: r.ad_name ?? '(unnamed ad)', campaign: r.campaign_name, group, spend,
       results: res, costPerResult: res > 0 ? spend / res : null,
       frequency: parseFloat(r.frequency ?? '0'),
+    });
+  }
+  return out;
+}
+
+/** Spend and results per ad set per day (Brinda's spike check: last 3 days vs its own 14-day normal). */
+export async function fetchMetaAdSetDaily(range: { since: string; until: string }): Promise<MetaAdSetDay[]> {
+  const rows = await fetchCampaignInsights(range, `adset_id,adset_name,${BREAKDOWN_FIELDS}`, '&time_increment=1', 'adset');
+  const out: MetaAdSetDay[] = [];
+  for (const r of rows) {
+    const group = campaignGroup(r.campaign_name);
+    if (!group || !r.date_start) continue;
+    out.push({
+      adsetId: r.adset_id ?? r.adset_name ?? '', adset: r.adset_name ?? '(unnamed ad set)', campaign: r.campaign_name,
+      group, date: r.date_start, spend: parseFloat(r.spend ?? '0'), results: results(r, group),
     });
   }
   return out;

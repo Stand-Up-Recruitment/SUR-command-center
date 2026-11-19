@@ -25,6 +25,7 @@ import {
 import { toMs, trailingDays, last12Months, nzDate, type MonthWindow, type DayRange } from '../lib/nzTime.js';
 import { env } from '../lib/env.js';
 import { candidateQualifier, DEFAULT_NON_TRADE_CATEGORIES } from '../lib/qualified.js';
+import { tradeOf } from '../lib/demand.js';
 import { isNonRecruiter, sourcedTally, firstName } from '../lib/recruitment.js';
 import { companyKey } from '../lib/companyKey.js';
 
@@ -924,8 +925,17 @@ export async function fetchMarketingMonth(w: MonthWindow): Promise<MarketingMont
     return { cacPerSignedClient, cacPerBookedCall, cacPerQualifiedCandidate };
   };
 
+  const qualifiedByTrade = new Map<string, number>();
+  const { from, to } = toMs(w.cur);
+  for (const c of data.candidates) {
+    if (!isInPeriod(c.Created, from, to) || !data.isQualified(c)) continue;
+    const trade = tradeOf(c.Category) ?? c.Category!.trim();
+    qualifiedByTrade.set(trade, (qualifiedByTrade.get(trade) ?? 0) + 1);
+  }
+
   return {
     paid: { cur: paidCur, prev: paidPrev },
+    qualifiedByTrade: [...qualifiedByTrade].map(([trade, count]) => ({ trade, count })).sort((a, b) => b.count - a.count),
     cac: { cur: cac(cacCur, spend90Cur), prev: cac(cacPrev, spend90Prev) },
     handoff: {
       cur: handoffTotals(data, w.cur, { client: paidCur.client.spend, candidate: paidCur.candidate.spend }),

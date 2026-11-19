@@ -4,6 +4,7 @@
 // PUT  /api/marketing-settings  MarketingSettings  — header x-admin-password
 import { supabase } from './_lib/supabase.js';
 import { DEFAULT_NON_TRADE_CATEGORIES } from '../src/lib/qualified.js';
+import { DEFAULT_SPIKE_RULE } from '../src/components/departments/marketingMetrics.js';
 import type { MarketingSettings } from '../src/types/index.js';
 
 const DEFAULTS: MarketingSettings = {
@@ -11,6 +12,7 @@ const DEFAULTS: MarketingSettings = {
   postsPerWeek: 7,
   targets: { callsBooked: null, qualifiedCandidates: null, costPerBookedCall: null, costPerQualifiedCandidate: null },
   nonTradeCategories: DEFAULT_NON_TRADE_CATEGORIES,
+  spikeRule: DEFAULT_SPIKE_RULE,
 };
 
 const num = (v: unknown) => (v == null ? null : Number(v));
@@ -30,6 +32,12 @@ export async function GET(): Promise<Response> {
       costPerQualifiedCandidate: num(data?.target_cost_per_qualified_candidate),
     },
     nonTradeCategories: data?.non_trade_categories ?? DEFAULTS.nonTradeCategories,
+    // Columns from migration 20261120000000; defaults until it has run.
+    spikeRule: {
+      spikePct: num(data?.spike_pct) ?? DEFAULT_SPIKE_RULE.spikePct,
+      watchPct: num(data?.watch_pct) ?? DEFAULT_SPIKE_RULE.watchPct,
+      minSpend: num(data?.spike_min_spend) ?? DEFAULT_SPIKE_RULE.minSpend,
+    },
   } satisfies MarketingSettings);
 }
 
@@ -54,6 +62,11 @@ export async function PUT(request: Request): Promise<Response> {
   if (!valid) {
     return Response.json({ error: 'Amounts and targets must be ≥ 0 (or empty), posts per week a whole number > 0, and categories a list of names' }, { status: 400 });
   }
+  const r = b.spikeRule;
+  const pct = (v: unknown) => typeof v === 'number' && Number.isFinite(v) && v > 0 && v <= 1000;
+  if (!r || !pct(r.spikePct) || !pct(r.watchPct) || r.watchPct >= r.spikePct || !(typeof r.minSpend === 'number' && Number.isFinite(r.minSpend) && r.minSpend >= 0)) {
+    return Response.json({ error: 'Spike rule: watch % and spike % must be above 0 with watch below spike, and minimum spend ≥ 0' }, { status: 400 });
+  }
   const settings: MarketingSettings = {
     ...b,
     nonTradeCategories: [...new Set(b.nonTradeCategories.map(c => c.trim()).filter(Boolean))],
@@ -67,6 +80,9 @@ export async function PUT(request: Request): Promise<Response> {
     target_cost_per_booked_call: t.costPerBookedCall,
     target_cost_per_qualified_candidate: t.costPerQualifiedCandidate,
     non_trade_categories: settings.nonTradeCategories,
+    spike_pct: r.spikePct,
+    watch_pct: r.watchPct,
+    spike_min_spend: r.minSpend,
     updated_at: new Date().toISOString(),
   });
   if (error) return Response.json({ error: error.message }, { status: 502 });
