@@ -2,6 +2,8 @@ import { useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { TimeFramePicker } from '../shared/TimeFramePicker';
 import { Skeleton } from '../shared/Skeleton';
+import { C, PACE_COLOR, NUM_FONT, CARD, LABEL, TODO } from '../shared/v2Theme';
+import { Chip, Section, Tag, Big, Tile, Line } from '../shared/v2Layout';
 import {
   useRecruiterKPIs, useJobAging, useVoiceCallKPIs, useJobAdderStageKPIs, useStageCohorts, useRecruitmentSettings, useSaveRecruitmentSettings,
 } from '../../hooks/queries';
@@ -21,22 +23,7 @@ import type { Cohort, RecruiterStat, RecruitmentSettings, RollingRates, TimeFram
 const INTERNAL_TARGET_WEEKLY = 20;
 const INTERNAL_TARGET_MONTHLY = 80;
 
-const C = {
-  card: '#1A1B1E', inset: '#222327', border: '#2E3036', rowBorder: '#26282D', track: '#2A2C31',
-  text: '#F2F2F3', soft: '#C9CBD1', muted: '#A1A3AA', faint: '#8A8D95', ink: '#141414',
-  green: '#4FCB7C', amber: '#F2A93B', red: '#F0504A', blue: '#8DBBF7', greyFill: '#3A3C42',
-};
-const PACE_COLOR: Record<Pace, string> = { green: C.green, amber: C.amber, red: C.red, grey: C.faint };
-// Filled status chips: [background, text]
-const FILL: Record<Pace | 'blue', [string, string]> = {
-  green: ['#3FBF6E', C.ink], amber: [C.amber, C.ink], red: [C.red, C.ink], blue: [C.blue, C.ink], grey: [C.greyFill, '#E6E7EA'],
-};
 const LEVEL_TONE: Record<ActionLevel, Pace | 'blue'> = { 'FIX NOW': 'red', 'THIS WEEK': 'amber', '1:1': 'blue', 'WATCH': 'grey' };
-
-const NUM_FONT = "'Space Grotesk', ui-sans-serif, system-ui, sans-serif";
-const CARD: CSSProperties = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 14 };
-const LABEL: CSSProperties = { fontSize: 13, fontWeight: 600, color: C.muted, letterSpacing: '0.4px' };
-const TODO: CSSProperties = { fontSize: 13, fontWeight: 600, color: C.text, background: C.inset, border: `1px solid ${C.border}`, borderRadius: 8, padding: '9px 11px' };
 
 // Client interviews needed = placement target ÷ 4-month client → contract rate; internal
 // needed = client needed ÷ 4-month int → client rate; both rounded up. A rate of 0 (no data
@@ -144,48 +131,6 @@ const TIMEFRAME_OPTIONS: { value: TimeFrame; label: string }[] = [
   { value: 'week', label: 'This week' },
   { value: 'month', label: 'This month' },
 ];
-
-const Chip = ({ tone, children, width }: { tone: Pace | 'blue'; children: ReactNode; width?: number }) => (
-  <span style={{
-    fontSize: 11, fontWeight: 700, letterSpacing: '0.5px', padding: '4px 8px', borderRadius: 5, whiteSpace: 'nowrap',
-    background: FILL[tone][0], color: FILL[tone][1], width, textAlign: width ? 'center' : undefined, boxSizing: 'border-box',
-    display: 'inline-block', justifySelf: 'start',
-  }}>{children}</span>
-);
-
-const Section = ({ title, aside, children }: { title: string; aside: ReactNode; children: ReactNode }) => (
-  <section style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: 12 }}>
-      <h2 style={{ margin: 0, fontFamily: NUM_FONT, fontSize: 22, fontWeight: 700, color: C.text }}>{title}</h2>
-      {typeof aside === 'string' ? <span style={{ fontSize: 14, color: C.muted }}>{aside}</span> : aside}
-    </div>
-    {children}
-  </section>
-);
-
-const Tag = ({ bg, children }: { bg: string; children: ReactNode }) => (
-  <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.8px', color: C.ink, background: bg, padding: '4px 8px', borderRadius: 5 }}>{children}</span>
-);
-
-const Big = ({ value, color, unit, size = 52 }: { value: ReactNode; color: string; unit?: string; size?: number }) => (
-  <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-    <span style={{ fontFamily: NUM_FONT, fontSize: size, fontWeight: 700, color, lineHeight: 1 }}>{value}</span>
-    {unit && <span style={{ fontSize: 16, color: C.soft }}>{unit}</span>}
-  </div>
-);
-
-const Tile = ({ label, chip, children }: { label: string; chip: ReactNode; children: ReactNode }) => (
-  <div style={{ ...CARD, padding: 20, display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-      <span style={LABEL}>{label}</span>{chip}
-    </div>
-    {children}
-  </div>
-);
-
-const Line = ({ children, muted }: { children: ReactNode; muted?: boolean }) => (
-  <div style={{ fontSize: muted ? 13 : 15, color: muted ? C.muted : C.text }}>{children}</div>
-);
 
 const BOARD_COLS = '190px 110px 120px 120px 120px 110px minmax(0, 1fr) 210px';
 const SOURCER_COLS = '190px 110px 1fr 1fr 210px';
