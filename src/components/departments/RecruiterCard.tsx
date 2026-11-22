@@ -11,33 +11,17 @@ import { COLORS } from '../../styles/tokens';
 import { useAuthRole } from '../auth/AuthContext';
 import {
   DEFAULT_RECRUITMENT_SETTINGS, hiringTrigger, teamRecruiters, placementTargetFor, tierFor, teamBreakeven as breakevenFor,
-  biggestBreak, todaysActions, shouldWeHire, botLooksOff, SHOW_UP_TARGET, STALE_LIMIT,
-  type BoardRow, type ActionLevel,
+  biggestBreak, todaysActions, recruitmentBoard, firstName, shouldWeHire, botLooksOff, SHOW_UP_TARGET, STALE_LIMIT,
+  type ActionLevel,
 } from '../../lib/recruitment';
 import { workingDays, neededByToday, pace, PACE_LABEL, type Pace } from '../../lib/workingDays';
-import type { Cohort, RecruiterStat, RecruitmentSettings, RollingRates, TimeFrame } from '../../types';
+import type { Cohort, RecruitmentSettings, TimeFrame } from '../../types';
 
 // Layout and colours follow the "Recruitment tab v2" mockup (Claude Design, 19 Nov 2026).
-
-// 4 internal interviews a day per recruiter → 20/week, 80/month.
-const INTERNAL_TARGET_WEEKLY = 20;
-const INTERNAL_TARGET_MONTHLY = 80;
 
 const fmt1 = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
 
 const LEVEL_TONE: Record<ActionLevel, Pace | 'blue'> = { 'FIX NOW': 'red', 'THIS WEEK': 'amber', '1:1': 'blue', 'WATCH': 'grey' };
-
-// Client interviews needed = placement target ÷ 4-month client → contract rate; internal
-// needed = client needed ÷ 4-month int → client rate; both rounded up. A rate of 0 (no data
-// in the window) falls back to the team's rate for that step.
-function whatItTakes(placementTarget: number, own: RollingRates, team: RollingRates) {
-  const c2c = own.clientToContract || team.clientToContract;
-  const i2c = own.intToClient || team.intToClient;
-  const ceil = (n: number) => Math.ceil(n - 1e-9); // guard float noise, e.g. 7.0000000001
-  const client = c2c > 0 ? ceil(placementTarget / c2c) : 0;
-  const internal = i2c > 0 ? ceil(client / i2c) : 0;
-  return { client, internal, c2c, i2c };
-}
 
 function RecruiterSkeleton() {
   return (
@@ -158,45 +142,13 @@ export function RecruiterCard() {
   const wd = workingDays(frame, now);
   const period = frame === 'week' ? 'week' : 'month';
   const need = (target: number) => neededByToday(target, wd);
-  const firstName = (n: string) => n.trim().split(' ')[0].toLowerCase();
 
   // Defaults when the settings API is down or answers without settings (e.g. vite dev serves no /api).
   const recruitment: RecruitmentSettings = settingsData?.recruiters ? settingsData : DEFAULT_RECRUITMENT_SETTINGS;
   const settingsWarning = settingsError?.message ?? settingsData?.error;
-
-  // Merge JobAdder pipeline-stage KPIs (separate webhook) by first name. Copies each row so
-  // the React Query cache isn't mutated. Only people on the settings recruiter list are shown.
-  const recruiters: RecruiterStat[] = teamRecruiters(data, jobAgingData, recruitment.recruiters).map(r => {
-    const js = jobAdderStageData?.byRecruiter.find(s => firstName(s.name) === firstName(r.name));
-    return {
-      ...r,
-      ...(jobAdderStageData && { noShows: js?.noShows ?? 0, prevNoShows: js?.prevNoShows ?? 0 }),
-      ...(js && {
-        referenceChecks: js.referenceChecks,
-        internalInterviewsBotBooked: js.internalInterviewsBotBooked,
-      }),
-    };
-  });
-
+  const { recruiters, rows, internalTarget } = recruitmentBoard(data, jobAgingData, jobAdderStageData, recruitment, targets, frame, wd);
   const cap = recruitment.maxActiveJobs;
-  const jobsFor = (name: string) =>
-    jobAgingData?.byRecruiter?.find(r => firstName(r.name) === firstName(name)) ?? { totalOpenJobs: 0, fresh: 0, ageing: 0, stale: 0 };
 
-  // ── Board rows: every target is turned into "needed by today" ──
-  const internalTarget = frame === 'week' ? INTERNAL_TARGET_WEEKLY : INTERNAL_TARGET_MONTHLY;
-  const rows = recruiters.map(r => {
-    const kind = tierFor(r.name)?.kind ?? 'placer';
-    const placementTarget = placementTargetFor(r.name, frame, recruiters, targets);
-    const wit = whatItTakes(placementTarget, r.rolling, data.rolling);
-    const jobs = jobsFor(r.name);
-    const board: BoardRow = {
-      name: r.name, kind, jobs: jobs.totalOpenJobs, rolling: r.rolling,
-      internal: { done: r.internalInterviews, needed: need(internalTarget) },
-      client: { done: r.clientInterviews, needed: need(wit.client) },
-      placements: { done: r.placements, needed: need(placementTarget) },
-    };
-    return { stat: r, board, jobs, wit, placementTarget };
-  });
   const placers = rows.filter(r => r.board.kind === 'placer');
   const sourcers = rows.filter(r => r.board.kind === 'sourcer');
 
