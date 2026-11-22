@@ -579,6 +579,9 @@ export interface OverviewSettings extends PlanSettings {
   constraintDetail: string;      // e.g. "Short on: electricians, carpenters"
   confirmedBy: string;
   confirmedAt: string | null;    // YYYY-MM-DD, set by the API when the constraint changes
+  constraintOwner: string;       // e.g. "Sourcers"
+  constraintFixedWhen: string;   // e.g. "40 internal interviews a week"
+  runwayWeeksMin: number;        // 3-month cash status: Tight when runway drops below this
 }
 
 // ─── Sales tab (month view) ───────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 // Vercel function: editable Overview settings (the annual placement plan + the current constraint).
 // GET  /api/overview-settings
-// PUT  /api/overview-settings  { planAnnualPlacements, planFallOverPct, planYear, constraintHeadline, constraintDetail, confirmedBy }  — header x-admin-password
+// PUT  /api/overview-settings  { planAnnualPlacements, planFallOverPct, planYear, constraintHeadline, constraintDetail, constraintOwner, constraintFixedWhen, confirmedBy, runwayWeeksMin }  — header x-admin-password
 // confirmedAt is set to today (NZ) whenever the headline, detail or confirmed-by name changes.
 import { supabase } from './_lib/supabase.js';
 import { nzDate } from '../src/lib/nzTime.js';
@@ -8,12 +8,13 @@ import { DEFAULT_PLAN_SETTINGS } from '../src/lib/placementPlan.js';
 import type { OverviewSettings } from '../src/types/index.js';
 
 const DEFAULTS: OverviewSettings = {
-  ...DEFAULT_PLAN_SETTINGS, constraintHeadline: '', constraintDetail: '', confirmedBy: '', confirmedAt: null,
+  ...DEFAULT_PLAN_SETTINGS, constraintHeadline: '', constraintDetail: '', constraintOwner: '', constraintFixedWhen: '', confirmedBy: '', confirmedAt: null, runwayWeeksMin: 8,
 };
 
 type Row = {
   plan_annual_placements?: number; plan_fall_over_pct?: number | string; plan_year?: number;
   constraint_headline: string; constraint_detail: string; confirmed_by: string; confirmed_at: string | null;
+  constraint_owner?: string; constraint_fixed_when?: string; runway_weeks_min?: number | string;
 };
 
 const fromRow = (r: Row | null): OverviewSettings => ({
@@ -24,6 +25,9 @@ const fromRow = (r: Row | null): OverviewSettings => ({
   constraintDetail: r?.constraint_detail ?? DEFAULTS.constraintDetail,
   confirmedBy: r?.confirmed_by ?? DEFAULTS.confirmedBy,
   confirmedAt: r?.confirmed_at ?? DEFAULTS.confirmedAt,
+  constraintOwner: r?.constraint_owner ?? DEFAULTS.constraintOwner,
+  constraintFixedWhen: r?.constraint_fixed_when ?? DEFAULTS.constraintFixedWhen,
+  runwayWeeksMin: r?.runway_weeks_min != null ? Number(r.runway_weeks_min) : DEFAULTS.runwayWeeksMin,
 });
 
 export async function GET(): Promise<Response> {
@@ -59,24 +63,33 @@ export async function PUT(request: Request): Promise<Response> {
   const headline = text(body?.constraintHeadline);
   const detail = text(body?.constraintDetail);
   const confirmedBy = text(body?.confirmedBy);
-  if (headline === null || detail === null || confirmedBy === null) {
-    return Response.json({ error: 'constraintHeadline, constraintDetail and confirmedBy must be text' }, { status: 400 });
+  const owner = text(body?.constraintOwner);
+  const fixedWhen = text(body?.constraintFixedWhen);
+  if (headline === null || detail === null || confirmedBy === null || owner === null || fixedWhen === null) {
+    return Response.json({ error: 'constraintHeadline, constraintDetail, constraintOwner, constraintFixedWhen and confirmedBy must be text' }, { status: 400 });
+  }
+  const runway = body?.runwayWeeksMin;
+  if (!(typeof runway === 'number' && runway >= 0 && runway <= 104)) {
+    return Response.json({ error: 'Runway line must be 0–104 weeks' }, { status: 400 });
   }
 
   const { data: existing, error: readError } = await db.from('overview_settings').select('*').eq('id', 1).maybeSingle();
   if (readError) return Response.json({ error: readError.message }, { status: 502 });
   const before = fromRow(existing);
-  const constraintChanged = headline !== before.constraintHeadline || detail !== before.constraintDetail || confirmedBy !== before.confirmedBy;
+  const constraintChanged = headline !== before.constraintHeadline || detail !== before.constraintDetail || confirmedBy !== before.confirmedBy
+    || owner !== before.constraintOwner || fixedWhen !== before.constraintFixedWhen;
   const confirmedAt = constraintChanged ? nzDate(Date.now()) : before.confirmedAt;
 
   const { error } = await db.from('overview_settings').upsert({
     id: 1, plan_annual_placements: annual, plan_fall_over_pct: fallOver, plan_year: year,
     constraint_headline: headline, constraint_detail: detail,
+    constraint_owner: owner, constraint_fixed_when: fixedWhen, runway_weeks_min: runway,
     confirmed_by: confirmedBy, confirmed_at: confirmedAt, updated_at: new Date().toISOString(),
   });
   if (error) return Response.json({ error: error.message }, { status: 502 });
   return Response.json({
     planAnnualPlacements: annual!, planFallOverPct: fallOver, planYear: year!,
-    constraintHeadline: headline, constraintDetail: detail, confirmedBy, confirmedAt,
+    constraintHeadline: headline, constraintDetail: detail, constraintOwner: owner, constraintFixedWhen: fixedWhen,
+    confirmedBy, confirmedAt, runwayWeeksMin: runway,
   } satisfies OverviewSettings);
 }

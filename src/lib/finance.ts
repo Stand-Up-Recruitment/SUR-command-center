@@ -1,6 +1,6 @@
 // Finance figures shared by the Finance tab and the Overview.
 import type { XeroFinanceData } from '../types';
-import type { MonthWindow } from './nzTime.js';
+import { addDays, type MonthWindow } from './nzTime.js';
 import { isTooEarly } from './rag.js';
 import { diagnoseFinance, type Diagnosis } from './diagnosis.js';
 
@@ -74,4 +74,29 @@ export function financeSummary(data: XeroFinanceData, w: MonthWindow, pace: Plac
       projectedNetProfit, pace, runwayWeeks,
     }),
   };
+}
+
+/** Days late assumed for a client with no payment history (same rule as the Finance tab's cash forecast). */
+export const NO_HISTORY_DAYS = 7;
+
+export interface ExpectedReceipt { client: string; amount: number; dueDate: string; expected: string; source: 'Xero' | 'Scheduled' }
+
+/**
+ * Money still to come in, NZD ex GST: unpaid Australian Xero invoices plus Airtable instalments
+ * scheduled but not yet invoiced. Each is expected on its due date + that client's average days late.
+ */
+export function expectedReceipts(
+  data: XeroFinanceData, scheduled: { amount: number; dueDate: string; client: string }[] | undefined,
+  lateDays: (client: string) => number, audToNzd: number,
+): ExpectedReceipt[] {
+  const out: ExpectedReceipt[] = [];
+  for (const inv of data.ausReceivables?.invoices ?? []) {
+    if (inv.amountDueExGst <= 0) continue;
+    out.push({ client: inv.contact, amount: inv.amountDueExGst, dueDate: inv.dueDate, expected: addDays(inv.dueDate, lateDays(inv.contact)), source: 'Xero' });
+  }
+  for (const s of scheduled ?? []) {
+    const due = s.dueDate.slice(0, 10);
+    out.push({ client: s.client, amount: s.amount * audToNzd, dueDate: due, expected: addDays(due, lateDays(s.client)), source: 'Scheduled' });
+  }
+  return out.sort((a, b) => a.expected.localeCompare(b.expected));
 }

@@ -1,6 +1,7 @@
 // Recruiter capacity / hiring trigger, shared by the Recruitment tab and the settings API.
 // Placement targets (split from the placement plan), breakeven and pace, shared by the Recruitment tab and the Overview.
-import type { JobAgingKPIs, RecruiterKPIs, RecruiterStat, RecruitmentSettings, RollingRates, TimeFrame } from '../types';
+import type { JobAdderStageKPIs, JobAgingKPIs, RecruiterKPIs, RecruiterStat, RecruitmentSettings, RollingRates, TimeFrame } from '../types';
+import { neededByToday, type WorkingDays } from './workingDays';
 
 export const WEEKS_PER_MONTH = 4.33;
 
@@ -220,6 +221,56 @@ export function biggestBreak(r: BoardRow, team: RollingRates): Break | null {
     .filter((c): c is Break & { ratio: number } => c.ratio !== null && c.ratio < 1)
     .sort((a, b) => a.ratio - b.ratio)[0];
   return worst ? { stage: worst.stage, detail: worst.detail, action: worst.action } : null;
+}
+
+// 4 internal interviews a day per recruiter → 20/week, 80/month.
+const INTERNAL_TARGET_WEEKLY = 20;
+const INTERNAL_TARGET_MONTHLY = 80;
+
+// Client interviews needed = placement target ÷ 4-month client → contract rate; internal
+// needed = client needed ÷ 4-month int → client rate; both rounded up. A rate of 0 (no data
+// in the window) falls back to the team's rate for that step.
+function whatItTakes(placementTarget: number, own: RollingRates, team: RollingRates) {
+  const c2c = own.clientToContract || team.clientToContract;
+  const i2c = own.intToClient || team.intToClient;
+  const ceil = (n: number) => Math.ceil(n - 1e-9); // guard float noise, e.g. 7.0000000001
+  const client = c2c > 0 ? ceil(placementTarget / c2c) : 0;
+  const internal = i2c > 0 ? ceil(client / i2c) : 0;
+  return { client, internal, c2c, i2c };
+}
+
+/** The Recruitment tab's board: listed recruiters with JobAdder stage KPIs merged, and every target turned into "needed by today". Shared with the Overview. */
+export function recruitmentBoard(
+  data: RecruiterKPIs, jobAging: JobAgingKPIs | undefined, stages: JobAdderStageKPIs | undefined,
+  settings: RecruitmentSettings, targets: TeamTargets, frame: TimeFrame, wd: WorkingDays,
+) {
+  const need = (target: number) => neededByToday(target, wd);
+  // Copies each row so the React Query cache isn't mutated. Only people on the settings recruiter list are shown.
+  const recruiters: RecruiterStat[] = teamRecruiters(data, jobAging, settings.recruiters).map(r => {
+    const js = stages?.byRecruiter.find(s => firstName(s.name) === firstName(r.name));
+    return {
+      ...r,
+      ...(stages && { noShows: js?.noShows ?? 0, prevNoShows: js?.prevNoShows ?? 0 }),
+      ...(js && { referenceChecks: js.referenceChecks, internalInterviewsBotBooked: js.internalInterviewsBotBooked }),
+    };
+  });
+  const jobsFor = (name: string) =>
+    jobAging?.byRecruiter?.find(r => firstName(r.name) === firstName(name)) ?? { totalOpenJobs: 0, fresh: 0, ageing: 0, stale: 0 };
+  const internalTarget = frame === 'week' ? INTERNAL_TARGET_WEEKLY : INTERNAL_TARGET_MONTHLY;
+  const rows = recruiters.map(r => {
+    const kind = tierFor(r.name)?.kind ?? 'placer';
+    const placementTarget = placementTargetFor(r.name, frame, recruiters, targets);
+    const wit = whatItTakes(placementTarget, r.rolling, data.rolling);
+    const jobs = jobsFor(r.name);
+    const board: BoardRow = {
+      name: r.name, kind, jobs: jobs.totalOpenJobs, rolling: r.rolling,
+      internal: { done: r.internalInterviews, needed: need(internalTarget) },
+      client: { done: r.clientInterviews, needed: need(wit.client) },
+      placements: { done: r.placements, needed: need(placementTarget) },
+    };
+    return { stat: r, board, jobs, wit, placementTarget };
+  });
+  return { recruiters, rows, internalTarget };
 }
 
 export type ActionLevel = 'FIX NOW' | 'THIS WEEK' | '1:1' | 'WATCH';
