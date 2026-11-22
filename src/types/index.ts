@@ -149,6 +149,7 @@ export interface RecruiterKPIs {
   activePipeline: number;      // total candidates in any stage (snapshot)
   rolling: RollingRates;       // team rolling 4-month rates
   months: string[];            // labels for monthlyPlacements, e.g. "Oct", oldest-first
+  monthlyInternalInterviews: (number | null)[];  // team, aligned with months (current month partial); null before data starts
   byRecruiter: RecruiterStat[];
 }
 
