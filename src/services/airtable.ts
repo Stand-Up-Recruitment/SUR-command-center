@@ -356,11 +356,18 @@ export async function fetchRecruiterKPIs(frame: TimeFrame = 'month'): Promise<Re
   }
 
   const byRecruiter = Array.from(recruiterMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+  // Team internal interviews per chart month, de-duplicated the same way as the period total.
+  // Months before the first logged internal interview are null (no data), not 0.
+  const internalRows = pipeline.filter(f => f.Status === 'Internal Interview' && f.Created);
+  const firstInternal = internalRows.length ? Math.min(...internalRows.map(f => monthKey(f.Created!))) : Infinity;
+  const monthlyInternalInterviews = chartMonthKeys.map(k => k < firstInternal ? null
+    : countStage(uniqueStageRecords(pipeline.filter(f => f.Created && monthKey(f.Created) === k), false), 'Internal Interview'));
 
   return {
     phoneInterviews: phoneThis,
     prevPhoneInterviews: phonePrev,
     internalInterviews: internalThis,
+    monthlyInternalInterviews,
     prevInternalInterviews: internalPrev,
     clientInterviews: clientThis,
     prevClientInterviews: clientPrev,

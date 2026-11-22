@@ -283,6 +283,10 @@ export function OverviewPage() {
   const labelOf = (key: string) => monthWindow(key, now).shortLabel;
   // Made = every placement signed (created) that month in JobAdder, fall-overs included; stuck = made minus fallen over.
   const madeIn = (key: string) => (ret.data ? ret.data.filter(p => p.createdAt.slice(0, 7) === key).length : null);
+  const internalIn = (key: string) => {
+    const i = r?.months.findIndex(lbl => lbl.slice(0, 3).toLowerCase() === labelOf(key).slice(0, 3).toLowerCase()) ?? -1;
+    return r && i >= 0 ? r.monthlyInternalInterviews[i] ?? null : null;
+  };
   const stuckIn = (key: string) => (ret.data ? ret.data.filter(p => p.createdAt.slice(0, 7) === key && !placementFacts(p, today).dropped).length : null);
   const profitIn = (key: string) => {
     const lbl = labelOf(key).slice(0, 3);
@@ -292,7 +296,7 @@ export function OverviewPage() {
   const histRows: { label: string; get: (key: string) => number | null; fmt: (n: number) => string; note?: string }[] = [
     { label: 'Placements made', get: madeIn, fmt: String },
     { label: 'Placements stuck', get: stuckIn, fmt: String },
-    { label: 'Internal interviews', get: () => null, fmt: String, note: 'Needs monthly history' },
+    { label: 'Internal interviews', get: internalIn, fmt: String },
     { label: 'Net profit', get: profitIn, fmt: k },
   ];
   const shownKeys = keys.slice(-6);
