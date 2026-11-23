@@ -356,7 +356,7 @@ export function MarketingCard() {
   const { data: xero } = useXeroFinanceData();
   const { data: cac } = useCacKPIs(
     xero && xero.ausRevenue > 0 ? (xero.ausGrossProfit / xero.ausRevenue) * 100 : undefined,
-    xero?.jobBoardAdvertising90d, xero?.prevJobBoardAdvertising90d, xero?.audNzdMonthlyRates,
+    xero?.jobBoardAdvertising90d, xero?.prevJobBoardAdvertising90d, xero?.audNzdMonthlyRates, xero?.opex90d, xero?.prevOpex90d,
   );
   const budget = settings?.monthlyBudget ?? null;
   const postsPerWeek = settings?.postsPerWeek ?? 7;
@@ -458,12 +458,18 @@ export function MarketingCard() {
           <CountTile label="QUALIFIED CANDIDATES" unit="candidates" c={qual} pw={pw} />
           <CostTile label="COST PER BOOKED CALL" unit="per call" c={callCost} prev={h.prev.costPerBookedCall} target={t?.costPerBookedCall} fmt={money0} pw={pw} />
           <CostTile label="COST PER QUALIFIED CANDIDATE" unit="each" c={qualCost} prev={h.prev.costPerQualifiedCandidate} target={t?.costPerQualifiedCandidate} fmt={money2} pw={pw} />
-          <Tile label="PLACEMENT CAC · LAST 90 DAYS" chip={null}>
-            <Big value={cac ? money0(cac.placementCac) : '—'} color={cac?.hasPrevPeriod ? ragColor(cac.placementCac <= cac.prevPlacementCac ? 'green' : 'red') : C.text} unit="per placement" />
-            <TextLine muted>{cac?.hasPrevPeriod
-              ? `Prior 90 days ${money0(cac.prevPlacementCac)} · ${cac.placementCac >= cac.prevPlacementCac ? '+' : '−'}${money0(Math.abs(cac.placementCac - cac.prevPlacementCac))}`
-              : 'Client + candidate acquisition spend ÷ placements signed'}</TextLine>
-          </Tile>
+          {([
+            ['PLACEMENT CAC', 'per placement', cac?.placementCacLoaded, cac?.prevPlacementCacLoaded, 'All ad spend + internal Opex ÷ placements signed'],
+            ['CLIENT CAC', 'per signed client', cac?.clientCacLoaded, cac?.prevClientCacLoaded, 'Client Meta spend + sales salaries & overhead share ÷ ToBs signed'],
+            ['CANDIDATE CAC', 'per placed candidate', cac?.candidateCacLoaded, cac?.prevCandidateCacLoaded, 'Candidate Meta + job board ads + recruiter salaries & overhead share ÷ placements signed'],
+          ] as const).map(([label, unit, cur, prev, formula]) => (
+            <Tile key={label} label={`${label} · LAST 90 DAYS`} chip={null}>
+              <Big value={cur != null ? money0(cur) : '—'} color={cac?.hasPrevPeriod && cur != null && prev != null ? ragColor(cur <= prev ? 'green' : 'red') : C.text} unit={unit} />
+              <TextLine muted>{cac?.hasPrevPeriod && cur != null && prev != null
+                ? `Prior 90 days ${money0(prev)} · ${cur >= prev ? '+' : '−'}${money0(Math.abs(cur - prev))}`
+                : formula}</TextLine>
+            </Tile>
+          ))}
         </div>
       </Section>
 
