@@ -377,8 +377,8 @@ export interface XeroFinanceData {
   jobBoardAdvertising90d?: number;
   prevJobBoardAdvertising90d?: number;
   // Trailing-90-day internal Opex for the fully loaded CACs (same window as above).
-  opex90d?: { officeSalaries: number; shareholderSalaries: number; staffOnCosts: number; overhead: number };
-  prevOpex90d?: { officeSalaries: number; shareholderSalaries: number; staffOnCosts: number; overhead: number };
+  opex90d?: { officeSalaries: number; shareholderSalaries: number; staffOnCosts: number; overhead: number; recruiterPay?: number; recruitersMatched?: number };
+  prevOpex90d?: { officeSalaries: number; shareholderSalaries: number; staffOnCosts: number; overhead: number; recruiterPay?: number; recruitersMatched?: number };
   // Unpaid ACCREC invoices already raised in Xero, past their due date (NZD).
   // Distinct from the frontend's own Airtable-scheduled overdue total.
   overdueXeroInvoices?: number;
