@@ -458,6 +458,9 @@ export function MarketingCard() {
           <CountTile label="QUALIFIED CANDIDATES" unit="candidates" c={qual} pw={pw} />
           <CostTile label="COST PER BOOKED CALL" unit="per call" c={callCost} prev={h.prev.costPerBookedCall} target={t?.costPerBookedCall} fmt={money0} pw={pw} />
           <CostTile label="COST PER QUALIFIED CANDIDATE" unit="each" c={qualCost} prev={h.prev.costPerQualifiedCandidate} target={t?.costPerQualifiedCandidate} fmt={money2} pw={pw} />
+        </div>
+        {/* CACs on their own row: 3 across on desktop, stacked on a phone. */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 14, marginTop: 14 }}>
           {([
             ['PLACEMENT CAC', 'per placement', cac?.placementCacLoaded, cac?.prevPlacementCacLoaded, 'All ad spend + internal Opex ÷ placements signed'],
             ['CLIENT CAC', 'per signed client', cac?.clientCacLoaded, cac?.prevClientCacLoaded, 'Client Meta spend + sales salaries & overhead share ÷ ToBs signed'],

@@ -42,7 +42,7 @@ const SALES_TIME_COST_PER_CALL = 0.25 * 72; // 15 min @ $72/hr
 // shortcut: headcount hard-coded, move to Marketing settings if it changes often.
 // "Salaries - Office Staff" is one Xero account, split by these heads; shareholders count as sales.
 const SALES_HEADCOUNT = 1;
-const RECRUITER_HEADCOUNT = 3;
+const RECRUITER_HEADCOUNT = 5;
 
 /** Trailing-90-day internal Opex from Xero (n8n Finance webhook), NZD, 100% AUS. */
 export interface Opex90d { officeSalaries: number; shareholderSalaries: number; staffOnCosts: number; overhead: number }
@@ -57,8 +57,8 @@ export function splitOpex(o: Opex90d) {
   return { client: total * salesShare, candidate: total * (1 - salesShare) };
 }
 console.assert(
-  (() => { const r = splitOpex({ officeSalaries: 400, shareholderSalaries: 100, staffOnCosts: 0, overhead: 0 }); return r.client === 200 && r.candidate === 300; })(),
-  'splitOpex: 1 sales + shareholders vs 3 recruiters',
+  (() => { const r = splitOpex({ officeSalaries: 600, shareholderSalaries: 100, staffOnCosts: 0, overhead: 0 }); return r.client === 200 && r.candidate === 500; })(),
+  'splitOpex: 1 sales + shareholders vs 5 recruiters',
 );
 
 // Approximate flat AUD→NZD rate, shared so it isn't duplicated per call site.
