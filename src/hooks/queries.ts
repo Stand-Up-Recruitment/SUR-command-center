@@ -11,6 +11,7 @@ import {
   fetchPlacementFees,
   AUD_TO_NZD_APPROX,
 } from '../services/airtable';
+import type { Opex90d } from '../services/airtable';
 import { fetchClientInvoices, hasClientInvoicesCredentials } from '../services/clientInvoices';
 import { fetchXeroFinanceData, hasXeroCredentials } from '../services/xero';
 import { fetchMetaSpendByFrame, fetchMetaCampaignBreakdown, fetchMetaAdBreakdown, fetchMetaAdSetDaily } from '../services/metaAds';
@@ -153,10 +154,10 @@ export function useMetaAusSpend(frame: LTGPFrame = '30d') {
 
 export const hasCacCredentials = hasAirtableKey && hasClientsBase;
 
-export function useCacKPIs(grossMarginPct?: number, jobBoardAdvertising90d?: number, prevJobBoardAdvertising90d?: number, audNzdMonthlyRates?: Record<string, number>) {
+export function useCacKPIs(grossMarginPct?: number, jobBoardAdvertising90d?: number, prevJobBoardAdvertising90d?: number, audNzdMonthlyRates?: Record<string, number>, opex90d?: Opex90d, prevOpex90d?: Opex90d) {
   return useQuery({
-    queryKey: ['cac', grossMarginPct ?? 0, jobBoardAdvertising90d ?? 0, prevJobBoardAdvertising90d ?? 0, audNzdMonthlyRates ?? {}],
-    queryFn: () => fetchCacKPIs(grossMarginPct, jobBoardAdvertising90d, prevJobBoardAdvertising90d, audNzdMonthlyRates),
+    queryKey: ['cac', grossMarginPct ?? 0, jobBoardAdvertising90d ?? 0, prevJobBoardAdvertising90d ?? 0, audNzdMonthlyRates ?? {}, opex90d ?? null, prevOpex90d ?? null],
+    queryFn: () => fetchCacKPIs(grossMarginPct, jobBoardAdvertising90d, prevJobBoardAdvertising90d, audNzdMonthlyRates, opex90d, prevOpex90d),
     enabled: hasCacCredentials,
     placeholderData: keepPreviousData,
   });

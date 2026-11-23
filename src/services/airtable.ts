@@ -39,6 +39,27 @@ const CRM_TABLE_ID = 'tbl4XcHW2Gb7PF4fw';
 const MAIN_CLIENT_TABLE_ID = 'tblHJjDpCeTgevOvI';
 const SALES_TRANSCRIPT_TABLE_ID = 'tblUntytJJFaaWW6w'; // lives in CLIENTS_BASE_ID, confirmed against the live schema
 const SALES_TIME_COST_PER_CALL = 0.25 * 72; // 15 min @ $72/hr
+// shortcut: headcount hard-coded, move to Marketing settings if it changes often.
+// "Salaries - Office Staff" is one Xero account, split by these heads; shareholders count as sales.
+const SALES_HEADCOUNT = 1;
+const RECRUITER_HEADCOUNT = 3;
+
+/** Trailing-90-day internal Opex from Xero (n8n Finance webhook), NZD, 100% AUS. */
+export interface Opex90d { officeSalaries: number; shareholderSalaries: number; staffOnCosts: number; overhead: number }
+
+/** Splits internal Opex into the client (sales) and candidate (recruiter) side, by salary share. */
+export function splitOpex(o: Opex90d) {
+  const office = o.officeSalaries / (SALES_HEADCOUNT + RECRUITER_HEADCOUNT);
+  const sales = o.shareholderSalaries + office * SALES_HEADCOUNT;
+  const recruiters = office * RECRUITER_HEADCOUNT;
+  const total = o.officeSalaries + o.shareholderSalaries + o.staffOnCosts + o.overhead;
+  const salesShare = sales + recruiters > 0 ? sales / (sales + recruiters) : 0;
+  return { client: total * salesShare, candidate: total * (1 - salesShare) };
+}
+console.assert(
+  (() => { const r = splitOpex({ officeSalaries: 400, shareholderSalaries: 100, staffOnCosts: 0, overhead: 0 }); return r.client === 200 && r.candidate === 300; })(),
+  'splitOpex: 1 sales + shareholders vs 3 recruiters',
+);
 
 // Approximate flat AUD→NZD rate, shared so it isn't duplicated per call site.
 // The Calculation Rules doc specifies a monthly-average rate per transaction month;
@@ -758,7 +779,7 @@ function acquisitionCacs(
   from: number,
   to: number,
   meta: { clientSpend: number; candidateSpend: number },
-): AcquisitionCacs & { clientAcquisitionCost: number } {
+): AcquisitionCacs & { clientAcquisitionCost: number; clientsWon: number } {
   const clientsWon = d.mainClients.filter(c => isInPeriod(c['Signed Date'], from, to)).length;
   const salesCalls = d.salesTranscripts.filter(t => isInPeriod(t.Created, from, to)).length;
   const callsBooked = countCallsBooked(d.callBookings, from, to);
@@ -766,6 +787,7 @@ function acquisitionCacs(
   const clientAcquisitionCost = meta.clientSpend + salesCalls * SALES_TIME_COST_PER_CALL;
   return {
     clientAcquisitionCost,
+    clientsWon,
     cacPerSignedClient: clientsWon > 0 ? clientAcquisitionCost / clientsWon : 0,
     cacPerBookedCall: callsBooked > 0 ? meta.clientSpend / callsBooked : 0,
     cacPerQualifiedCandidate: qualified > 0 ? meta.candidateSpend / qualified : 0,
@@ -793,6 +815,8 @@ export async function fetchCacKPIs(
   jobBoardAdvertising90d: number = 0,
   prevJobBoardAdvertising90d: number = 0,
   audNzdMonthlyRates: Record<string, number> = {},
+  opex90d?: Opex90d,
+  prevOpex90d?: Opex90d,
 ): Promise<CacKPIs> {
   if (!CLIENTS_BASE_ID || !CANDIDATES_BASE_ID) throw new Error('CAC credentials not configured');
 
@@ -823,6 +847,23 @@ export async function fetchCacKPIs(
   const placementCac = placementsInWindow > 0
     ? (cur.clientAcquisitionCost + metaResult.candidateSpend + jobBoardAdvertising90d) / placementsInWindow
     : 0;
+  // Fully loaded CACs (Marketing tab): Meta + job boards + internal Opex split by salary share.
+  // Real sales salaries replace the per-call sales-time estimate here. null until n8n sends Opex.
+  const loaded = (
+    c: { clientSpend: number; candidateSpend: number }, clientsWon: number, placements: number, jba: number, o?: Opex90d,
+  ) => {
+    if (!o) return { client: null, candidate: null, placement: null };
+    const opex = splitOpex(o);
+    const clientCost = c.clientSpend + opex.client;
+    const candidateCost = c.candidateSpend + jba + opex.candidate;
+    return {
+      client: clientsWon > 0 ? clientCost / clientsWon : 0,
+      candidate: placements > 0 ? candidateCost / placements : 0,
+      placement: placements > 0 ? (clientCost + candidateCost) / placements : 0,
+    };
+  };
+  const curLoaded = loaded(metaResult, cur.clientsWon, placementsInWindow, jobBoardAdvertising90d, opex90d);
+  let prevLoaded: ReturnType<typeof loaded> = { client: null, candidate: null, placement: null };
 
   const hasPrevPeriod = prevMetaResult !== null;
   let prevCacPerSignedClient = 0;
@@ -839,6 +880,7 @@ export async function fetchCacKPIs(
     prevPlacementCac = prevPlacementsInWindow > 0
       ? (prev.clientAcquisitionCost + prevMetaResult.candidateSpend + prevJobBoardAdvertising90d) / prevPlacementsInWindow
       : 0;
+    prevLoaded = loaded(prevMetaResult, prev.clientsWon, prevPlacementsInWindow, prevJobBoardAdvertising90d, prevOpex90d);
   }
 
   // ── CAC card deltas: last 90 days vs the prior 90 days, as a % change ──────
@@ -894,6 +936,12 @@ export async function fetchCacKPIs(
     prevPlacementCac,
     cacPerQualifiedCandidate,
     prevCacPerQualifiedCandidate,
+    clientCacLoaded: curLoaded.client,
+    prevClientCacLoaded: prevLoaded.client,
+    candidateCacLoaded: curLoaded.candidate,
+    prevCandidateCacLoaded: prevLoaded.candidate,
+    placementCacLoaded: curLoaded.placement,
+    prevPlacementCacLoaded: prevLoaded.placement,
     ltgp,
     ltgpMethod,
     placementRate,
