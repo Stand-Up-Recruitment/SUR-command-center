@@ -39,26 +39,33 @@ const CRM_TABLE_ID = 'tbl4XcHW2Gb7PF4fw';
 const MAIN_CLIENT_TABLE_ID = 'tblHJjDpCeTgevOvI';
 const SALES_TRANSCRIPT_TABLE_ID = 'tblUntytJJFaaWW6w'; // lives in CLIENTS_BASE_ID, confirmed against the live schema
 const SALES_TIME_COST_PER_CALL = 0.25 * 72; // 15 min @ $72/hr
-// shortcut: headcount hard-coded, move to Marketing settings if it changes often.
-// "Salaries - Office Staff" is one Xero account, split by these heads; shareholders count as sales.
+// Recruiter pay comes from Xero Payroll pay slips (n8n "Sum Recruiter Pay"); the rest of
+// "Salaries - Office Staff" plus shareholders' pay is the sales side.
+// shortcut: headcount split is only the fallback when payroll data is missing.
 const SALES_HEADCOUNT = 1;
 const RECRUITER_HEADCOUNT = 5;
 
 /** Trailing-90-day internal Opex from Xero (n8n Finance webhook), NZD, 100% AUS. */
-export interface Opex90d { officeSalaries: number; shareholderSalaries: number; staffOnCosts: number; overhead: number }
+export interface Opex90d {
+  officeSalaries: number; shareholderSalaries: number; staffOnCosts: number; overhead: number;
+  recruiterPay?: number; // named recruiters' gross pay excl. commission, from pay slips
+}
 
 /** Splits internal Opex into the client (sales) and candidate (recruiter) side, by salary share. */
 export function splitOpex(o: Opex90d) {
-  const office = o.officeSalaries / (SALES_HEADCOUNT + RECRUITER_HEADCOUNT);
-  const sales = o.shareholderSalaries + office * SALES_HEADCOUNT;
-  const recruiters = office * RECRUITER_HEADCOUNT;
+  const recruiters = o.recruiterPay ?? o.officeSalaries * RECRUITER_HEADCOUNT / (SALES_HEADCOUNT + RECRUITER_HEADCOUNT);
+  const sales = o.shareholderSalaries + Math.max(0, o.officeSalaries - recruiters);
   const total = o.officeSalaries + o.shareholderSalaries + o.staffOnCosts + o.overhead;
   const salesShare = sales + recruiters > 0 ? sales / (sales + recruiters) : 0;
   return { client: total * salesShare, candidate: total * (1 - salesShare) };
 }
 console.assert(
   (() => { const r = splitOpex({ officeSalaries: 600, shareholderSalaries: 100, staffOnCosts: 0, overhead: 0 }); return r.client === 200 && r.candidate === 500; })(),
-  'splitOpex: 1 sales + shareholders vs 5 recruiters',
+  'splitOpex: headcount fallback, 1 sales + shareholders vs 5 recruiters',
+);
+console.assert(
+  (() => { const r = splitOpex({ officeSalaries: 600, shareholderSalaries: 100, staffOnCosts: 0, overhead: 0, recruiterPay: 300 }); return r.client === 400 && r.candidate === 300; })(),
+  'splitOpex: real recruiter pay, rest of office + shareholders to sales',
 );
 
 // Approximate flat AUD→NZD rate, shared so it isn't duplicated per call site.
