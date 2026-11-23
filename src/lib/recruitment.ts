@@ -1,7 +1,7 @@
 // Recruiter capacity / hiring trigger, shared by the Recruitment tab and the settings API.
 // Placement targets (split from the placement plan), breakeven and pace, shared by the Recruitment tab and the Overview.
 import type { JobAdderStageKPIs, JobAgingKPIs, RecruiterKPIs, RecruiterStat, RecruitmentSettings, RollingRates, TimeFrame } from '../types';
-import { neededByToday, type WorkingDays } from './workingDays';
+import { neededByToday, type WorkingDays } from './workingDays.js';
 
 export const WEEKS_PER_MONTH = 4.33;
 
