@@ -125,8 +125,10 @@ async function finance(full: boolean) {
   if (!full) return { diagnosis: summary.diagnosis, summary, placementPlan: p };
   // Same inputs the Finance tab passes to its LTGP:CAC row.
   const grossMarginPct = data.ausRevenue > 0 ? (data.ausGrossProfit / data.ausRevenue) * 100 : undefined;
-  const cac = await soft(fetchCacKPIs(grossMarginPct, data.jobBoardAdvertising90d, data.prevJobBoardAdvertising90d, data.audNzdMonthlyRates));
-  return { diagnosis: summary.diagnosis, summary, placementPlan: p, planYearToDate: rec.planYearToDate, ltgpCac: cac, scheduledInvoices: scheduled, xero: data };
+  const cac = await soft(fetchCacKPIs(grossMarginPct, data.jobBoardAdvertising90d, data.prevJobBoardAdvertising90d, data.audNzdMonthlyRates, data.opex90d, data.prevOpex90d));
+  const placementCac = 'placementCacLoaded' in cac ? cac.placementCacLoaded : null;
+  const ltgpToCacPerPlacement = p.gp && placementCac ? p.gp.value / placementCac : null;
+  return { diagnosis: summary.diagnosis, summary, placementPlan: p, planYearToDate: rec.planYearToDate, ltgpCac: cac, ltgpToCacPerPlacement, scheduledInvoices: scheduled, xero: data };
 }
 
 /** The Overview page: every department's Diagnosis and the top things needing attention. */

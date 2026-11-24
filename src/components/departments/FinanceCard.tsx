@@ -286,12 +286,15 @@ function PLSummarySection({ w, totalRevenue, totalGrossProfit, totalOpex, netPro
     cacPerSignedClientDeltaPct: number | null;
     placementCacDeltaPct: number | null;
     cacPerQualifiedCandidateDeltaPct: number | null;
-    ltgp: number; costPerPlacedClient: number; ltgpToCac: number;
+    placementCacLoaded: number | null;
   } | undefined;
   monthlyTrend: XeroFinanceData['monthlyTrend'];
   plan: PlacementPlan;
 }) {
   const grossMarginPct = totalRevenue > 0 ? (totalGrossProfit / totalRevenue) * 100 : 0;
+  // Per placement: gross profit per placement (the plan's figure) ÷ Placement CAC (same as Marketing).
+  const placementCac = cac?.placementCacLoaded;
+  const ltgpToCac = plan.gp && placementCac ? plan.gp.value / placementCac : null;
   const netMarginPct = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
 
   // Selected month = the trend's partial isCurrentMonth entry, or a past month
@@ -355,9 +358,9 @@ function PLSummarySection({ w, totalRevenue, totalGrossProfit, totalOpex, netPro
         <KP
           accent={PU}
           label="LTGP:CAC"
-          value={cac ? `${cac.ltgpToCac.toFixed(1)}:1` : '—'}
+          value={ltgpToCac != null ? `${ltgpToCac.toFixed(1)}:1` : '—'}
           valueColor={PU}
-          sub={cac ? `LTGP ${fmtNZD(cac.ltgp)} · cost per placed client ${fmtNZD(cac.costPerPlacedClient)} · other CAC numbers are on Marketing and Sales` : undefined}
+          sub={`Per placement · gross profit ${plan.gp ? fmtNZD(plan.gp.value) : '—'} ÷ Placement CAC ${placementCac ? fmtNZD(placementCac) : '—'} (last 90 days, as on Marketing)`}
         />
       </G4>
     </>
@@ -596,7 +599,7 @@ export function FinanceCard() {
   const netProfit         = data?.ausNetProfit ?? data?.ausGrossProfit ?? 0;
 
   const grossMarginPct = totalRevenue > 0 ? (totalGrossProfit / totalRevenue) * 100 : undefined;
-  const { data: cac } = useCacKPIs(grossMarginPct, data?.jobBoardAdvertising90d, data?.prevJobBoardAdvertising90d, data?.audNzdMonthlyRates);
+  const { data: cac } = useCacKPIs(grossMarginPct, data?.jobBoardAdvertising90d, data?.prevJobBoardAdvertising90d, data?.audNzdMonthlyRates, data?.opex90d, data?.prevOpex90d);
 
   if (!data) return <FinanceSkeleton />;
 
