@@ -135,7 +135,7 @@ export function ClientsCard() {
   if (!card) return <ClientsSkeleton />;
 
   const missing = [
-    !invoicesQ.data && 'Xero invoices (Payment left out of every score)',
+    !invoicesQ.data && 'Xero invoices (Volume and Payment left out of every score)',
     !jobAdderQ.data && 'JobAdder notes (departures treated as unexplained)',
   ].filter(Boolean) as string[];
 
@@ -189,9 +189,9 @@ export function ClientsCard() {
 
       <div style={{ background: BG2, border: `.5px solid ${BORDER}`, borderRadius: 12, padding: '1rem 1.25rem', marginTop: 16, fontSize: 12, color: MUTED, lineHeight: 1.7 }}>
         <div style={{ color: TEXT, fontWeight: 600, marginBottom: 6 }}>How the score works</div>
-        <div><b style={{ color: TEXT }}>Volume (30%)</b>: placements with the client ÷ placements with our biggest client × 100.</div>
-        <div><b style={{ color: TEXT }}>Payment (40%)</b>, from Xero: 100 if invoices are paid on time on average, minus 3 per average day late (a neutral 70 if nothing is paid yet), minus 15 for each invoice overdue now and 5 for each void / credited invoice.</div>
-        <div><b style={{ color: TEXT }}>Retention & Relationship (30%)</b>, from JobAdder drop-off reasons: only client-caused departures ("Client quality") count against the client. Candidate-side reasons cost nothing. Unexplained departures cost {UNEXPLAINED_NUDGE_EACH} each, capped at {UNEXPLAINED_NUDGE_CAP}.</div>
+        <div><b style={{ color: TEXT }}>Volume (30%)</b>: fees paid to SUR in the last 12 months (AUD, from Xero) ÷ our top client's × 100.</div>
+        <div><b style={{ color: TEXT }}>Payment (40%)</b>, from Xero: 100 if invoices are paid on time on average, minus 3 per average day late (a neutral 70 if nothing is paid yet), minus 15 for each invoice overdue now. Voided or credited invoices carry no penalty, and invoices not yet due on agreed terms are not counted as late or overdue.</div>
+        <div><b style={{ color: TEXT }}>Retention & Relationship (30%)</b>, from JobAdder drop-off reasons: only client-caused departures ("Client and site issue") count against the client, in proportion to the client's placements. Candidate-side reasons cost nothing. Unexplained departures cost {UNEXPLAINED_NUDGE_EACH} each, capped at {UNEXPLAINED_NUDGE_CAP}.</div>
         <div>If a client has no data for a component, the other weights are rescaled. Tiers: A 80+, B 70–79.9, C 50–69.9, D under 50.</div>
         <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 8 }}>
           {(['good', 'ok', 'bad', 'neutral'] as Tone[]).map(t => (
@@ -201,7 +201,7 @@ export function ClientsCard() {
           ))}
         </div>
         <div style={{ marginTop: 8 }}>
-          Assumptions to confirm with Les: the tier cut-offs and the unexplained-departure nudge were reconstructed; volume is relative to the biggest client; each void / credited invoice costs 5. JobAdder reasons cover placements starting from 1 Jun 2026.
+          Assumptions to confirm with Les: the tier cut-offs and the unexplained-departure nudge were reconstructed; volume is relative to the top client by fees paid. JobAdder reasons cover placements starting from 1 Jun 2026.
         </div>
       </div>
     </div>

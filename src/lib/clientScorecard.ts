@@ -1,4 +1,4 @@
-// AU Client Scorecard: Volume 30% + Payment 40% + Retention & Relationship 30%. Rules
+// AU Client Scorecard (method per AU_Client_Scorecard.html, 24 Nov 2026): Volume 30% + Payment 40% + Retention & Relationship 30%. Rules
 // follow the "AU Client Scorecard — Requirements" doc (14 Oct 2026). Pure functions: the
 // Clients tab renders this, and the Overview will read it from here rather than recalculate.
 import type { ClientInvoice, ClientPlacement, RetentionPlacement } from '../types';
@@ -13,9 +13,9 @@ export const UNEXPLAINED_NUDGE_EACH = 5;
 export const UNEXPLAINED_NUDGE_CAP = 15;
 const LATE_PENALTY_PER_DAY = 3;
 const OVERDUE_PENALTY = 15;
-const VOID_PENALTY = 5;
 const NO_PAID_BASE = 70;
-const CLIENT_CAUSED_REASON = 'Client quality';
+// "Client and site issue" is the JobAdder wording; "Client quality" is Rachel's label for the same thing.
+const CLIENT_CAUSED = /client quality|client and site/i;
 // NZ clients sit in the same Placements table; they are out of scope.
 const NZ_CLIENTS = new Set(['dempsey wood', 'heb', 'rck auckland'].map(n => companyKey(n, n)));
 
@@ -67,19 +67,25 @@ const scoreTone = (s: number): Tone => (s >= 70 ? 'good' : s >= 50 ? 'ok' : 'bad
 export const tierOf = (score: number): Tier => TIERS.find(t => score >= t.min)!.tier;
 
 // ─── Volume (30%) ─────────────────────────────────────────────────────────────
-export function volumeSignal(n: number, maxN: number): Signal {
-  const score = r1(Math.min(100, (n / maxN) * 100));
+// Fees paid to SUR in the 12 months to asAt (AUD, Xero), relative to the top client.
+export const yearAgo = (asAt: string) => `${+asAt.slice(0, 4) - 1}${asAt.slice(4)}`;
+export const feesPaid = (invoices: ClientInvoice[], asAt: string) => invoices
+  .filter(i => i.status === 'PAID' && i.fullyPaidOnDate && i.fullyPaidOnDate >= yearAgo(asAt) && i.fullyPaidOnDate <= asAt)
+  .reduce((s, i) => s + i.amountPaid, 0);
+
+export function volumeSignal(paid: number, maxPaid: number, placements: number, asAt: string): Signal {
+  const score = r1(maxPaid > 0 ? Math.min(100, (paid / maxPaid) * 100) : 0);
   return {
     score,
-    // One placement is a small client, not a bad one.
-    tone: n >= 3 ? 'good' : n === 2 ? 'ok' : 'neutral',
-    headline: `${n} placement${n === 1 ? '' : 's'}`,
+    // A small client is not a bad one.
+    tone: score >= 50 ? 'good' : score >= 15 ? 'ok' : 'neutral',
+    headline: `${money(paid)} paid in last 12 months · ${placements} placement${placements === 1 ? '' : 's'}`,
     working: {
       columns: [], rows: [],
       steps: [
-        `${n} placement${n === 1 ? '' : 's'} with this client`,
-        `Largest client has ${maxN}`,
-        `${n} ÷ ${maxN} × 100 = ${fmt(score)} (capped at 100)`,
+        `Fees paid ${yearAgo(asAt)} – ${asAt}: ${money(paid)} AUD`,
+        `Top client (benchmark): ${money(maxPaid)}`,
+        `${money(paid)} ÷ ${money(maxPaid)} × 100 = ${fmt(score)}`,
       ],
     },
   };
@@ -147,10 +153,7 @@ export function paymentSignal(invoices: ClientInvoice[], asAt: string): ClientSc
     score -= overdue.length * OVERDUE_PENALTY;
     working.steps.push(`− ${OVERDUE_PENALTY} × ${overdue.length} overdue now (${money(overdueAmount)} outstanding) = ${fmt(r1(score))}`);
   }
-  if (voids.length) {
-    score -= voids.length * VOID_PENALTY;
-    working.steps.push(`− ${VOID_PENALTY} × ${voids.length} void / credited = ${fmt(r1(score))}`);
-  }
+  if (voids.length) working.steps.push(`${voids.length} void / credited — not penalised`);
   if (notDue.length) working.steps.push(`${notDue.length} not yet due — shown, not penalised`);
   score = r1(clamp(score));
   working.steps.push(`Clamped to 0–100: ${fmt(score)}`);
@@ -179,14 +182,14 @@ export function retentionSignal(
     if (ja) matched.add(personKey(p.candidate));
     const reason = ja?.reason ?? null;
     let verdict: string;
-    if (reason === CLIENT_CAUSED_REASON) { redFlags++; verdict = 'Client-caused (red flag)'; }
+    if (reason && CLIENT_CAUSED.test(reason)) { redFlags++; verdict = 'Client-caused (red flag)'; }
     else if (reason) verdict = 'No penalty';
     else { unexplained++; verdict = 'Unexplained'; }
     rows.push([p.candidate, p.cancellationDate ?? '—', reason ?? 'no reason logged', verdict]);
   }
   // A client-caused drop-off logged in JobAdder but not yet ended in Airtable still counts.
   for (const j of jobAdder) {
-    if (j.dropped && j.reason === CLIENT_CAUSED_REASON && !matched.has(personKey(j.candidate))) {
+    if (j.dropped && j.reason && CLIENT_CAUSED.test(j.reason) && !matched.has(personKey(j.candidate))) {
       redFlags++;
       rows.push([j.candidate, '—', j.reason, 'Client-caused (red flag)']);
     }
@@ -234,13 +237,14 @@ export function buildScorecard(
     if (NZ_CLIENTS.has(key)) continue;
     groups.set(key, [...(groups.get(key) ?? []), p]);
   }
-  const maxN = Math.max(...[...groups.values()].map(g => g.length), 1);
 
   const invoicesBy = new Map<string, ClientInvoice[]>();
   for (const inv of invoices ?? []) {
     const k = companyKey(inv.contact, inv.contact);
     invoicesBy.set(k, [...(invoicesBy.get(k) ?? []), inv]);
   }
+  const paidBy = new Map([...groups.keys()].map(k => [k, feesPaid(invoicesBy.get(k) ?? [], asAt)]));
+  const maxPaid = Math.max(...paidBy.values(), 0);
   const jaBy = new Map<string, { candidate: string; reason: string | null; dropped: boolean }[]>();
   for (const p of jobAdder ?? []) {
     const f = placementFacts(p, asAt);
@@ -249,7 +253,8 @@ export function buildScorecard(
   }
 
   const scored = [...groups.entries()].map(([key, ps]) => {
-    const volume = volumeSignal(ps.length, maxN);
+    const volume = volumeSignal(paidBy.get(key)!, maxPaid, ps.length, asAt);
+    if (!invoices) Object.assign(volume, { score: null, tone: 'neutral', headline: `${ps.length} placements`, working: { columns: [], rows: [], steps: ['Xero invoices unavailable — Volume left out of the score'] } });
     const payment = paymentSignal(invoices ? invoicesBy.get(key) ?? [] : [], asAt);
     if (!invoices) payment.working.steps = ['Xero invoices unavailable — Payment left out of the score'];
     const retention = retentionSignal(ps, jaBy.get(key) ?? []);
