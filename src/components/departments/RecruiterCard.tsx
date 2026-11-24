@@ -119,7 +119,8 @@ const TIMEFRAME_OPTIONS: { value: TimeFrame; label: string }[] = [
 ];
 
 const BOARD_COLS = '190px 110px 120px 120px 120px 110px minmax(0, 1fr) 210px';
-const SOURCER_COLS = '190px 110px 1fr 1fr 210px';
+const SOURCER_COLS = '190px 110px 150px 1fr 1fr 210px';
+const SOURCER_DAILY_CALLS = 40;
 
 export function RecruiterCard() {
   const [frame, setFrame] = useState<TimeFrame>('month');
@@ -486,7 +487,7 @@ export function RecruiterCard() {
             })}
             {sourcers.length > 0 && (
               <div style={{ display: 'grid', gridTemplateColumns: SOURCER_COLS, gap: 12, padding: '14px 20px', borderBottom: `1px solid ${C.border}`, background: '#17181B', ...LABEL, fontSize: 12 }}>
-                <span>SOURCER</span><span>STATUS</span><span>INTERVIEWS BOOKED FOR PLACERS</span><span>SOURCED CVS SENT</span><span>ACTION</span>
+                <span>SOURCER</span><span>STATUS</span><span>CALLS</span><span>INTERVIEWS BOOKED FOR PLACERS</span><span>SOURCED CVS SENT</span><span>ACTION</span>
               </div>
             )}
             {sourcers.map(r => {
@@ -494,13 +495,21 @@ export function RecruiterCard() {
               const subsTarget = tier?.next?.submissions;
               const subs = subsTarget ? { done: r.stat.sourcedSubmissions, needed: need(subsTarget) } : null;
               const p = subs ? pace(subs.done, subs.needed) : 'grey';
+              const callsNeeded = SOURCER_DAILY_CALLS * wd.elapsed;
+              const callsPace = pace(r.stat.phoneInterviews, callsNeeded);
+              // Status is the worse of calls and sourced CVs; grey only when neither has a target yet.
+              const status = (['red', 'amber', 'green'] as Pace[]).find(t => t === p || t === callsPace) ?? 'grey';
               return (
                 <div key={r.stat.name} style={{ display: 'grid', gridTemplateColumns: SOURCER_COLS, gap: 12, padding: '16px 20px', alignItems: 'center' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                     <span style={{ fontSize: 16, fontWeight: 700 }}>{r.stat.name}</span>
                     <span style={{ fontSize: 12, color: C.muted }}>{tier?.tier ?? 'Sourcer'}</span>
                   </div>
-                  <Chip tone={p}>{PACE_LABEL[p]}</Chip>
+                  <Chip tone={status}>{PACE_LABEL[status]}</Chip>
+                  <span style={{ fontFamily: NUM_FONT, fontSize: 20, fontWeight: 700, color: PACE_COLOR[callsPace] }}>
+                    {r.stat.phoneInterviews} / {callsNeeded}
+                    <span style={{ fontSize: 13, fontWeight: 500, color: C.muted }}> · {SOURCER_DAILY_CALLS}/day</span>
+                  </span>
                   <span style={{ fontFamily: NUM_FONT, fontSize: 20, fontWeight: 700, color: C.faint }}>
                     [target] <span style={{ fontSize: 13, fontWeight: 500, color: C.muted }}>needs a number</span>
                   </span>
