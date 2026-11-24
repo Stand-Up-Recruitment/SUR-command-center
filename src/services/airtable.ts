@@ -39,34 +39,14 @@ const CRM_TABLE_ID = 'tbl4XcHW2Gb7PF4fw';
 const MAIN_CLIENT_TABLE_ID = 'tblHJjDpCeTgevOvI';
 const SALES_TRANSCRIPT_TABLE_ID = 'tblUntytJJFaaWW6w'; // lives in CLIENTS_BASE_ID, confirmed against the live schema
 const SALES_TIME_COST_PER_CALL = 0.25 * 72; // 15 min @ $72/hr
-// Recruiter pay comes from Xero Payroll pay slips (n8n "Sum Recruiter Pay"); the rest of
-// "Salaries - Office Staff" plus shareholders' pay is the sales side.
-// shortcut: headcount split is only the fallback when payroll data is missing.
-const SALES_HEADCOUNT = 1;
-const RECRUITER_HEADCOUNT = 5;
-
 /** Trailing-90-day internal Opex from Xero (n8n Finance webhook), NZD, 100% AUS. */
+// Only acquisition salaries count: Les's pay ("Salaries - Shareholders"; Les is the shareholder
+// and sole salesperson) on the client side, the named recruiters' pay (Xero Payroll pay slips,
+// excl. commission) on the candidate side. Other staff, on-costs and overhead are left out.
 export interface Opex90d {
   officeSalaries: number; shareholderSalaries: number; staffOnCosts: number; overhead: number;
-  recruiterPay?: number; // named recruiters' gross pay excl. commission, from pay slips
+  recruiterPay?: number;
 }
-
-/** Splits internal Opex into the client (sales) and candidate (recruiter) side, by salary share. */
-export function splitOpex(o: Opex90d) {
-  const recruiters = o.recruiterPay ?? o.officeSalaries * RECRUITER_HEADCOUNT / (SALES_HEADCOUNT + RECRUITER_HEADCOUNT);
-  const sales = o.shareholderSalaries + Math.max(0, o.officeSalaries - recruiters);
-  const total = o.officeSalaries + o.shareholderSalaries + o.staffOnCosts + o.overhead;
-  const salesShare = sales + recruiters > 0 ? sales / (sales + recruiters) : 0;
-  return { client: total * salesShare, candidate: total * (1 - salesShare) };
-}
-console.assert(
-  (() => { const r = splitOpex({ officeSalaries: 600, shareholderSalaries: 100, staffOnCosts: 0, overhead: 0 }); return r.client === 200 && r.candidate === 500; })(),
-  'splitOpex: headcount fallback, 1 sales + shareholders vs 5 recruiters',
-);
-console.assert(
-  (() => { const r = splitOpex({ officeSalaries: 600, shareholderSalaries: 100, staffOnCosts: 0, overhead: 0, recruiterPay: 300 }); return r.client === 400 && r.candidate === 300; })(),
-  'splitOpex: real recruiter pay, rest of office + shareholders to sales',
-);
 
 // Approximate flat AUD→NZD rate, shared so it isn't duplicated per call site.
 // The Calculation Rules doc specifies a monthly-average rate per transaction month;
@@ -854,17 +834,19 @@ export async function fetchCacKPIs(
   const placementCac = placementsInWindow > 0
     ? (cur.clientAcquisitionCost + metaResult.candidateSpend + jobBoardAdvertising90d) / placementsInWindow
     : 0;
-  // Fully loaded CACs (Marketing tab): Meta + job boards + internal Opex split by salary share.
+  // Fully loaded CACs (Marketing tab): Meta + job boards + Les's and the recruiters' pay.
   // Real sales salaries replace the per-call sales-time estimate here. null until n8n sends Opex.
   const loaded = (
     c: { clientSpend: number; candidateSpend: number }, clientsWon: number, placements: number, jba: number, o?: Opex90d,
   ) => {
     if (!o) return { client: null, candidate: null, placement: null };
-    const opex = splitOpex(o);
-    const clientCost = c.clientSpend + opex.client;
-    const candidateCost = c.candidateSpend + jba + opex.candidate;
+    const clientCost = c.clientSpend + o.shareholderSalaries;
+    const client = clientsWon > 0 ? clientCost / clientsWon : 0;
+    // No payroll data → no candidate/placement CAC, rather than a guess.
+    if (o.recruiterPay == null) return { client, candidate: null, placement: null };
+    const candidateCost = c.candidateSpend + jba + o.recruiterPay;
     return {
-      client: clientsWon > 0 ? clientCost / clientsWon : 0,
+      client,
       candidate: placements > 0 ? candidateCost / placements : 0,
       placement: placements > 0 ? (clientCost + candidateCost) / placements : 0,
     };

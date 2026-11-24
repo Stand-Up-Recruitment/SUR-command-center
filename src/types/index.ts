@@ -378,7 +378,7 @@ export interface XeroFinanceData {
   prevJobBoardAdvertising90d?: number;
   // Trailing-90-day internal Opex for the fully loaded CACs (same window as above).
   opex90d?: { officeSalaries: number; shareholderSalaries: number; staffOnCosts: number; overhead: number; recruiterPay?: number; recruitersMatched?: number };
-  prevOpex90d?: { officeSalaries: number; shareholderSalaries: number; staffOnCosts: number; overhead: number; recruiterPay?: number; recruitersMatched?: number };
+  prevOpex90d?: { officeSalaries: number; shareholderSalaries: number; staffOnCosts: number; overhead: number; recruiterPay?: number };
   // Unpaid ACCREC invoices already raised in Xero, past their due date (NZD).
   // Distinct from the frontend's own Airtable-scheduled overdue total.
   overdueXeroInvoices?: number;
@@ -432,10 +432,9 @@ export interface CacKPIs {
   cacPerQualifiedCandidate: number;
   prevCacPerQualifiedCandidate: number;
 
-  // Fully loaded CACs (Marketing tab), trailing 90 days. Internal Opex (salaries, on-costs,
-  // overhead) is split client/candidate by salary share; null until the Finance webhook sends Opex.
-  // Client = (client Meta + client Opex share) ÷ ToBs signed.
-  // Candidate = (candidate Meta + job board ads + candidate Opex share) ÷ placements signed.
+  // Fully loaded CACs (Marketing tab), trailing 90 days; null until the Finance webhook sends Opex.
+  // Client = (client Meta + Les's salary) ÷ ToBs signed.
+  // Candidate = (candidate Meta + job board ads + recruiters' pay) ÷ placements signed. Null without payroll data.
   // Placement = all of the above ÷ placements signed.
   clientCacLoaded: number | null;
   prevClientCacLoaded: number | null;
