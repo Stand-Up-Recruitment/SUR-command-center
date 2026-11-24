@@ -463,7 +463,7 @@ export function MarketingCard() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 14, marginTop: 14 }}>
           {([
             ['PLACEMENT CAC', 'per placement', cac?.placementCacLoaded, cac?.prevPlacementCacLoaded, 'All ad spend + salaries ÷ placements signed'],
-            ['CLIENT CAC', 'per signed client', cac?.clientCacLoaded, cac?.prevClientCacLoaded, 'Client Meta spend + Les’s salary ÷ ToBs signed'],
+            ['CLIENT CAC', 'per signed client', cac?.clientCacLoaded, cac?.prevClientCacLoaded, 'Client Meta spend + Les’s sales time ($28/hr, 60%) ÷ ToBs signed'],
             ['CANDIDATE CAC', 'per placed candidate', cac?.candidateCacLoaded, cac?.prevCandidateCacLoaded, 'Candidate Meta + job board ads + recruiters’ pay ÷ placements signed'],
           ] as const).map(([label, unit, cur, prev, formula]) => (
             <Tile key={label} label={`${label} · LAST 90 DAYS`} chip={null}>

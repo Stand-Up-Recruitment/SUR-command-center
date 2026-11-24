@@ -432,8 +432,8 @@ export interface CacKPIs {
   cacPerQualifiedCandidate: number;
   prevCacPerQualifiedCandidate: number;
 
-  // Fully loaded CACs (Marketing tab), trailing 90 days; null until the Finance webhook sends Opex.
-  // Client = (client Meta + Les's salary) ÷ ToBs signed.
+  // Fully loaded CACs (Marketing tab), trailing 90 days.
+  // Client = (client Meta + Les's sales time at $28/hr × 40 hr × 60%) ÷ ToBs signed.
   // Candidate = (candidate Meta + job board ads + recruiters' pay) ÷ placements signed. Null without payroll data.
   // Placement = all of the above ÷ placements signed.
   clientCacLoaded: number | null;
