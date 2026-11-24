@@ -118,8 +118,9 @@ const TIMEFRAME_OPTIONS: { value: TimeFrame; label: string }[] = [
   { value: 'month', label: 'This month' },
 ];
 
-const BOARD_COLS = '190px 110px 120px 120px 120px 110px minmax(0, 1fr) 210px';
-const SOURCER_COLS = '190px 110px 150px 1fr 1fr 210px';
+// Fluid columns so the board fits any width without a horizontal scroll; cells wrap instead.
+const BOARD_COLS = 'minmax(0, 1.7fr) minmax(0, 1fr) minmax(0, 1.1fr) minmax(0, 1.1fr) minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 2.6fr) minmax(0, 1.9fr)';
+const SOURCER_COLS = 'minmax(0, 1.7fr) minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 2fr) minmax(0, 2fr) minmax(0, 1.9fr)';
 const SOURCER_DAILY_CALLS = 40;
 
 export function RecruiterCard() {
@@ -425,8 +426,8 @@ export function RecruiterCard() {
 
       {/* Who do I talk to? */}
       <Section title="Who do I talk to?" aside="Each number shows done / needed by today · tap a name for detail">
-        <div style={{ ...CARD, overflowX: 'auto' }}>
-          <div style={{ minWidth: 1180 }}>
+        <div style={CARD}>
+          <div>
             <div style={{ display: 'grid', gridTemplateColumns: BOARD_COLS, gap: 12, padding: '14px 20px', borderBottom: `1px solid ${C.border}`, ...LABEL, fontSize: 12 }}>
               <span>PLACER</span><span>STATUS</span><span>PLACED</span><span>CLIENT INT.</span><span>INTERNAL INT.</span><span>JOBS · STALE</span><span>BIGGEST BREAK</span><span>ACTION</span>
             </div>
