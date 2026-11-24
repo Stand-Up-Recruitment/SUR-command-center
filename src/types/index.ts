@@ -1,4 +1,5 @@
 import type { PlanSettings } from '../lib/placementPlan';
+import type { FeeLine } from '../lib/placementFees';
 
 // ─── Airtable raw record shape ──────────────────────────────────────────────
 export interface AirtableRecord<T> {
@@ -379,6 +380,8 @@ export interface XeroFinanceData {
   // Trailing-90-day internal Opex for the fully loaded CACs (same window as above).
   opex90d?: { officeSalaries: number; shareholderSalaries: number; staffOnCosts: number; overhead: number; recruiterPay?: number; recruitersMatched?: number };
   prevOpex90d?: { officeSalaries: number; shareholderSalaries: number; staffOnCosts: number; overhead: number; recruiterPay?: number };
+  // AUD "Placement Fee" invoice lines since 1 Apr 2026 (what was charged, net of credits). Missing if n8n's branch failed.
+  placementFeeLines?: FeeLine[];
   // Unpaid ACCREC invoices already raised in Xero, past their due date (NZD).
   // Distinct from the frontend's own Airtable-scheduled overdue total.
   overdueXeroInvoices?: number;
