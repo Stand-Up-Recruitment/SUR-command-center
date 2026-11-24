@@ -462,9 +462,9 @@ export function MarketingCard() {
         {/* CACs on their own row: 3 across on desktop, stacked on a phone. */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 14, marginTop: 14 }}>
           {([
-            ['PLACEMENT CAC', 'per placement', cac?.placementCacLoaded, cac?.prevPlacementCacLoaded, 'All ad spend + internal Opex ÷ placements signed'],
-            ['CLIENT CAC', 'per signed client', cac?.clientCacLoaded, cac?.prevClientCacLoaded, 'Client Meta spend + sales salaries & overhead share ÷ ToBs signed'],
-            ['CANDIDATE CAC', 'per placed candidate', cac?.candidateCacLoaded, cac?.prevCandidateCacLoaded, 'Candidate Meta + job board ads + recruiter salaries & overhead share ÷ placements signed'],
+            ['PLACEMENT CAC', 'per placement', cac?.placementCacLoaded, cac?.prevPlacementCacLoaded, 'All ad spend + salaries ÷ placements signed'],
+            ['CLIENT CAC', 'per signed client', cac?.clientCacLoaded, cac?.prevClientCacLoaded, 'Client Meta spend + Les’s salary ÷ ToBs signed'],
+            ['CANDIDATE CAC', 'per placed candidate', cac?.candidateCacLoaded, cac?.prevCandidateCacLoaded, 'Candidate Meta + job board ads + recruiters’ pay ÷ placements signed'],
           ] as const).map(([label, unit, cur, prev, formula]) => (
             <Tile key={label} label={`${label} · LAST 90 DAYS`} chip={null}>
               <Big value={cur != null ? money0(cur) : '—'} color={cac?.hasPrevPeriod && cur != null && prev != null ? ragColor(cur <= prev ? 'green' : 'red') : C.text} unit={unit} />
