@@ -895,6 +895,9 @@ export async function fetchCacKPIs(
     }
   }
 
+  // LTGP = average gross profit per placed client, minus the candidate cost of each of its placements.
+  // Candidate sourcing is a delivery cost, so CAC here is the client side only. null without payroll data.
+  const candidateCost = curLoaded.candidate;
   const placedClientGrossProfits: number[] = [];
   for (const client of cohortClients) {
     const linked = placementsByClientId.get(client.id);
@@ -905,18 +908,17 @@ export async function fetchCacKPIs(
       const rate = audNzdMonthlyRates[(p['Candidate Start Date'] ?? '').slice(0, 7)] ?? AUD_TO_NZD_APPROX;
       return sum + (p['Total Amount'] ?? 0) * rate;
     }, 0);
-    placedClientGrossProfits.push(feesNZD * (grossMarginPct / 100));
+    placedClientGrossProfits.push(feesNZD * (grossMarginPct / 100) - (candidateCost ?? 0) * linked.length);
   }
 
   const cohortSize = cohortClients.length;
   const placedClientCount = placedClientGrossProfits.length;
-  const ltgpMethod: 'median' | 'average' = placedClientCount < 30 ? 'median' : 'average';
-  const ltgp = ltgpMethod === 'median'
-    ? median(placedClientGrossProfits)
-    : placedClientGrossProfits.reduce((a, b) => a + b, 0) / (placedClientCount || 1);
+  const ltgp = candidateCost != null && placedClientCount > 0
+    ? placedClientGrossProfits.reduce((a, b) => a + b, 0) / placedClientCount
+    : null;
   const placementRate = cohortSize > 0 ? placedClientCount / cohortSize : 0;
-  const costPerPlacedClient = placementRate > 0 ? cacPerSignedClient / placementRate : 0;
-  const ltgpToCac = costPerPlacedClient > 0 ? ltgp / costPerPlacedClient : 0;
+  const costPerPlacedClient = placementRate > 0 && curLoaded.client > 0 ? curLoaded.client / placementRate : null;
+  const ltgpToCac = ltgp != null && costPerPlacedClient ? ltgp / costPerPlacedClient : null;
 
   return {
     cacPerSignedClient,
@@ -933,7 +935,6 @@ export async function fetchCacKPIs(
     placementCacLoaded: curLoaded.placement,
     prevPlacementCacLoaded: prevLoaded.placement,
     ltgp,
-    ltgpMethod,
     placementRate,
     costPerPlacedClient,
     ltgpToCac,
