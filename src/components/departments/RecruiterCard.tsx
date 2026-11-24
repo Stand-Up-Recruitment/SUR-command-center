@@ -119,7 +119,7 @@ const TIMEFRAME_OPTIONS: { value: TimeFrame; label: string }[] = [
 ];
 
 const BOARD_COLS = '190px 110px 120px 120px 120px 110px minmax(0, 1fr) 210px';
-const SOURCER_COLS = '190px 110px 1fr 1fr 210px';
+const SOURCER_COLS = '190px 110px 120px 1fr 1fr 210px';
 
 export function RecruiterCard() {
   const [frame, setFrame] = useState<TimeFrame>('month');
@@ -486,7 +486,7 @@ export function RecruiterCard() {
             })}
             {sourcers.length > 0 && (
               <div style={{ display: 'grid', gridTemplateColumns: SOURCER_COLS, gap: 12, padding: '14px 20px', borderBottom: `1px solid ${C.border}`, background: '#17181B', ...LABEL, fontSize: 12 }}>
-                <span>SOURCER</span><span>STATUS</span><span>INTERVIEWS BOOKED FOR PLACERS</span><span>SOURCED CVS SENT</span><span>ACTION</span>
+                <span>SOURCER</span><span>STATUS</span><span>CALLS</span><span>INTERVIEWS BOOKED FOR PLACERS</span><span>SOURCED CVS SENT</span><span>ACTION</span>
               </div>
             )}
             {sourcers.map(r => {
@@ -501,6 +501,7 @@ export function RecruiterCard() {
                     <span style={{ fontSize: 12, color: C.muted }}>{tier?.tier ?? 'Sourcer'}</span>
                   </div>
                   <Chip tone={p}>{PACE_LABEL[p]}</Chip>
+                  <span style={{ fontFamily: NUM_FONT, fontSize: 20, fontWeight: 700 }}>{r.stat.phoneInterviews}</span>
                   <span style={{ fontFamily: NUM_FONT, fontSize: 20, fontWeight: 700, color: C.faint }}>
                     [target] <span style={{ fontSize: 13, fontWeight: 500, color: C.muted }}>needs a number</span>
                   </span>
