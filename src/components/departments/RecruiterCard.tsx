@@ -497,13 +497,15 @@ export function RecruiterCard() {
               const p = subs ? pace(subs.done, subs.needed) : 'grey';
               const callsNeeded = SOURCER_DAILY_CALLS * wd.elapsed;
               const callsPace = pace(r.stat.phoneInterviews, callsNeeded);
+              // Status is the worse of calls and sourced CVs; grey only when neither has a target yet.
+              const status = (['red', 'amber', 'green'] as Pace[]).find(t => t === p || t === callsPace) ?? 'grey';
               return (
                 <div key={r.stat.name} style={{ display: 'grid', gridTemplateColumns: SOURCER_COLS, gap: 12, padding: '16px 20px', alignItems: 'center' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                     <span style={{ fontSize: 16, fontWeight: 700 }}>{r.stat.name}</span>
                     <span style={{ fontSize: 12, color: C.muted }}>{tier?.tier ?? 'Sourcer'}</span>
                   </div>
-                  <Chip tone={p}>{PACE_LABEL[p]}</Chip>
+                  <Chip tone={status}>{PACE_LABEL[status]}</Chip>
                   <span style={{ fontFamily: NUM_FONT, fontSize: 20, fontWeight: 700, color: PACE_COLOR[callsPace] }}>
                     {r.stat.phoneInterviews} / {callsNeeded}
                     <span style={{ fontSize: 13, fontWeight: 500, color: C.muted }}> · {SOURCER_DAILY_CALLS}/day</span>
