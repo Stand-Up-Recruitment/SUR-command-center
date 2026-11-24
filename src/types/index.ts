@@ -434,7 +434,7 @@ export interface CacKPIs {
 
   // Fully loaded CACs (Marketing tab), trailing 90 days.
   // Client = (client Meta + Les's sales time at $28/hr × 40 hr × 60%) ÷ ToBs signed.
-  // Candidate = (candidate Meta + job board ads + recruiters' pay) ÷ placements signed. Null without payroll data.
+  // Candidate = (candidate Meta + job board ads + 60% of recruiters' pay) ÷ placements signed. Null without payroll data.
   // Placement = all of the above ÷ placements signed.
   clientCacLoaded: number | null;
   prevClientCacLoaded: number | null;

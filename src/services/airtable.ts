@@ -41,8 +41,10 @@ const SALES_TRANSCRIPT_TABLE_ID = 'tblUntytJJFaaWW6w'; // lives in CLIENTS_BASE_
 const SALES_TIME_COST_PER_CALL = 0.25 * 72; // 15 min @ $72/hr
 // Les's selling time at a salesperson's replacement cost, not the owner's own pay: $28/hr × 40 hr/wk × 60% on sales.
 const SALES_COST_90D = 28 * 40 * 0.6 * (90 / 7);
+// Recruiters spend 60% of their time finding and placing candidates.
+const RECRUITER_ACQUISITION_SHARE = 0.6;
 /** Trailing-90-day internal Opex from Xero (n8n Finance webhook), NZD, 100% AUS. */
-// Only acquisition salaries count: SALES_COST_90D on the client side, the named recruiters' pay
+// Only acquisition salaries count: SALES_COST_90D on the client side, 60% of the named recruiters' pay
 // (Xero Payroll pay slips, excl. commission) on the candidate side. Other staff, on-costs and overhead are left out.
 export interface Opex90d {
   officeSalaries: number; shareholderSalaries: number; staffOnCosts: number; overhead: number;
@@ -843,7 +845,7 @@ export async function fetchCacKPIs(
     const client = clientsWon > 0 ? clientCost / clientsWon : 0;
     // No payroll data → no candidate/placement CAC, rather than a guess.
     if (o?.recruiterPay == null) return { client, candidate: null, placement: null };
-    const candidateCost = c.candidateSpend + jba + o.recruiterPay;
+    const candidateCost = c.candidateSpend + jba + o.recruiterPay * RECRUITER_ACQUISITION_SHARE;
     return {
       client,
       candidate: placements > 0 ? candidateCost / placements : 0,

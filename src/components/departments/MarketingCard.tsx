@@ -464,7 +464,7 @@ export function MarketingCard() {
           {([
             ['PLACEMENT CAC', 'per placement', cac?.placementCacLoaded, cac?.prevPlacementCacLoaded, 'All ad spend + salaries ÷ placements signed'],
             ['CLIENT CAC', 'per signed client', cac?.clientCacLoaded, cac?.prevClientCacLoaded, 'Client Meta spend + Les’s sales time ($28/hr, 60%) ÷ ToBs signed'],
-            ['CANDIDATE CAC', 'per placed candidate', cac?.candidateCacLoaded, cac?.prevCandidateCacLoaded, 'Candidate Meta + job board ads + recruiters’ pay ÷ placements signed'],
+            ['CANDIDATE CAC', 'per placed candidate', cac?.candidateCacLoaded, cac?.prevCandidateCacLoaded, 'Candidate Meta + job board ads + 60% of recruiters’ pay ÷ placements signed'],
           ] as const).map(([label, unit, cur, prev, formula]) => (
             <Tile key={label} label={`${label} · LAST 90 DAYS`} chip={null}>
               <Big value={cur != null ? money0(cur) : '—'} color={cac?.hasPrevPeriod && cur != null && prev != null ? ragColor(cur <= prev ? 'green' : 'red') : C.text} unit={unit} />
