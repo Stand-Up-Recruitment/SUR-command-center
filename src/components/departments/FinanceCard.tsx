@@ -287,6 +287,7 @@ function PLSummarySection({ w, totalRevenue, totalGrossProfit, totalOpex, netPro
     placementCacDeltaPct: number | null;
     cacPerQualifiedCandidateDeltaPct: number | null;
     placementCacLoaded: number | null;
+    ltgp: number | null; costPerPlacedClient: number | null; ltgpToCac: number | null;
   } | undefined;
   monthlyTrend: XeroFinanceData['monthlyTrend'];
   plan: PlacementPlan;
@@ -294,7 +295,8 @@ function PLSummarySection({ w, totalRevenue, totalGrossProfit, totalOpex, netPro
   const grossMarginPct = totalRevenue > 0 ? (totalGrossProfit / totalRevenue) * 100 : 0;
   // Per placement: gross profit per placement (the plan's figure) ÷ Placement CAC (same as Marketing).
   const placementCac = cac?.placementCacLoaded;
-  const ltgpToCac = plan.gp && placementCac ? plan.gp.value / placementCac : null;
+  const perPlacement = plan.gp && placementCac ? plan.gp.value / placementCac : null;
+  const fmtRatio = (r: number | null | undefined) => (r != null ? `${r.toFixed(1)}:1` : '—');
   const netMarginPct = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
 
   // Selected month = the trend's partial isCurrentMonth entry, or a past month
@@ -358,9 +360,9 @@ function PLSummarySection({ w, totalRevenue, totalGrossProfit, totalOpex, netPro
         <KP
           accent={PU}
           label="LTGP:CAC"
-          value={ltgpToCac != null ? `${ltgpToCac.toFixed(1)}:1` : '—'}
+          value={fmtRatio(cac?.ltgpToCac)}
           valueColor={PU}
-          sub={`Per placement · gross profit ${plan.gp ? fmtNZD(plan.gp.value) : '—'} ÷ Placement CAC ${placementCac ? fmtNZD(placementCac) : '—'} (last 90 days, as on Marketing)`}
+          sub={`Per placed client · LTGP ${cac?.ltgp != null ? fmtNZD(cac.ltgp) : '—'} (average, after candidate costs) ÷ client CAC per placed client ${cac?.costPerPlacedClient != null ? fmtNZD(cac.costPerPlacedClient) : '—'} · per placement ${fmtRatio(perPlacement)}`}
         />
       </G4>
     </>

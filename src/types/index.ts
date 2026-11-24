@@ -443,12 +443,13 @@ export interface CacKPIs {
   placementCacLoaded: number | null;
   prevPlacementCacLoaded: number | null;
 
-  // Unit economics: LTGP and LTGP:CAC
-  ltgp: number;
-  ltgpMethod: 'median' | 'average';
+  // Unit economics, clients signed 1 Apr → 90 days ago. null without payroll data / placed clients.
+  // LTGP = average (fees × gross margin − Candidate CAC × placements) per placed client.
+  // LTGP:CAC = LTGP ÷ (Client CAC ÷ placement rate).
+  ltgp: number | null;
   placementRate: number;
-  costPerPlacedClient: number;
-  ltgpToCac: number;
+  costPerPlacedClient: number | null;
+  ltgpToCac: number | null;
   cohortSize: number;
   placedClientCount: number;
 
