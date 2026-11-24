@@ -356,7 +356,7 @@ export function MarketingCard() {
   const { data: xero } = useXeroFinanceData();
   const { data: cac } = useCacKPIs(
     xero && xero.ausRevenue > 0 ? (xero.ausGrossProfit / xero.ausRevenue) * 100 : undefined,
-    xero?.jobBoardAdvertising90d, xero?.prevJobBoardAdvertising90d, xero?.audNzdMonthlyRates, xero?.opex90d, xero?.prevOpex90d,
+    xero?.jobBoardAdvertising90d, xero?.prevJobBoardAdvertising90d, xero?.audNzdMonthlyRates, xero?.opex90d, xero?.prevOpex90d, xero?.placementFeeLines,
   );
   const budget = settings?.monthlyBudget ?? null;
   const postsPerWeek = settings?.postsPerWeek ?? 7;

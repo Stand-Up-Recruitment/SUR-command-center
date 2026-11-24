@@ -29,6 +29,7 @@ import { tradeOf } from '../lib/demand.js';
 import { isNonRecruiter, sourcedTally, firstName } from '../lib/recruitment.js';
 import { companyKey } from '../lib/companyKey.js';
 import type { PlacementFee } from '../lib/placementPlan.js';
+import { actualFeeAud, type FeeLine } from '../lib/placementFees.js';
 
 const API_KEY = env.VITE_AIRTABLE_API_KEY as string;
 const CLIENTS_BASE_ID = env.VITE_AIRTABLE_CLIENTS_BASE_ID as string;
@@ -649,6 +650,8 @@ export async function fetchPlacementFees(): Promise<PlacementFee[]> {
       status: (f[statusKey] as string | undefined) ?? '',
       cancelled: Boolean(f['Cancellation Date']),
       feeAud: f['Total Amount'] ?? 0,
+      candidate: (f['Candidate Name'] as string | undefined) ?? '',
+      company: (f['Company Name'] as string[] | undefined)?.[0] ?? '',
     };
   });
 }
@@ -687,6 +690,8 @@ type PlacementCacFields = {
   'Total Amount'?: number;
   'Candidate-Client Contract Sign Status'?: boolean;
   'Company ID'?: string[]; // linked Main Client record ID(s)
+  'Candidate Name'?: string;
+  'Company Name'?: string[]; // lookup
 };
 
 // Calculation Rules 4.3: placements created in the window with a signed
@@ -807,6 +812,7 @@ export async function fetchCacKPIs(
   audNzdMonthlyRates: Record<string, number> = {},
   opex90d?: Opex90d,
   prevOpex90d?: Opex90d,
+  placementFeeLines: FeeLine[] = [],
 ): Promise<CacKPIs> {
   if (!CLIENTS_BASE_ID || !CANDIDATES_BASE_ID) throw new Error('CAC credentials not configured');
 
@@ -906,7 +912,9 @@ export async function fetchCacKPIs(
     // the candidate started, falling back to the flat rate if that month is missing.
     const feesNZD = linked.reduce((sum, p) => {
       const rate = audNzdMonthlyRates[(p['Candidate Start Date'] ?? '').slice(0, 7)] ?? AUD_TO_NZD_APPROX;
-      return sum + (p['Total Amount'] ?? 0) * rate;
+      // What was actually charged (Xero), else the agreed fee.
+      const fee = actualFeeAud({ candidate: p['Candidate Name'] ?? '', company: p['Company Name']?.[0] ?? '', status: p.Status ?? '', agreedFee: p['Total Amount'] ?? 0 }, placementFeeLines);
+      return sum + (fee ?? p['Total Amount'] ?? 0) * rate;
     }, 0);
     placedClientGrossProfits.push(feesNZD * (grossMarginPct / 100) - (candidateCost ?? 0) * linked.length);
   }

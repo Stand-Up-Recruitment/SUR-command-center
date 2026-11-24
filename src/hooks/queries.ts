@@ -12,6 +12,7 @@ import {
   AUD_TO_NZD_APPROX,
 } from '../services/airtable';
 import type { Opex90d } from '../services/airtable';
+import type { FeeLine } from '../lib/placementFees';
 import { fetchClientInvoices, hasClientInvoicesCredentials } from '../services/clientInvoices';
 import { fetchXeroFinanceData, hasXeroCredentials } from '../services/xero';
 import { fetchMetaSpendByFrame, fetchMetaCampaignBreakdown, fetchMetaAdBreakdown, fetchMetaAdSetDaily } from '../services/metaAds';
@@ -154,10 +155,10 @@ export function useMetaAusSpend(frame: LTGPFrame = '30d') {
 
 export const hasCacCredentials = hasAirtableKey && hasClientsBase;
 
-export function useCacKPIs(grossMarginPct?: number, jobBoardAdvertising90d?: number, prevJobBoardAdvertising90d?: number, audNzdMonthlyRates?: Record<string, number>, opex90d?: Opex90d, prevOpex90d?: Opex90d) {
+export function useCacKPIs(grossMarginPct?: number, jobBoardAdvertising90d?: number, prevJobBoardAdvertising90d?: number, audNzdMonthlyRates?: Record<string, number>, opex90d?: Opex90d, prevOpex90d?: Opex90d, placementFeeLines?: FeeLine[]) {
   return useQuery({
-    queryKey: ['cac', grossMarginPct ?? 0, jobBoardAdvertising90d ?? 0, prevJobBoardAdvertising90d ?? 0, audNzdMonthlyRates ?? {}, opex90d ?? null, prevOpex90d ?? null],
-    queryFn: () => fetchCacKPIs(grossMarginPct, jobBoardAdvertising90d, prevJobBoardAdvertising90d, audNzdMonthlyRates, opex90d, prevOpex90d),
+    queryKey: ['cac', grossMarginPct ?? 0, jobBoardAdvertising90d ?? 0, prevJobBoardAdvertising90d ?? 0, audNzdMonthlyRates ?? {}, opex90d ?? null, prevOpex90d ?? null, placementFeeLines ?? null],
+    queryFn: () => fetchCacKPIs(grossMarginPct, jobBoardAdvertising90d, prevJobBoardAdvertising90d, audNzdMonthlyRates, opex90d, prevOpex90d, placementFeeLines),
     enabled: hasCacCredentials,
     placeholderData: keepPreviousData,
   });
@@ -325,7 +326,7 @@ export function usePlacementPlan(): { plan: PlacementPlan; ytd: ReturnType<typeo
   const [today] = useState(() => nzDate(Date.now())); // page load date
   const plan = placementPlan(s, {
     fallOver: ret.data ? liveFallOver(ret.data, today) : null,
-    gp: fees.data ? grossProfitPerPlacement(fees.data, fin.data?.audNzdMonthlyRates, today, AUD_TO_NZD_APPROX) : null,
+    gp: fees.data ? grossProfitPerPlacement(fees.data, fin.data?.audNzdMonthlyRates, today, AUD_TO_NZD_APPROX, fin.data?.placementFeeLines) : null,
     costs: fin.data ? avgMonthlyCosts(fin.data.monthlyTrend) : null,
   });
   return { plan, ytd: ret.data ? planYearToDate(ret.data, s, today) : null };

@@ -601,7 +601,7 @@ export function FinanceCard() {
   const netProfit         = data?.ausNetProfit ?? data?.ausGrossProfit ?? 0;
 
   const grossMarginPct = totalRevenue > 0 ? (totalGrossProfit / totalRevenue) * 100 : undefined;
-  const { data: cac } = useCacKPIs(grossMarginPct, data?.jobBoardAdvertising90d, data?.prevJobBoardAdvertising90d, data?.audNzdMonthlyRates, data?.opex90d, data?.prevOpex90d);
+  const { data: cac } = useCacKPIs(grossMarginPct, data?.jobBoardAdvertising90d, data?.prevJobBoardAdvertising90d, data?.audNzdMonthlyRates, data?.opex90d, data?.prevOpex90d, data?.placementFeeLines);
 
   if (!data) return <FinanceSkeleton />;
 

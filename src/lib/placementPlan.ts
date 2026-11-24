@@ -5,6 +5,7 @@
 //   projected net profit = must stick × gross profit per placement − avg monthly costs
 import type { RetentionPlacement, XeroFinanceData } from '../types';
 import { placementFacts } from './retention.js';
+import { actualFeeAud, type FeeLine } from './placementFees.js';
 
 export interface PlanSettings {
   planAnnualPlacements: number;  // placements made in the plan year
@@ -14,7 +15,7 @@ export interface PlanSettings {
 export const DEFAULT_PLAN_SETTINGS: PlanSettings = { planAnnualPlacements: 170, planFallOverPct: 30, planYear: 2027 };
 
 /** One Airtable placement's fee, for gross profit per placement. */
-export interface PlacementFee { startDate: string; status: string; cancelled: boolean; feeAud: number }
+export interface PlacementFee { startDate: string; status: string; cancelled: boolean; feeAud: number; candidate?: string; company?: string }
 
 const ceil = (n: number) => Math.ceil(n - 1e-9); // guard float noise, e.g. 15.0000000001
 const monthsBack = (ymd: string, n: number) => {
@@ -32,12 +33,16 @@ export function liveFallOver(placements: RetentionPlacement[], today: string): {
   return { rate: fell / started.length, fell, started: started.length };
 }
 
-/** Gross profit per placement = average full fee (NZD) of placements that started in the last 6 months and stuck (Live / Completed, not cancelled). */
-export function grossProfitPerPlacement(fees: PlacementFee[], rates: Record<string, number> | undefined, today: string, fallbackRate: number): { value: number; count: number } | null {
+/** Gross profit per placement = average fee (NZD) of placements that started in the last 6 months and stuck (Live / Completed, not cancelled).
+ *  Fee = what Xero shows was charged (see actualFeeAud), else the agreed fee. */
+export function grossProfitPerPlacement(fees: PlacementFee[], rates: Record<string, number> | undefined, today: string, fallbackRate: number, lines: FeeLine[] = []): { value: number; count: number } | null {
   const from = monthsBack(today, 6);
   const stuck = fees.filter(f => f.startDate > from && f.startDate <= today && ['Live', 'Completed'].includes(f.status) && !f.cancelled && f.feeAud > 0);
   if (!stuck.length) return null;
-  const total = stuck.reduce((s, f) => s + f.feeAud * (rates?.[f.startDate.slice(0, 7)] ?? fallbackRate), 0);
+  const total = stuck.reduce((s, f) => {
+    const fee = actualFeeAud({ candidate: f.candidate ?? '', company: f.company ?? '', status: f.status, agreedFee: f.feeAud }, lines) ?? f.feeAud;
+    return s + fee * (rates?.[f.startDate.slice(0, 7)] ?? fallbackRate);
+  }, 0);
   return { value: total / stuck.length, count: stuck.length };
 }
 
