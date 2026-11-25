@@ -11,23 +11,25 @@ import { avgDaysLateByClient } from '../../lib/clientScorecard';
 import { companyKey } from '../../lib/companyKey';
 import type { PlacementPlan, planYearToDate } from '../../lib/placementPlan';
 import { DiagnosisTile } from '../shared/DiagnosisTile';
+import { C, NUM_FONT, CARD, LABEL } from '../shared/v2Theme';
+import { Tile, Big, Line as TextLine } from '../shared/v2Layout';
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, Cell,
 } from 'recharts';
-import type { XeroFinanceData } from '../../types';
+import type { XeroFinanceData, CacKPIs } from '../../types';
 
-// ─── Palette ──────────────────────────────────────────────────────────────────
-const NZ   = '#1D9E75';
-const AUS  = '#378ADD';
-const PU   = '#534AB7';
-const AM   = '#BA7517';
-const RD   = '#D85A30';
+// ─── Palette (the Marketing / Recruitment v2 colours) ──────────────────────────
+const NZ   = C.green;
+const AUS  = C.blue;
+const PU   = '#A99CF5'; // net profit / plan: a lighter violet that reads on the v2 cards
+const AM   = C.amber;
+const RD   = C.red;
 
-const BG     = '#111111';
-const BG2    = '#1a1a1a';
-const BORDER = 'rgba(255,255,255,0.10)';
-const TEXT   = '#f5f5f5';
-const MUTED  = '#a3a3a3';
+const BG     = C.inset;
+const BG2    = C.card;
+const BORDER = C.border;
+const TEXT   = C.text;
+const MUTED  = C.muted;
 
 const fmtNZD = (n: number) => {
   const abs = Math.abs(n).toLocaleString('en-NZ', { maximumFractionDigits: 0 });
@@ -39,26 +41,24 @@ const fmtDate = (iso: string) =>
 
 // ─── Layout helpers ───────────────────────────────────────────────────────────
 
-function SH({ color, label, sub }: { color: string; label: string; sub?: string }) {
+function SH({ label, sub }: { label: string; sub?: string }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '1.4rem 0 .75rem' }}>
-      <div style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
-      <span style={{ fontSize: 11, fontWeight: 500, letterSpacing: '.06em', textTransform: 'uppercase' as const, color }}>{label}</span>
-      <div style={{ flex: 1, height: .5, background: BORDER }} />
-      {sub && <span style={{ fontSize: 11, color: MUTED }}>{sub}</span>}
+    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: 12, margin: '32px 0 14px' }}>
+      <h2 style={{ margin: 0, fontFamily: NUM_FONT, fontSize: 22, fontWeight: 700, color: C.text }}>{label}</h2>
+      {sub && <span style={{ fontSize: 14, color: C.muted }}>{sub}</span>}
     </div>
   );
 }
 
-function KP({ label, value, sub, accent, valueColor }: {
-  label: string; value: string; sub?: string; accent?: string; valueColor?: string;
+// Tile in the Marketing style: label, big number, muted line. `accent` is kept for callers but no longer drawn.
+function KP({ label, value, unit, sub, valueColor }: {
+  label: string; value: string; unit?: string; sub?: string; accent?: string; valueColor?: string;
 }) {
   return (
-    <div style={{ background: BG, border: `.5px solid ${BORDER}`, borderRadius: 8, borderTop: accent ? `3px solid ${accent}` : undefined, padding: '.875rem 1rem' }}>
-      <div style={{ fontSize: 11, color: MUTED, marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: 21, fontWeight: 500, color: valueColor ?? TEXT, lineHeight: 1.1 }}>{value}</div>
-      {sub && <div style={{ fontSize: 11, color: MUTED, marginTop: 3 }}>{sub}</div>}
-    </div>
+    <Tile label={label.toUpperCase()} chip={null}>
+      <Big value={value} color={valueColor ?? C.text} size={40} unit={unit} />
+      {sub && <TextLine muted>{sub}</TextLine>}
+    </Tile>
   );
 }
 
@@ -71,7 +71,7 @@ type MonthCompare = {
 
 // Top-row card: big FY-to-date number, then "[Month] so far" and a same-point
 // comparison with last month. ▲/▼ is green/red, reversed when `invert` (opex).
-function KPMonth({ label, value, valueColor, accent, metric, compare, invert }: {
+function KPMonth({ label, value, valueColor, metric, compare, invert }: {
   label: string; value: string; valueColor?: string; accent?: string;
   metric: MonthMetric; compare: MonthCompare; invert?: boolean;
 }) {
@@ -82,27 +82,26 @@ function KPMonth({ label, value, valueColor, accent, metric, compare, invert }: 
   const diff = cur != null && prev != null ? cur - prev : null;
   const diffColor = diff == null ? MUTED : (invert ? diff <= 0 : diff >= 0) ? NZ : RD;
   return (
-    <div style={{ background: BG, border: `.5px solid ${BORDER}`, borderRadius: 8, borderTop: accent ? `3px solid ${accent}` : undefined, padding: '.875rem 1rem' }}>
-      <div style={{ fontSize: 11, color: MUTED, marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: 21, fontWeight: 500, color: valueColor ?? TEXT, lineHeight: 1.1 }}>{value}</div>
-      <div style={{ fontSize: 11, color: MUTED, marginTop: 3 }}>
-        {compare.currentName} {compare.isCurrent ? 'so far' : 'total'}: {cur != null ? fmtNZD(cur) : '—'}
-      </div>
-      <div style={{ fontSize: 11, color: MUTED, marginTop: 3 }}>
-        <span style={{ color: diffColor }}>
+    <Tile label={label.toUpperCase()} chip={null}>
+      <Big value={value} color={valueColor ?? C.text} size={40} />
+      <TextLine>
+        {compare.currentName} {compare.isCurrent ? 'so far' : 'total'}: <strong>{cur != null ? fmtNZD(cur) : '—'}</strong>
+      </TextLine>
+      <TextLine muted>
+        <span style={{ color: diffColor, fontWeight: 600 }}>
           {diff == null ? '—' : `${diff >= 0 ? '▲ +' : '▼ −'}${fmtNZD(Math.abs(diff))}`}
         </span>
         {compare.isCurrent
           ? ` vs ${compare.lastName} at the same point · ${compare.lastName} total ${lastTotal != null ? fmtNZD(lastTotal) : '—'}`
           : ` vs ${compare.lastName} total ${lastTotal != null ? fmtNZD(lastTotal) : '—'}`}
-      </div>
-    </div>
+      </TextLine>
+    </Tile>
   );
 }
 
 function G4({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 10, marginBottom: '.875rem' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14, marginBottom: 14 }}>
       {children}
     </div>
   );
@@ -112,7 +111,7 @@ function Card({ children, accent, accentSide }: { children: React.ReactNode; acc
   const borderTop  = accent && accentSide !== 'left' ? `3px solid ${accent}` : undefined;
   const borderLeft = accent && accentSide === 'left' ? `3px solid ${accent}` : undefined;
   return (
-    <div style={{ background: BG2, border: `.5px solid ${BORDER}`, borderRadius: 12, borderTop, borderLeft, padding: '1.25rem', marginBottom: '.875rem' }}>
+    <div style={{ ...CARD, borderTop, borderLeft, padding: 20, marginBottom: 14 }}>
       {children}
     </div>
   );
@@ -120,7 +119,7 @@ function Card({ children, accent, accentSide }: { children: React.ReactNode; acc
 
 function NoteBox({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ fontSize: 10, color: MUTED, lineHeight: 1.5, padding: '6px 8px', background: BG, borderRadius: 8, marginTop: 6 }}>
+    <div style={{ fontSize: 13, color: MUTED, lineHeight: 1.5, padding: '10px 12px', background: BG, borderRadius: 8, marginTop: 8 }}>
       {children}
     </div>
   );
@@ -138,19 +137,19 @@ function FinanceSkeleton() {
   );
   return (
     <div>
-      <SH color={TEXT} label="P&L Summary" />
+      <SH label="P&L Summary" />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0,1fr))', gap: 10, marginBottom: '.875rem' }}>{[0,1,2,3,4].map(kpCard)}</div>
       <div style={{ background: BG2, border: `.5px solid ${BORDER}`, borderRadius: 12, padding: '1.25rem', marginBottom: '.875rem' }}>
         <Skeleton height={240} />
       </div>
-      <SH color={MUTED} label="Cash Position" />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 10, marginBottom: '.875rem' }}>{[0,1,2,3].map(kpCard)}</div>
-      <SH color={AM} label="Variance Commentary" />
+      <SH label="Cash Position" />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14, marginBottom: 14 }}>{[0,1,2,3].map(kpCard)}</div>
+      <SH label="Variance Commentary" />
       <div style={{ background: BG2, border: `.5px solid ${BORDER}`, borderRadius: 12, padding: '1.25rem', marginBottom: '.875rem' }}>
         <Skeleton height={13} width={400} style={{ marginBottom: 8 }} />
         <Skeleton height={13} width={320} />
       </div>
-      <SH color={AUS} label="13-Week Cash Outlook" />
+      <SH label="13-Week Cash Outlook" />
       <div style={{ background: BG2, border: `.5px solid ${BORDER}`, borderRadius: 12, padding: '1.25rem', marginBottom: '.875rem' }}>
         <Skeleton height={220} />
       </div>
@@ -189,10 +188,10 @@ function TwelveMonthTrendChart({ data, plan }: { data: XeroFinanceData['monthlyT
     <Card>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: '.75rem' }}>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 500, color: TEXT, marginBottom: 2 }}>12-Month Trend</div>
-          <div style={{ fontSize: 11, color: MUTED }}>Revenue (bars) · Net profit (line) · Australia only · NZD</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: TEXT, marginBottom: 4 }}>12-Month Trend</div>
+          <div style={{ fontSize: 13, color: MUTED }}>Revenue (bars) · Net profit (line) · Australia only · NZD</div>
           {view === 'monthly' && (
-            <div style={{ fontSize: 11, color: MUTED }}>
+            <div style={{ fontSize: 13, color: MUTED }}>
               <span style={{ color: AM }}>- - Breakeven</span> = revenue that covers average monthly costs ({plan.costs ? fmtNZD(plan.costs.value) : '—'}) ·{' '}
               <span style={{ color: PU }}>- - Plan</span> = net profit the plan delivers at current costs ({plan.projectedNetProfit != null ? fmtNZD(plan.projectedNetProfit) : '—'})
             </div>
@@ -204,7 +203,7 @@ function TwelveMonthTrendChart({ data, plan }: { data: XeroFinanceData['monthlyT
               key={v}
               onClick={() => setView(v)}
               style={{
-                fontSize: 11,
+                fontSize: 13,
                 padding: '4px 10px',
                 borderRadius: 6,
                 border: `.5px solid ${BORDER}`,
@@ -221,17 +220,17 @@ function TwelveMonthTrendChart({ data, plan }: { data: XeroFinanceData['monthlyT
       </div>
       <ResponsiveContainer width="100%" height={240}>
         <ComposedChart data={chartData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
-          <XAxis dataKey="month" tick={{ fontSize: 11, fill: MUTED }} axisLine={false} tickLine={false} />
+          <XAxis dataKey="month" tick={{ fontSize: 12, fill: MUTED }} axisLine={false} tickLine={false} />
           <YAxis
-            tick={{ fontSize: 11, fill: MUTED }}
+            tick={{ fontSize: 12, fill: MUTED }}
             axisLine={false}
             tickLine={false}
             tickFormatter={fmtAxis}
             domain={[(min: number) => Math.min(0, min), (max: number) => Math.max(0, max, view === 'monthly' ? (plan.projectedNetProfit ?? 0) * 1.05 : 0)]}
           />
           <ReferenceLine y={0} stroke={BORDER} />
-          {view === 'monthly' && plan.costs && <ReferenceLine y={plan.costs.value} stroke={AM} strokeDasharray="5 4" label={{ value: 'Breakeven', position: 'insideTopLeft', fill: AM, fontSize: 10 }} />}
-          {view === 'monthly' && plan.projectedNetProfit != null && <ReferenceLine y={plan.projectedNetProfit} stroke={PU} strokeDasharray="5 4" label={{ value: 'Plan', position: 'insideTopLeft', fill: PU, fontSize: 10 }} />}
+          {view === 'monthly' && plan.costs && <ReferenceLine y={plan.costs.value} stroke={AM} strokeDasharray="5 4" label={{ value: 'Breakeven', position: 'insideTopLeft', fill: AM, fontSize: 12 }} />}
+          {view === 'monthly' && plan.projectedNetProfit != null && <ReferenceLine y={plan.projectedNetProfit} stroke={PU} strokeDasharray="5 4" label={{ value: 'Plan', position: 'insideTopLeft', fill: PU, fontSize: 12 }} />}
           <Tooltip
             contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${BORDER}`, background: BG2 }}
             labelStyle={{ color: TEXT }}
@@ -278,17 +277,7 @@ function PLSummarySection({ w, totalRevenue, totalGrossProfit, totalOpex, netPro
   w: MonthWindow;
   totalRevenue: number; totalGrossProfit: number; totalOpex: number; netProfit: number;
   lastMonthSamePoint: XeroFinanceData['lastMonthSamePoint'];
-  cac: {
-    cacPerSignedClient: number; prevCacPerSignedClient: number;
-    cacPerQualifiedCandidate: number; prevCacPerQualifiedCandidate: number;
-    placementCac: number; prevPlacementCac: number;
-    hasPrevPeriod: boolean;
-    cacPerSignedClientDeltaPct: number | null;
-    placementCacDeltaPct: number | null;
-    cacPerQualifiedCandidateDeltaPct: number | null;
-    placementCacLoaded: number | null;
-    ltgp: number | null; costPerPlacedClient: number | null; ltgpToCac: number | null;
-  } | undefined;
+  cac: CacKPIs | undefined;
   monthlyTrend: XeroFinanceData['monthlyTrend'];
   plan: PlacementPlan;
 }) {
@@ -316,7 +305,7 @@ function PLSummarySection({ w, totalRevenue, totalGrossProfit, totalOpex, netPro
 
   return (
     <>
-      <SH color={TEXT} label="P&L Summary" sub="Australia only · revenue · gross profit · opex · net profit · LTGP:CAC" />
+      <SH label="P&L Summary" sub="Australia only · revenue · gross profit · opex · net profit · LTGP:CAC" />
 
       <G4>
         <KPMonth
@@ -356,15 +345,28 @@ function PLSummarySection({ w, totalRevenue, totalGrossProfit, totalOpex, netPro
 
       <TwelveMonthTrendChart data={monthlyTrend} plan={plan} />
 
-      <G4>
+      {/* Unit economics: LTGP:CAC with the two CACs behind it (moved from Marketing). Last 90 days vs the prior 90. */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 14, marginBottom: 14 }}>
         <KP
-          accent={PU}
           label="LTGP:CAC"
           value={fmtRatio(cac?.ltgpToCac)}
           valueColor={PU}
           sub={`Per placed client · LTGP ${cac?.ltgp != null ? fmtNZD(cac.ltgp) : '—'} (average, after candidate costs) ÷ client CAC per placed client ${cac?.costPerPlacedClient != null ? fmtNZD(cac.costPerPlacedClient) : '—'} · per placement ${fmtRatio(perPlacement)}`}
         />
-      </G4>
+        {([
+          ['CLIENT CAC · LAST 90 DAYS', 'per signed client', cac?.clientCacLoaded, cac?.prevClientCacLoaded, 'Client Meta spend + Les’s sales time ($28/hr, 60%) ÷ ToBs signed'],
+          ['CANDIDATE CAC · LAST 90 DAYS', 'per placed candidate', cac?.candidateCacLoaded, cac?.prevCandidateCacLoaded, 'Candidate Meta + job board ads + 60% of recruiters’ pay ÷ placements signed'],
+        ] as const).map(([label, unit, cur, prev, formula]) => {
+          const compare = cac?.hasPrevPeriod && cur != null && prev != null;
+          return (
+            <Tile key={label} label={label} chip={null}>
+              <Big value={cur != null ? fmtNZD(cur) : '—'} color={compare ? (cur <= prev ? NZ : RD) : TEXT} size={40} unit={unit} />
+              <TextLine muted>{formula}</TextLine>
+              {compare && <TextLine muted>Prior 90 days {fmtNZD(prev)} · {cur >= prev ? '+' : '−'}{fmtNZD(Math.abs(cur - prev))}</TextLine>}
+            </Tile>
+          );
+        })}
+      </div>
     </>
   );
 }
@@ -382,16 +384,16 @@ function MonthCashCard({ title, monthLabel, rows, cashFlowHasDetail }: {
   title: string; monthLabel: string; rows: MonthCashRow[];
   cashFlowHasDetail: boolean;
 }) {
-  const th = { fontSize: 10, fontWeight: 700, color: MUTED, padding: '4px 6px', borderBottom: `.5px solid ${BORDER}` } as const;
-  const td = { padding: '5px 6px', borderBottom: `.5px solid ${BORDER}`, textAlign: 'right' as const, whiteSpace: 'nowrap' as const };
+  const th = { fontSize: 12, fontWeight: 700, color: MUTED, padding: '8px 8px', borderBottom: `1px solid ${C.rowBorder}` } as const;
+  const td = { padding: '9px 8px', borderBottom: `1px solid ${C.rowBorder}`, textAlign: 'right' as const, whiteSpace: 'nowrap' as const };
   return (
     <Card>
-      <div style={{ fontSize: 13, fontWeight: 500, color: TEXT }}>{title}</div>
-      <div style={{ fontSize: 11, color: MUTED, marginBottom: '.75rem' }}>{monthLabel}</div>
+      <div style={{ fontSize: 16, fontWeight: 700, color: TEXT }}>{title}</div>
+      <div style={{ fontSize: 13, color: MUTED, marginBottom: 12 }}>{monthLabel}</div>
       {rows.length === 0 ? (
-        <div style={{ fontSize: 11, color: MUTED, fontStyle: 'italic' }}>No weeks in range</div>
+        <div style={{ fontSize: 13, color: MUTED, fontStyle: 'italic' }}>No weeks in range</div>
       ) : (
-        <table style={{ width: '100%', fontSize: 11, borderCollapse: 'collapse' }}>
+        <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
           <thead>
             <tr>
               <th style={{ ...th, textAlign: 'left' }}>Week</th>
@@ -430,7 +432,7 @@ function MonthCashCard({ title, monthLabel, rows, cashFlowHasDetail }: {
         const netCashFlow = rows.reduce((sum, r) => sum + rowNet(r), 0);
         return (
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, paddingTop: 8, borderTop: `.5px solid ${BORDER}` }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: MUTED }}>Net cash flow</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: MUTED }}>Net cash flow</span>
             <span style={{ fontSize: 13, fontWeight: 700, color: netCashFlow >= 0 ? NZ : RD, whiteSpace: 'nowrap' }}>
               {netCashFlow >= 0 ? '+' : '−'}{fmtNZD(Math.abs(netCashFlow))}
             </span>
@@ -463,12 +465,12 @@ function CashPositionSection({
 
   return (
     <>
-      <SH color={MUTED} label="Cash Position"
+      <SH label="Cash Position"
         sub={hasCombined
           ? `Actuals · forecast · as at ${fmtDate(cashKpis.closingDate)}`
           : 'Actuals · forecast'} />
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 10, marginBottom: '.875rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14, marginBottom: 14 }}>
         <KP accent={availableCash >= 0 ? NZ : RD}
             label="Available cash"
             value={bankAccounts ? fmtNZD(availableCash) : '—'}
@@ -480,14 +482,15 @@ function CashPositionSection({
             valueColor={AM} />
         <KP accent={RD}
             label="Overdue"
-            value={ausReceivables ? `${fmtNZD(ausReceivables.overdueTotal)} · ${overdueCount} invoice${overdueCount === 1 ? '' : 's'}` : '—'}
+            value={ausReceivables ? fmtNZD(ausReceivables.overdueTotal) : '—'}
+            sub={ausReceivables ? `${overdueCount} invoice${overdueCount === 1 ? '' : 's'}` : undefined}
             valueColor={ausReceivables && ausReceivables.overdueTotal > 0 ? RD : MUTED} />
       </div>
 
       {/* Previous / current / next month cash outlook, side by side */}
       {hasCombined && (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 14 }}>
             <MonthCashCard title="Previous month" monthLabel={monthBuckets.previous.label} rows={monthBuckets.previous.rows} cashFlowHasDetail={cashFlowHasDetail} />
             <MonthCashCard title="Current month" monthLabel={monthBuckets.current.label} rows={monthBuckets.current.rows} cashFlowHasDetail={cashFlowHasDetail} />
             <MonthCashCard title="Next month" monthLabel={monthBuckets.next.label} rows={monthBuckets.next.rows} cashFlowHasDetail={cashFlowHasDetail} />
@@ -513,7 +516,7 @@ function PlacementTargetsSection({ plan, ytd, pace }: {
   const paceColor = !pace ? MUTED : pace.projected >= plan.mustMake ? NZ : plan.breakeven != null && pace.projected >= plan.breakeven ? AM : RD;
   return (
     <>
-      <SH color={TEXT} label="Placement targets"
+      <SH label="Placement targets"
         sub={`Plan ${st.planYear}: ${st.planAnnualPlacements} placements made, ${st.planFallOverPct}% planned fall-over · set on the Overview (⚙) · used by every tab`} />
       <G4>
         <KP accent={paceColor} label="Must make per month" value={String(plan.mustMake)} valueColor={paceColor}
@@ -521,21 +524,22 @@ function PlacementTargetsSection({ plan, ytd, pace }: {
         <KP accent={PU} label="Must stick per month" value={plan.mustStick.toFixed(1)} sub={`${Math.round(plan.mustStick * 12)} a year`} />
         <KP accent={AM} label="Breakeven per month" value={plan.breakeven != null ? String(plan.breakeven) : '—'} sub="Placements made that cover costs" />
         <KP accent={plan.projectedNetProfit != null && plan.projectedNetProfit >= 0 ? NZ : RD} label="Projected net profit"
-            value={plan.projectedNetProfit != null ? `${fmtNZD(plan.projectedNetProfit)}/month` : '—'}
+            value={plan.projectedNetProfit != null ? fmtNZD(plan.projectedNetProfit) : '—'}
+            unit={plan.projectedNetProfit != null ? 'per month' : undefined}
             valueColor={plan.projectedNetProfit != null && plan.projectedNetProfit >= 0 ? NZ : RD}
             sub="The result if the plan is hit, at current costs" />
       </G4>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 10, marginBottom: '.875rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 14, marginBottom: 14 }}>
         {([['Placements made', ytd?.made, ytd?.madeTarget ?? st.planAnnualPlacements, NZ], ['Placements stuck', ytd?.stuck, ytd?.stuckTarget ?? Math.round(st.planAnnualPlacements * (1 - st.planFallOverPct / 100)), PU]] as const).map(([label, done, target, color]) => {
           const started = ytd?.started ?? false;
           return (
-            <div key={label} style={{ background: BG, border: `.5px solid ${BORDER}`, borderRadius: 8, padding: '.875rem 1rem' }}>
-              <div style={{ fontSize: 11, color: MUTED, marginBottom: 4 }}>{label} · {st.planYear} year to date</div>
-              <div style={{ fontSize: 21, fontWeight: 500, color: TEXT }}>{started && done != null ? done : '—'} <span style={{ fontSize: 13, color: MUTED }}>of {target}</span></div>
-              <div style={{ height: 6, background: BG2, borderRadius: 3, marginTop: 8, overflow: 'hidden' }}>
+            <div key={label} style={{ ...CARD, padding: 20 }}>
+              <div style={{ ...LABEL, marginBottom: 10 }}>{label.toUpperCase()} · {st.planYear} YEAR TO DATE</div>
+              <Big value={started && done != null ? done : '—'} color={TEXT} size={40} unit={`of ${target}`} />
+              <div style={{ height: 8, background: C.track, borderRadius: 4, marginTop: 12, overflow: 'hidden' }}>
                 <div style={{ width: `${started && done != null ? Math.min(100, (done / target) * 100) : 0}%`, height: '100%', background: color }} />
               </div>
-              <div style={{ fontSize: 11, color: MUTED, marginTop: 4 }}>{started ? (label === 'Placements stuck' ? 'Made minus those that have fallen over so far' : 'Signed since 1 Jan') : `Starts 1 Jan ${st.planYear}`}</div>
+              <div style={{ fontSize: 13, color: MUTED, marginTop: 8 }}>{started ? (label === 'Placements stuck' ? 'Made minus those that have fallen over so far' : 'Signed since 1 Jan') : `Starts 1 Jan ${st.planYear}`}</div>
             </div>
           );
         })}
@@ -551,7 +555,7 @@ function TargetRunwaySection({ s, w }: { s: FinanceSummary; w: MonthWindow }) {
   const rwColor = s.runwayWeeks == null ? MUTED : s.runwayWeeks >= 8 ? NZ : s.runwayWeeks >= 4 ? AM : RD;
   return (
     <>
-      <SH color={TEXT} label="Net profit & runway" sub={`Australia only · ${w.isCurrent ? 'month to date' : 'full month'}`} />
+      <SH label="Net profit & runway" sub={`Australia only · ${w.isCurrent ? 'month to date' : 'full month'}`} />
       <G4>
         <KP accent={PU}
             label={w.isCurrent ? 'Net profit this month' : `Net profit · ${w.label}`}
@@ -705,18 +709,23 @@ export function FinanceCard() {
   });
 
   return (
-    <div style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
-      <DiagnosisTile diagnosis={summary.diagnosis} />
-      <PlacementTargetsSection plan={plan} ytd={ytd} pace={pace} />
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
+    <div style={{ color: C.text }}>
+      <header style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16, marginBottom: 20 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <h1 style={{ margin: 0, fontFamily: NUM_FONT, fontSize: 34, fontWeight: 700, letterSpacing: '-0.5px', color: C.text }}>Finance</h1>
+          <p style={{ margin: 0, fontSize: 14, color: C.muted }}>Australia only · NZD · the month picker sets net profit and the P&amp;L</p>
+        </div>
         <select
           value={month}
           onChange={e => setMonth(e.target.value)}
-          style={{ background: BG2, color: TEXT, border: `1px solid ${BORDER}`, borderRadius: 8, padding: '8px 12px', fontSize: 13 }}
+          aria-label="Month"
+          style={{ height: 44, background: C.card, color: C.text, border: `1px solid ${C.border}`, borderRadius: 10, padding: '0 12px', fontSize: 14 }}
         >
           {recentMonthKeys(12).map(k => <option key={k} value={k}>{monthWindow(k).label}</option>)}
         </select>
-      </div>
+      </header>
+      <DiagnosisTile diagnosis={summary.diagnosis} />
+      <PlacementTargetsSection plan={plan} ytd={ytd} pace={pace} />
       <TargetRunwaySection s={monthSummary} w={w} />
 
       <PLSummarySection w={w} totalRevenue={totalRevenue} totalGrossProfit={totalGrossProfit} totalOpex={totalOpex} netProfit={netProfit} lastMonthSamePoint={data.lastMonthSamePoint} cac={cac} monthlyTrend={data.monthlyTrend} plan={plan} />
