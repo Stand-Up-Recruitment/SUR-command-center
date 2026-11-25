@@ -9,9 +9,9 @@ import { monthWindow, currentMonthKey, recentMonthKeys, addDays, type MonthWindo
 import { recruitmentPace, teamRecruiters, DEFAULT_RECRUITMENT_SETTINGS } from '../../lib/recruitment';
 import { avgDaysLateByClient } from '../../lib/clientScorecard';
 import { companyKey } from '../../lib/companyKey';
-import type { PlacementPlan, planYearToDate } from '../../lib/placementPlan';
+import type { PlacementPlan } from '../../lib/placementPlan';
 import { DiagnosisTile } from '../shared/DiagnosisTile';
-import { C, NUM_FONT, CARD, LABEL } from '../shared/v2Theme';
+import { C, NUM_FONT, CARD } from '../shared/v2Theme';
 import { Tile, Big, Line as TextLine } from '../shared/v2Layout';
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, Cell,
@@ -506,48 +506,6 @@ function CashPositionSection({
   );
 }
 
-// ─── Placement targets (the plan, set on the Overview ⚙) ─────────────────────
-
-function PlacementTargetsSection({ plan, ytd, pace }: {
-  plan: PlacementPlan; ytd: ReturnType<typeof planYearToDate> | null;
-  pace: { placements: number; projected: number } | null;
-}) {
-  const st = plan.settings;
-  const paceColor = !pace ? MUTED : pace.projected >= plan.mustMake ? NZ : plan.breakeven != null && pace.projected >= plan.breakeven ? AM : RD;
-  return (
-    <>
-      <SH label="Placement targets"
-        sub={`Plan ${st.planYear}: ${st.planAnnualPlacements} placements made, ${st.planFallOverPct}% planned fall-over · set on the Overview (⚙) · used by every tab`} />
-      <G4>
-        <KP accent={paceColor} label="Must make per month" value={String(plan.mustMake)} valueColor={paceColor}
-            sub={pace ? `This month: ${pace.placements} made, on pace for ${pace.projected}` : 'Placements made this month: —'} />
-        <KP accent={PU} label="Must stick per month" value={plan.mustStick.toFixed(1)} sub={`${Math.round(plan.mustStick * 12)} a year`} />
-        <KP accent={AM} label="Breakeven per month" value={plan.breakeven != null ? String(plan.breakeven) : '—'} sub="Placements made that cover costs" />
-        <KP accent={plan.projectedNetProfit != null && plan.projectedNetProfit >= 0 ? NZ : RD} label="Projected net profit"
-            value={plan.projectedNetProfit != null ? fmtNZD(plan.projectedNetProfit) : '—'}
-            unit={plan.projectedNetProfit != null ? 'per month' : undefined}
-            valueColor={plan.projectedNetProfit != null && plan.projectedNetProfit >= 0 ? NZ : RD}
-            sub="The result if the plan is hit, at current costs" />
-      </G4>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 14, marginBottom: 14 }}>
-        {([['Placements made', ytd?.made, ytd?.madeTarget ?? st.planAnnualPlacements, NZ], ['Placements stuck', ytd?.stuck, ytd?.stuckTarget ?? Math.round(st.planAnnualPlacements * (1 - st.planFallOverPct / 100)), PU]] as const).map(([label, done, target, color]) => {
-          const started = ytd?.started ?? false;
-          return (
-            <div key={label} style={{ ...CARD, padding: 20 }}>
-              <div style={{ ...LABEL, marginBottom: 10 }}>{label.toUpperCase()} · {st.planYear} YEAR TO DATE</div>
-              <Big value={started && done != null ? done : '—'} color={TEXT} size={40} unit={`of ${target}`} />
-              <div style={{ height: 8, background: C.track, borderRadius: 4, marginTop: 12, overflow: 'hidden' }}>
-                <div style={{ width: `${started && done != null ? Math.min(100, (done / target) * 100) : 0}%`, height: '100%', background: color }} />
-              </div>
-              <div style={{ fontSize: 13, color: MUTED, marginTop: 8 }}>{started ? (label === 'Placements stuck' ? 'Made minus those that have fallen over so far' : 'Signed since 1 Jan') : `Starts 1 Jan ${st.planYear}`}</div>
-            </div>
-          );
-        })}
-      </div>
-    </>
-  );
-}
-
 // ─── Net profit & runway (read by the Overview) ───────────────────────────────
 
 function TargetRunwaySection({ s, w }: { s: FinanceSummary; w: MonthWindow }) {
@@ -588,7 +546,7 @@ export function FinanceCard() {
   const { data, error } = useXeroFinanceData();
   const { data: scheduledInvoices } = useScheduledInvoices();
   const { data: clientInvoices } = useClientInvoices();
-  const { plan, ytd } = usePlacementPlan();
+  const { plan } = usePlacementPlan();
   const { data: rec } = useRecruiterKPIs('month');
   const { data: jobs } = useJobAging();
   const { data: recSettings } = useRecruitmentSettings();
@@ -725,7 +683,6 @@ export function FinanceCard() {
         </select>
       </header>
       <DiagnosisTile diagnosis={summary.diagnosis} />
-      <PlacementTargetsSection plan={plan} ytd={ytd} pace={pace} />
       <TargetRunwaySection s={monthSummary} w={w} />
 
       <PLSummarySection w={w} totalRevenue={totalRevenue} totalGrossProfit={totalGrossProfit} totalOpex={totalOpex} netProfit={netProfit} lastMonthSamePoint={data.lastMonthSamePoint} cac={cac} monthlyTrend={data.monthlyTrend} plan={plan} />
