@@ -373,11 +373,11 @@ export interface XeroFinanceData {
   varianceCommentary?: string | null;
   recommendation?: string | null;
   audNzdRate?: number;
-  // Job Board Advertising (Xero Opex account), 100% AUS, trailing 90 days — for the
+  // Job Board Advertising (Xero Opex account), 100% AUS, trailing 30 days (field names still say 90d) — for the
   // CAC formulas, since advertising/ausAdvertising above are FY-to-date (wrong period).
   jobBoardAdvertising90d?: number;
   prevJobBoardAdvertising90d?: number;
-  // Trailing-90-day internal Opex for the fully loaded CACs (same window as above).
+  // Trailing-30-day internal Opex for the fully loaded CACs (same window as above).
   opex90d?: { officeSalaries: number; shareholderSalaries: number; staffOnCosts: number; overhead: number; recruiterPay?: number; recruitersMatched?: number };
   prevOpex90d?: { officeSalaries: number; shareholderSalaries: number; staffOnCosts: number; overhead: number; recruiterPay?: number };
   // AUD "Placement Fee" invoice lines since 1 Apr 2026 (what was charged, net of credits). Missing if n8n's branch failed.
@@ -435,7 +435,7 @@ export interface CacKPIs {
   cacPerQualifiedCandidate: number;
   prevCacPerQualifiedCandidate: number;
 
-  // Fully loaded CACs (Marketing tab), trailing 90 days.
+  // Fully loaded CACs (Finance tab), trailing 30 days.
   // Client = (client Meta + Les's sales time at $28/hr × 40 hr × 60%) ÷ ToBs signed.
   // Candidate = (candidate Meta + job board ads + 60% of recruiters' pay) ÷ placements signed. Null without payroll data.
   // Placement = all of the above ÷ placements signed.
@@ -456,7 +456,7 @@ export interface CacKPIs {
   cohortSize: number;
   placedClientCount: number;
 
-  // Last-90-days vs prior-90-days % change for the CAC card deltas (null when
+  // Last-30-days vs prior-30-days % change for the CAC card deltas (null when
   // the prior period's CAC is 0).
   cacPerSignedClientDeltaPct: number | null;
   placementCacDeltaPct: number | null;

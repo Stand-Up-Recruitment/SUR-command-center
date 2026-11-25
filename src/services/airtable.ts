@@ -41,11 +41,13 @@ const MAIN_CLIENT_TABLE_ID = 'tblHJjDpCeTgevOvI';
 const SALES_TRANSCRIPT_TABLE_ID = 'tblUntytJJFaaWW6w'; // lives in CLIENTS_BASE_ID, confirmed against the live schema
 const SALES_TIME_COST_PER_CALL = 0.25 * 72; // 15 min @ $72/hr
 // Les's selling time at a salesperson's replacement cost, not the owner's own pay: $28/hr × 40 hr/wk × 60% on sales.
-const SALES_COST_90D = 28 * 40 * 0.6 * (90 / 7);
+// Finance's CAC tiles and LTGP:CAC use the last 30 days (vs the prior 30). Other tabs' CAC stays on CAC_WINDOW_DAYS.
+const FINANCE_CAC_DAYS = 30;
+const SALES_COST_WINDOW = 28 * 40 * 0.6 * (FINANCE_CAC_DAYS / 7);
 // Recruiters spend 60% of their time finding and placing candidates.
 const RECRUITER_ACQUISITION_SHARE = 0.6;
-/** Trailing-90-day internal Opex from Xero (n8n Finance webhook), NZD, 100% AUS. */
-// Only acquisition salaries count: SALES_COST_90D on the client side, 60% of the named recruiters' pay
+/** Trailing internal Opex from Xero (n8n Finance webhook), NZD, 100% AUS. Named 90d, but n8n sends FINANCE_CAC_DAYS (30). */
+// Only acquisition salaries count: SALES_COST_WINDOW on the client side, 60% of the named recruiters' pay
 // (Xero Payroll pay slips, excl. commission) on the candidate side. Other staff, on-costs and overhead are left out.
 export interface Opex90d {
   officeSalaries: number; shareholderSalaries: number; staffOnCosts: number; overhead: number;
@@ -820,23 +822,23 @@ export async function fetchCacKPIs(
     fetchAllWithIdsFromBase<MainClientFields>(CLIENTS_BASE_ID, MAIN_CLIENT_TABLE_ID),
     fetchAllFromBase<PlacementCacFields>(CLIENTS_BASE_ID, PLACEMENTS_TABLE_ID),
     fetchAcquisitionData(),
-    fetchMetaSpendByFrame('90d').catch(() => ({ candidateSpend: 0, clientSpend: 0 })),
-    fetchMetaSpendPrevPeriod('90d').catch(() => null),
+    fetchMetaSpendByFrame('30d').catch(() => ({ candidateSpend: 0, clientSpend: 0 })),
+    fetchMetaSpendPrevPeriod('30d').catch(() => null),
   ]);
 
   // Exclude the "Stand Up Recruitment" test record from every client-based count.
   const allMainClients = allMainClientsRaw.filter(c => c.fields['Company Name'] !== 'Stand Up Recruitment');
 
   const now = Date.now();
-  const start = now - CAC_WINDOW_DAYS * 86_400_000;
+  const start = now - FINANCE_CAC_DAYS * 86_400_000;
   const prevEnd = start;
-  const prevStart = prevEnd - CAC_WINDOW_DAYS * 86_400_000;
+  const prevStart = prevEnd - FINANCE_CAC_DAYS * 86_400_000;
 
   const cur = acquisitionCacs(acquisition, start, now, metaResult);
   const cacPerSignedClient = cur.cacPerSignedClient;
   const cacPerQualifiedCandidate = cur.cacPerQualifiedCandidate;
 
-  // Job Board Advertising (Xero Opex account, 100% AUS, trailing 90 days) comes from
+  // Job Board Advertising (Xero Opex account, 100% AUS, trailing 30 days) comes from
   // the n8n Finance webhook's jobBoardAdvertising90d field — its own advertising/
   // ausAdvertising fields are FY-to-date and cover the wrong period for this window.
   const placementsInWindow = allPlacements.filter(p => isPlacementCountedForCac(p, start, now)).length;
@@ -847,7 +849,7 @@ export async function fetchCacKPIs(
   const loaded = (
     c: { clientSpend: number; candidateSpend: number }, clientsWon: number, placements: number, jba: number, o?: Opex90d,
   ) => {
-    const clientCost = c.clientSpend + SALES_COST_90D;
+    const clientCost = c.clientSpend + SALES_COST_WINDOW;
     const client = clientsWon > 0 ? clientCost / clientsWon : 0;
     // No payroll data → no candidate/placement CAC, rather than a guess.
     if (o?.recruiterPay == null) return { client, candidate: null, placement: null };
@@ -879,7 +881,7 @@ export async function fetchCacKPIs(
     prevLoaded = loaded(prevMetaResult, prev.clientsWon, prevPlacementsInWindow, prevJobBoardAdvertising90d, prevOpex90d);
   }
 
-  // ── CAC card deltas: last 90 days vs the prior 90 days, as a % change ──────
+  // ── CAC card deltas: last 30 days vs the prior 30 days, as a % change ──────
   const pctChange = (cur: number, prev: number) => (prev > 0 ? ((cur - prev) / prev) * 100 : null);
   const cacPerSignedClientDeltaPct = hasPrevPeriod ? pctChange(cacPerSignedClient, prevCacPerSignedClient) : null;
   const placementCacDeltaPct = hasPrevPeriod ? pctChange(placementCac, prevPlacementCac) : null;
