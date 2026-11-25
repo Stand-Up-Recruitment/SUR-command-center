@@ -8,7 +8,7 @@ import { AM, RD, BG, BG2, BORDER, TEXT, MUTED, NZ, money0, money2, int, kShort }
 import { Grid } from '../shared/monthLayout';
 import { C, PACE_COLOR, NUM_FONT, CARD, LABEL, TODO } from '../shared/v2Theme';
 import { Chip, Section, Tag, Big, Tile, Line as TextLine } from '../shared/v2Layout';
-import { useMarketingMonth, useOrganicMonth, useMarketingSettings, useSaveMarketingSettings, useMetaBreakdown, useVoiceCallKPIs, useMetaAdSets, useMarketingDemand, useXeroFinanceData, useCacKPIs } from '../../hooks/queries';
+import { useMarketingMonth, useOrganicMonth, useMarketingSettings, useSaveMarketingSettings, useMetaBreakdown, useVoiceCallKPIs, useMetaAdSets, useMarketingDemand } from '../../hooks/queries';
 import { useAuthRole } from '../auth/AuthContext';
 import { monthWindow, recentMonthKeys, currentMonthKey, type MonthWindow } from '../../lib/nzTime';
 import { rate, type RagContext } from '../../lib/rag';
@@ -352,12 +352,6 @@ export function MarketingCard() {
   const { data: voice } = useVoiceCallKPIs('month');
   const { data: adSetRows, error: adSetError } = useMetaAdSets();
   const { data: demand, error: demandError, isLoading: demandLoading } = useMarketingDemand();
-  // Placement CAC (moved from Finance): same central 90-day calculation and inputs as Finance's LTGP:CAC.
-  const { data: xero } = useXeroFinanceData();
-  const { data: cac } = useCacKPIs(
-    xero && xero.ausRevenue > 0 ? (xero.ausGrossProfit / xero.ausRevenue) * 100 : undefined,
-    xero?.jobBoardAdvertising90d, xero?.prevJobBoardAdvertising90d, xero?.audNzdMonthlyRates, xero?.opex90d, xero?.prevOpex90d, xero?.placementFeeLines,
-  );
   const budget = settings?.monthlyBudget ?? null;
   const postsPerWeek = settings?.postsPerWeek ?? 7;
 
@@ -458,21 +452,6 @@ export function MarketingCard() {
           <CountTile label="QUALIFIED CANDIDATES" unit="candidates" c={qual} pw={pw} />
           <CostTile label="COST PER BOOKED CALL" unit="per call" c={callCost} prev={h.prev.costPerBookedCall} target={t?.costPerBookedCall} fmt={money0} pw={pw} />
           <CostTile label="COST PER QUALIFIED CANDIDATE" unit="each" c={qualCost} prev={h.prev.costPerQualifiedCandidate} target={t?.costPerQualifiedCandidate} fmt={money2} pw={pw} />
-        </div>
-        {/* CACs on their own row: 3 across on desktop, stacked on a phone. */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 14, marginTop: 14 }}>
-          {([
-            ['PLACEMENT CAC', 'per placement', cac?.placementCacLoaded, cac?.prevPlacementCacLoaded, 'All ad spend + salaries ÷ placements signed'],
-            ['CLIENT CAC', 'per signed client', cac?.clientCacLoaded, cac?.prevClientCacLoaded, 'Client Meta spend + Les’s sales time ($28/hr, 60%) ÷ ToBs signed'],
-            ['CANDIDATE CAC', 'per placed candidate', cac?.candidateCacLoaded, cac?.prevCandidateCacLoaded, 'Candidate Meta + job board ads + 60% of recruiters’ pay ÷ placements signed'],
-          ] as const).map(([label, unit, cur, prev, formula]) => (
-            <Tile key={label} label={`${label} · LAST 90 DAYS`} chip={null}>
-              <Big value={cur != null ? money0(cur) : '—'} color={cac?.hasPrevPeriod && cur != null && prev != null ? ragColor(cur <= prev ? 'green' : 'red') : C.text} unit={unit} />
-              <TextLine muted>{cac?.hasPrevPeriod && cur != null && prev != null
-                ? `Prior 90 days ${money0(prev)} · ${cur >= prev ? '+' : '−'}${money0(Math.abs(cur - prev))}`
-                : formula}</TextLine>
-            </Tile>
-          ))}
         </div>
       </Section>
 

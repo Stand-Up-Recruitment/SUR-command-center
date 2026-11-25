@@ -167,7 +167,7 @@ const TOOLS: { name: string; description: string; properties: object; run: (a: A
   },
   {
     name: 'get_marketing',
-    description: 'Marketing tab: Diagnosis, Meta ad spend/clicks/leads/applications, handoff to sales and recruiters with targets, CAC, organic Instagram/Facebook (followers, posts, reach), and the per-campaign and per-ad breakdown.',
+    description: 'Marketing tab: Diagnosis, Meta ad spend/clicks/leads/applications, handoff to sales and recruiters with targets, organic Instagram/Facebook (followers, posts, reach), and the per-campaign and per-ad breakdown.',
     properties: MONTH,
     run: a => marketing(month(a), true),
   },
@@ -185,7 +185,7 @@ const TOOLS: { name: string; description: string; properties: object; run: (a: A
   },
   {
     name: 'get_finance',
-    description: 'Finance tab (Xero, Australia): Diagnosis, net profit vs target, cash and runway, P&L, cash flow and outlook, 12-month trend, LTGP:CAC, and scheduled invoices.',
+    description: 'Finance tab (Xero, Australia): Diagnosis, net profit vs target, cash and runway, P&L, cash flow and outlook, 12-month trend, LTGP:CAC with client and candidate CAC, and scheduled invoices.',
     properties: {},
     run: () => finance(true),
   },
