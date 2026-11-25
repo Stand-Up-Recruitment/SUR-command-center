@@ -346,7 +346,7 @@ function PLSummarySection({ w, totalRevenue, totalGrossProfit, totalOpex, netPro
 
       <TwelveMonthTrendChart data={monthlyTrend} plan={plan} />
 
-      {/* Unit economics: LTGP:CAC with the two CACs behind it (moved from Marketing). Last 90 days vs the prior 90. */}
+      {/* Unit economics: LTGP:CAC with the two CACs behind it (moved from Marketing). Last 30 days vs the prior 30. */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 14, marginBottom: 14 }}>
         <KP
           label="LTGP:CAC"
@@ -355,15 +355,15 @@ function PLSummarySection({ w, totalRevenue, totalGrossProfit, totalOpex, netPro
           sub={`Per placed client · LTGP ${cac?.ltgp != null ? fmtNZD(cac.ltgp) : '—'} (average, after candidate costs) ÷ client CAC per placed client ${cac?.costPerPlacedClient != null ? fmtNZD(cac.costPerPlacedClient) : '—'} · per placement ${fmtRatio(perPlacement)}`}
         />
         {([
-          ['CLIENT CAC · LAST 90 DAYS', 'per signed client', cac?.clientCacLoaded, cac?.prevClientCacLoaded, 'Client Meta spend + Les’s sales time ($28/hr, 60%) ÷ ToBs signed'],
-          ['CANDIDATE CAC · LAST 90 DAYS', 'per placed candidate', cac?.candidateCacLoaded, cac?.prevCandidateCacLoaded, 'Candidate Meta + job board ads + 60% of recruiters’ pay ÷ placements signed'],
+          ['CLIENT CAC · LAST 30 DAYS', 'per signed client', cac?.clientCacLoaded, cac?.prevClientCacLoaded, 'Client Meta spend + Les’s sales time ($28/hr, 60%) ÷ ToBs signed'],
+          ['CANDIDATE CAC · LAST 30 DAYS', 'per placed candidate', cac?.candidateCacLoaded, cac?.prevCandidateCacLoaded, 'Candidate Meta + job board ads + 60% of recruiters’ pay ÷ placements signed'],
         ] as const).map(([label, unit, cur, prev, formula]) => {
           const compare = cac?.hasPrevPeriod && cur != null && prev != null;
           return (
             <Tile key={label} label={label} chip={null}>
               <Big value={cur != null ? fmtNZD(cur) : '—'} color={compare ? (cur <= prev ? NZ : RD) : TEXT} size={40} unit={unit} />
               <TextLine muted>{formula}</TextLine>
-              {compare && <TextLine muted>Prior 90 days {fmtNZD(prev)} · {cur >= prev ? '+' : '−'}{fmtNZD(Math.abs(cur - prev))}</TextLine>}
+              {compare && <TextLine muted>Prior 30 days {fmtNZD(prev)} · {cur >= prev ? '+' : '−'}{fmtNZD(Math.abs(cur - prev))}</TextLine>}
             </Tile>
           );
         })}
