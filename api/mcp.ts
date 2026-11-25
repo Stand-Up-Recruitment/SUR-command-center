@@ -126,8 +126,10 @@ async function finance(full: boolean) {
   // Same inputs the Finance tab passes to its LTGP:CAC row.
   const grossMarginPct = data.ausRevenue > 0 ? (data.ausGrossProfit / data.ausRevenue) * 100 : undefined;
   const cac = await soft(fetchCacKPIs(grossMarginPct, data.jobBoardAdvertising90d, data.prevJobBoardAdvertising90d, data.audNzdMonthlyRates, data.opex90d, data.prevOpex90d, data.placementFeeLines));
-  const placementCac = 'placementCacLoaded' in cac ? cac.placementCacLoaded : null;
-  const ltgpToCacPerPlacement = p.gp && placementCac ? p.gp.value / placementCac : null;
+  // Per placement, like per placed client: candidate cost is a product cost (off the profit), client cost is the CAC.
+  const candCac = 'candidateCacLoaded' in cac ? cac.candidateCacLoaded : null;
+  const clientCacPerPlacement = 'placementCacLoaded' in cac && cac.placementCacLoaded != null && candCac != null ? cac.placementCacLoaded - candCac : null;
+  const ltgpToCacPerPlacement = p.gp && candCac != null && clientCacPerPlacement ? (p.gp.value - candCac) / clientCacPerPlacement : null;
   return { diagnosis: summary.diagnosis, summary, placementPlan: p, planYearToDate: rec.planYearToDate, ltgpCac: cac, ltgpToCacPerPlacement, scheduledInvoices: scheduled, xero: data };
 }
 
