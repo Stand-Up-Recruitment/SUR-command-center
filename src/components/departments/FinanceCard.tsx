@@ -350,9 +350,9 @@ function PLSummarySection({ w, totalRevenue, totalGrossProfit, totalOpex, netPro
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 14, marginBottom: 14 }}>
         <KP
           label="LTGP:CAC"
-          value={fmtRatio(cac?.ltgpToCac)}
+          value={fmtRatio(perPlacement)}
           valueColor={PU}
-          sub={`Per placed client · LTGP ${cac?.ltgp != null ? fmtNZD(cac.ltgp) : '—'} (average, after candidate costs) ÷ client CAC per placed client ${cac?.costPerPlacedClient != null ? fmtNZD(cac.costPerPlacedClient) : '—'} · per placement ${fmtRatio(perPlacement)}`}
+          sub={`Per placement · GP ${plan.gp && candCac != null ? fmtNZD(plan.gp.value - candCac) : '—'} (after candidate cost) ÷ CAC per placement ${clientCacPerPlacement != null ? fmtNZD(clientCacPerPlacement) : '—'} · per placed client ${fmtRatio(cac?.ltgpToCac)}`}
         />
         {([
           ['CLIENT CAC · LAST 30 DAYS', 'per signed client', cac?.clientCacLoaded, cac?.prevClientCacLoaded, 'Client Meta spend + Les’s sales time ($28/hr, 60%) ÷ ToBs signed'],
