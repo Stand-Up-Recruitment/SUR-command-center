@@ -282,9 +282,10 @@ function PLSummarySection({ w, totalRevenue, totalGrossProfit, totalOpex, netPro
   plan: PlacementPlan;
 }) {
   const grossMarginPct = totalRevenue > 0 ? (totalGrossProfit / totalRevenue) * 100 : 0;
-  // Per placement: gross profit per placement (the plan's figure) ÷ Placement CAC (same as Marketing).
-  const placementCac = cac?.placementCacLoaded;
-  const perPlacement = plan.gp && placementCac ? plan.gp.value / placementCac : null;
+  // Per placement, like per placed client: candidate cost is a product cost (off the profit), client cost is the CAC.
+  const candCac = cac?.candidateCacLoaded;
+  const clientCacPerPlacement = cac?.placementCacLoaded != null && candCac != null ? cac.placementCacLoaded - candCac : null;
+  const perPlacement = plan.gp && candCac != null && clientCacPerPlacement ? (plan.gp.value - candCac) / clientCacPerPlacement : null;
   const fmtRatio = (r: number | null | undefined) => (r != null ? `${r.toFixed(1)}:1` : '—');
   const netMarginPct = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
 
