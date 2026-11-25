@@ -16,6 +16,7 @@ import {
 } from '../../lib/recruitment';
 import { workingDays, neededByToday, pace, PACE_LABEL, type Pace } from '../../lib/workingDays';
 import type { Cohort, RecruitmentSettings, TimeFrame } from '../../types';
+import { PlacementTargets } from '../shared/PlacementTargets';
 
 // Layout and colours follow the "Recruitment tab v2" mockup (Claude Design, 19 Nov 2026).
 
@@ -315,6 +316,9 @@ export function RecruiterCard() {
           </Tile>
         </div>
       </Section>
+
+      {/* Placement targets (moved from Finance) */}
+      <PlacementTargets />
 
       {/* Where is it breaking? */}
       <Section title="Where is it breaking?" aside={<Tag bg={C.blue}>THE ENGINE · DRIVES NEXT {period.toUpperCase()}</Tag>}>
