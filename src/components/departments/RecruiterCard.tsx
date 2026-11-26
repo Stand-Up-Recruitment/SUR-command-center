@@ -121,8 +121,9 @@ const TIMEFRAME_OPTIONS: { value: TimeFrame; label: string }[] = [
 
 // Fluid columns so the board fits any width without a horizontal scroll; cells wrap instead.
 const BOARD_COLS = 'minmax(0, 1.7fr) minmax(0, 1fr) minmax(0, 1.1fr) minmax(0, 1.1fr) minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 2.6fr) minmax(0, 1.9fr)';
-const SOURCER_COLS = 'minmax(0, 1.7fr) minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 2fr) minmax(0, 2fr) minmax(0, 1.9fr)';
+const SOURCER_COLS = 'minmax(0, 1.7fr) minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 2fr) minmax(0, 1.9fr)';
 const SOURCER_DAILY_CALLS = 40;
+const SOURCER_DAILY_INTERVIEWS = 5; // internal interviews booked for placers
 
 export function RecruiterCard() {
   const [frame, setFrame] = useState<TimeFrame>('month');
@@ -492,18 +493,20 @@ export function RecruiterCard() {
             })}
             {sourcers.length > 0 && (
               <div style={{ display: 'grid', gridTemplateColumns: SOURCER_COLS, gap: 12, padding: '14px 20px', borderBottom: `1px solid ${C.border}`, background: '#17181B', ...LABEL, fontSize: 12 }}>
-                <span>SOURCER</span><span>STATUS</span><span>CALLS</span><span>INTERVIEWS BOOKED FOR PLACERS</span><span>SOURCED CVS SENT</span><span>ACTION</span>
+                <span>SOURCER</span><span>STATUS</span><span>CALLS</span><span>INTERVIEWS BOOKED FOR PLACERS</span><span>ACTION</span>
               </div>
             )}
             {sourcers.map(r => {
               const tier = tierFor(r.stat.name);
-              const subsTarget = tier?.next?.submissions;
-              const subs = subsTarget ? { done: r.stat.sourcedSubmissions, needed: need(subsTarget) } : null;
-              const p = subs ? pace(subs.done, subs.needed) : 'grey';
               const callsNeeded = SOURCER_DAILY_CALLS * wd.elapsed;
               const callsPace = pace(r.stat.phoneInterviews, callsNeeded);
-              // Status is the worse of calls and sourced CVs; grey only when neither has a target yet.
-              const status = (['red', 'amber', 'green'] as Pace[]).find(t => t === p || t === callsPace) ?? 'grey';
+              const interviewsNeeded = SOURCER_DAILY_INTERVIEWS * wd.elapsed;
+              const interviewsPace = pace(r.stat.internalInterviews, interviewsNeeded);
+              // Status is the worse of calls and interviews booked.
+              const status = (['red', 'amber', 'green'] as Pace[]).find(t => t === callsPace || t === interviewsPace) ?? 'grey';
+              const behind = (x: Pace) => x === 'red' || x === 'amber';
+              const action = behind(interviewsPace) ? 'Book more interviews for placers'
+                : behind(callsPace) ? 'Make more calls' : 'Keep going';
               return (
                 <div key={r.stat.name} style={{ display: 'grid', gridTemplateColumns: SOURCER_COLS, gap: 12, padding: '16px 20px', alignItems: 'center' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -515,14 +518,11 @@ export function RecruiterCard() {
                     {r.stat.phoneInterviews} / {callsNeeded}
                     <span style={{ fontSize: 13, fontWeight: 500, color: C.muted }}> · {SOURCER_DAILY_CALLS}/day</span>
                   </span>
-                  <span style={{ fontFamily: NUM_FONT, fontSize: 20, fontWeight: 700, color: C.faint }}>
-                    [target] <span style={{ fontSize: 13, fontWeight: 500, color: C.muted }}>needs a number</span>
+                  <span style={{ fontFamily: NUM_FONT, fontSize: 20, fontWeight: 700, color: PACE_COLOR[interviewsPace] }}>
+                    {r.stat.internalInterviews} / {interviewsNeeded}
+                    <span style={{ fontSize: 13, fontWeight: 500, color: C.muted }}> · {SOURCER_DAILY_INTERVIEWS}/day</span>
                   </span>
-                  <span style={{ fontFamily: NUM_FONT, fontSize: 20, fontWeight: 700, color: subs ? PACE_COLOR[p] : C.faint }}>
-                    {subs ? `${subs.done} / ${subs.needed}` : r.stat.sourcedSubmissions}
-                    {subsTarget && <span style={{ fontSize: 13, fontWeight: 500, color: C.muted }}> · {subsTarget} for {tier?.next?.tier}</span>}
-                  </span>
-                  <span style={TODO}>Set daily sourcing target</span>
+                  <span style={TODO}>{action}</span>
                 </div>
               );
             })}
