@@ -1,45 +1,51 @@
-import { useState, type ReactNode } from 'react';
-import {
-  ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, LabelList, Legend, ReferenceLine,
-} from 'recharts';
+import { useState } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
+import { ComposedChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, LabelList, ReferenceLine } from 'recharts';
 import { Skeleton } from '../shared/Skeleton';
-import { NZ, AM, RD, BG, BG2, BORDER, TEXT, MUTED, RAG_COLOR, money0, int, type Cmp } from '../shared/monthTheme';
-import { Section, Grid, Metric, Delta, CmpCard } from '../shared/monthLayout';
+import { money0, int } from '../shared/monthTheme';
+import { C, PACE_COLOR, NUM_FONT, CARD, LABEL, TODO } from '../shared/v2Theme';
+import { Chip, Section, Tag, Big, Tile, Line as TextLine } from '../shared/v2Layout';
 import { useSalesMonth, useSalesSettings, useSaveSalesSettings } from '../../hooks/queries';
 import { useAuthRole } from '../auth/AuthContext';
-import { monthWindow, recentMonthKeys, currentMonthKey, type MonthWindow } from '../../lib/nzTime';
-import { rate, type Rag, type RagContext } from '../../lib/rag';
+import { monthWindow, recentMonthKeys, currentMonthKey } from '../../lib/nzTime';
+import { rate, pctChange, type RagContext } from '../../lib/rag';
+import { PACE_LABEL, type Pace } from '../../lib/workingDays';
+import { DEFAULT_TARGET_PER_SALESPERSON, targetsFor } from './salesMetrics';
 import {
-  STALE_DAYS, DEFAULT_TARGET_PER_SALESPERSON, ratio, signRate, showRate, share, staleRag, targetsFor, callsCmpFor, salesDiagnosis, type Targets,
-} from './salesMetrics';
-import type { SalesMonth, SalesSettings } from '../../types';
+  CALL_DAYS, meetingsHad, pctOf, closeRate, neededBy, vsTarget, openStatus, salesActions, biggestBreak,
+  type SalesLevel, type OpenStatus,
+} from '../../lib/sales';
+import type { SalesSettings } from '../../types';
 
-const pct0 = (n: number) => `${Math.round(n)}%`;
-const ragText = (rag: Rag) => (rag === 'grey' ? TEXT : RAG_COLOR[rag]);
+const DEFAULT_CLOSE_RATE = 30;
 
 // ─── Settings panel ───────────────────────────────────────────────────────────
 function SettingsPanel({ settings, onClose }: { settings: SalesSettings; onClose: () => void }) {
   const save = useSaveSalesSettings();
   const [target, setTarget] = useState(String(settings.targetPerSalesperson));
+  const [close, setClose] = useState(String(settings.closeRateTarget));
   const [password, setPassword] = useState('');
-  const input = { background: BG, border: `1px solid ${BORDER}`, borderRadius: 6, color: TEXT, padding: '8px 10px', fontSize: 13, width: '100%', boxSizing: 'border-box' as const };
+  const input = { background: C.inset, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, padding: '8px 10px', fontSize: 13, width: '100%', boxSizing: 'border-box' as const };
+  const label = { fontSize: 11, color: C.muted };
 
   const submit = () => {
-    save.mutate({ settings: { targetPerSalesperson: Number(target) }, adminPassword: password }, { onSuccess: onClose });
+    save.mutate({ settings: { targetPerSalesperson: Number(target), closeRateTarget: Number(close) }, adminPassword: password }, { onSuccess: onClose });
   };
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }} onClick={onClose}>
-      <div style={{ background: BG2, border: `1px solid ${BORDER}`, borderRadius: 12, padding: '1.25rem', width: 340 }} onClick={e => e.stopPropagation()}>
-        <div style={{ fontSize: 15, fontWeight: 600, color: TEXT, marginBottom: 14 }}>Sales settings</div>
-        <label style={{ fontSize: 11, color: MUTED }}>ToBs signed target (per salesperson, per month)</label>
+      <div style={{ ...CARD, padding: '1.25rem', width: 340 }} onClick={e => e.stopPropagation()}>
+        <div style={{ fontSize: 15, fontWeight: 600, color: C.text, marginBottom: 14 }}>Sales targets</div>
+        <label style={label}>Signed ToBs per month (per salesperson)</label>
         <input style={{ ...input, margin: '4px 0 12px' }} type="number" min={1} step={1} value={target} onChange={e => setTarget(e.target.value)} />
-        <label style={{ fontSize: 11, color: MUTED }}>Admin password</label>
+        <label style={label}>Close rate target (% of meetings had)</label>
+        <input style={{ ...input, margin: '4px 0 12px' }} type="number" min={1} max={100} step={1} value={close} onChange={e => setClose(e.target.value)} />
+        <label style={label}>Admin password</label>
         <input style={{ ...input, margin: '4px 0 12px' }} type="password" value={password} onChange={e => setPassword(e.target.value)} />
-        {save.error && <div style={{ fontSize: 11, color: RD, marginBottom: 10 }}>{save.error.message}</div>}
+        {save.error && <div style={{ fontSize: 11, color: C.red, marginBottom: 10 }}>{save.error.message}</div>}
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button onClick={onClose} style={{ fontSize: 12, padding: '6px 12px', borderRadius: 6, border: `1px solid ${BORDER}`, background: 'transparent', color: MUTED, cursor: 'pointer' }}>Cancel</button>
-          <button onClick={submit} disabled={save.isPending} style={{ fontSize: 12, padding: '6px 12px', borderRadius: 6, border: 'none', background: NZ, color: TEXT, cursor: 'pointer' }}>
+          <button onClick={onClose} style={{ fontSize: 12, padding: '6px 12px', borderRadius: 6, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, cursor: 'pointer' }}>Cancel</button>
+          <button onClick={submit} disabled={save.isPending} style={{ fontSize: 12, padding: '6px 12px', borderRadius: 6, border: 'none', background: C.red, color: C.ink, fontWeight: 600, cursor: 'pointer' }}>
             {save.isPending ? 'Saving…' : 'Save'}
           </button>
         </div>
@@ -49,321 +55,265 @@ function SettingsPanel({ settings, onClose }: { settings: SalesSettings; onClose
 }
 
 // ─── Small pieces ─────────────────────────────────────────────────────────────
-/** Conversion rate between two funnel stages. */
-function Step({ label, value, sub }: { label: string; value: string; sub?: string }) {
+const LEVEL_TONE: Record<SalesLevel, Pace | 'blue'> = { 'CALL NOW': 'red', 'THIS WEEK': 'amber', PUSH: 'blue', 'SET UP': 'grey' };
+const STATUS_TONE: Record<OpenStatus, Pace> = { CALL: 'red', WATCH: 'amber', 'IN SEQUENCE': 'grey' };
+const ragColor = (r: Pace) => (r === 'grey' ? C.text : PACE_COLOR[r]);
+const pct = (n: number | null) => (n == null ? '—' : `${Math.round(n)}%`);
+const direction = (cur: number, prev: number) => (cur > prev ? 'up' : cur < prev ? 'down' : 'flat');
+const TH: CSSProperties = { ...LABEL, fontSize: 12, textAlign: 'left', padding: '12px 16px', borderBottom: `1px solid ${C.rowBorder}`, whiteSpace: 'nowrap' };
+const TD: CSSProperties = { padding: '14px 16px', borderBottom: `1px solid ${C.rowBorder}`, fontSize: 14, color: C.text, verticalAlign: 'top' };
+const Sub = ({ children }: { children: ReactNode }) => <div style={{ fontSize: 12, color: C.muted, marginTop: 3 }}>{children}</div>;
+
+function Step({ label, value, children }: { label: string; value: string; children: ReactNode }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', fontSize: 10, color: MUTED, minWidth: 64 }}>
-      <div>{label}</div>
-      <div style={{ fontSize: 13, fontWeight: 600, color: TEXT, margin: '2px 0' }}>{value}</div>
-      {sub && <div>{sub}</div>}
+    <div style={{ background: C.inset, border: `1px solid ${C.border}`, borderRadius: 10, padding: 14, flex: '1 1 150px', minWidth: 0 }}>
+      <div style={{ ...LABEL, fontSize: 11 }}>{label}</div>
+      <div style={{ fontFamily: NUM_FONT, fontSize: 30, fontWeight: 700, color: C.text, margin: '4px 0' }}>{value}</div>
+      <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5 }}>{children}</div>
     </div>
   );
 }
-
-function Panel({ title, children }: { title?: string; children: ReactNode }) {
-  return (
-    <div style={{ background: BG, border: `.5px solid ${BORDER}`, borderRadius: 8, padding: '.875rem 1rem' }}>
-      {title && <div style={{ fontSize: 11, color: MUTED, marginBottom: 8 }}>{title}</div>}
-      {children}
-    </div>
-  );
-}
-
-function Table({ head, rows, align }: { head: string[]; rows: ReactNode[][]; align: ('left' | 'right')[] }) {
-  const cell = (i: number) => ({ textAlign: align[i], padding: '8px', borderBottom: `.5px solid ${BORDER}` });
-  return (
-    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-      <thead>
-        <tr>{head.map((h, i) => <th key={h} style={{ ...cell(i), color: MUTED, fontWeight: 500, padding: '6px 8px' }}>{h}</th>)}</tr>
-      </thead>
-      <tbody>
-        {rows.map((r, j) => <tr key={j}>{r.map((c, i) => <td key={i} style={{ ...cell(i), color: TEXT }}>{c}</td>)}</tr>)}
-      </tbody>
-    </table>
-  );
-}
-
-// ─── Sections ─────────────────────────────────────────────────────────────────
-
-function ConvertingSection({ m, w, ctx, t, signedRag }: { m: SalesMonth; w: MonthWindow; ctx: RagContext; t: Targets; signedRag: Rag }) {
-  const { cur, prev } = m;
-  const pw = w.prevShortLabel;
-  const sr = signRate(cur), psr = signRate(prev);
-  const srRag = rate(sr, psr, 'up', ctx);
-  const proRata = Math.round(t.proRata);
-  return (
-    <Section n={1} title="Is sales converting?" sub={`Real figures, Airtable CRM, ${w.label}`}>
-      <Grid cols={3}>
-        <Metric label="ToBs signed" value={int(cur.signed)} rag={signedRag}>
-          Target {proRata}{w.isCurrent ? ' so far' : ''}{' '}
-          <span style={{ color: ragText(signedRag) }}>{proRata > 0 ? `${Math.round((cur.signed / t.proRata) * 100)}% of target` : ''}</span> · {pw} {prev.signed}
-        </Metric>
-        <Metric label="Sign rate (signed ÷ ToBs sent)" value={sr == null ? '—' : pct0(sr)} rag={srRag}>
-          {sr != null && psr != null && <Delta prefix={pw} prevText={pct0(psr)} cur={Math.round(sr)} prev={Math.round(psr)} rag={srRag} pts />}
-        </Metric>
-        {m.cac
-          ? <CmpCard ctx={ctx} c={{ label: 'CAC per signed client', cur: m.cac.cur, prev: m.cac.prev, better: 'down', fmt: money0, prevWord: pw }} />
-          : <Metric label="CAC per signed client" rag="grey">Not available</Metric>}
-      </Grid>
-      {m.cac && <div style={{ fontSize: 11, color: MUTED }}>CAC is trailing 90 days, from the central CAC calculation (same as Finance and Marketing).</div>}
-    </Section>
-  );
-}
-
-function FunnelSection({ m, w, ctx, signedRag, callsCmp, sentCmp }: { m: SalesMonth; w: MonthWindow; ctx: RagContext; signedRag: Rag; callsCmp: Cmp; sentCmp: Cmp }) {
-  const { cur, prev } = m;
-  const show = showRate(cur);
-  const held = cur.callsHeld ?? cur.callsBooked;
-  const fit = ratio(cur.paidTobs, held);
-  const sr = signRate(cur);
-  const outcomeCard = (label: string, n: number | null, p: number | null) => {
-    if (n == null) return <Metric label={label} rag="grey">Starts once recorded</Metric>;
-    const s = share(n, cur)!, ps = share(p, prev);
-    const rag = rate(s, ps, 'down', ctx);
-    return <Metric label={label} value={int(n)} rag={rag}>{pct0(s)} of calls{ps != null && <> · {w.prevShortLabel} {pct0(ps)}</>}</Metric>;
-  };
-  return (
-    <Section n={2} title="The funnel" sub="Handoff from Marketing on the left. Sales' job ends at signed.">
-      <Grid cols="1fr auto 1fr auto 1fr auto 1fr">
-        <CmpCard ctx={ctx} c={callsCmp} />
-        <Step label="Show rate" value={show == null ? '—' : pct0(show)} sub={show == null ? 'needs No Show' : undefined} />
-        {cur.callsHeld == null
-          ? <Metric label="Calls held" rag="grey">Starts once No Show is recorded</Metric>
-          : <Metric label="Calls held" value={int(cur.callsHeld)} rag={rate(show, showRate(prev), 'up', ctx)}>{int(cur.noShow!)} no-shows</Metric>}
-        <Step label="Fit rate" value={fit == null ? '—' : pct0(fit)} sub={`${cur.paidTobs} of ${held}`} />
-        <CmpCard ctx={ctx} c={sentCmp} />
-        <Step label="Sign rate" value={sr == null ? '—' : pct0(sr)} />
-        <Metric label="ToBs signed" value={int(cur.signed)} rag={signedRag}>All sources</Metric>
-      </Grid>
-      <Grid cols={4}>
-        <Metric label="Calls with no ToB" value={int(cur.closedNoToB)} rag="grey">
-          {cur.noShow == null && cur.notFit == null && cur.waitlist == null
-            ? 'Today all marked "Closed". Splits into No Show / Not a Fit / Waitlist once they are recorded.'
-            : `${w.prevShortLabel} ${int(prev.closedNoToB)}`}
-        </Metric>
-        {outcomeCard('No show', cur.noShow, prev.noShow)}
-        {outcomeCard('Not a fit', cur.notFit, prev.notFit)}
-        {outcomeCard('Waitlist', cur.waitlist, prev.waitlist)}
-      </Grid>
-      <div style={{ fontSize: 11, color: MUTED }}>
-        Calls are paid-ad clients only (Client Paid Ads), by call date. ToBs sent and signed are all sources, including referrals.
-      </div>
-    </Section>
-  );
-}
-
-function SalespersonSection({ m, ctx, t }: { m: SalesMonth; ctx: RagContext; t: Targets }) {
-  const teamPrevSr = signRate(m.prev);
-  const rows = m.salespeople.map(p => {
-    const sr = ratio(p.signed, p.sent);
-    const signedRag = rate(p.signed, t.perPersonProRata, 'up', ctx);
-    const srRag = rate(sr, teamPrevSr, 'up', ctx);
-    const show = p.noShow == null ? null : ratio(p.calls - p.noShow, p.calls);
-    return [
-      <strong key="n">{p.name}</strong>,
-      int(p.calls),
-      show == null ? '—' : pct0(show),
-      int(p.sent),
-      <span key="s" style={{ color: ragText(signedRag) }}>{p.signed} / {Math.round(t.perPersonProRata)}</span>,
-      <span key="r" style={{ color: ragText(srRag) }}>{sr == null ? '—' : pct0(sr)}</span>,
-      int(p.open),
-      <span key="st" style={{ color: ragText(staleRag(p.stale)) }}>{p.stale}</span>,
-    ];
-  });
-  return (
-    <Section n={3} title="By salesperson" sub={`Signings target ${t.perPerson} a month each, pro-rata month to date`}>
-      <Panel>
-        <Table
-          head={['Salesperson', 'Calls', 'Show rate', 'ToBs sent', 'Signed / target', 'Sign rate', 'Open ToBs', 'Stale']}
-          align={['left', 'right', 'right', 'right', 'right', 'right', 'right', 'right']}
-          rows={rows}
-        />
-        <div style={{ fontSize: 11, color: MUTED, marginTop: 8 }}>
-          Until a Salesperson field is added to Client Paid Ads and the CRM, everything is counted under Les.
-        </div>
-      </Panel>
-    </Section>
-  );
-}
-
-function WaitingSection({ m }: { m: SalesMonth }) {
-  const { open, timeToSign: tts } = m;
-  const segs = [
-    { label: 'Sent', n: open.stages.sent, bg: '#8a8a8a', fg: BG },
-    { label: 'Waiting', n: open.stages.waiting, bg: '#d4d4d4', fg: BG },
-    { label: 'Follow-up #1', n: open.stages.fu1, bg: AM, fg: BG },
-    { label: '#2', n: open.stages.fu2, bg: RD, fg: BG },
-    { label: '#3+', n: open.stages.fu3, bg: '#8b2f1c', fg: TEXT },
-  ];
-  const rag = staleRag(open.stale);
-  return (
-    <Section n={4} title="ToBs waiting for a signature" sub={`${open.total} open now. Flag = unsigned more than ${STALE_DAYS} days (not counting Waiting).`}>
-      <div style={{ display: 'flex', height: 30, borderRadius: 6, overflow: 'hidden', marginBottom: 10, fontSize: 11, fontWeight: 600 }}>
-        {segs.map(s => (
-          <div key={s.label} style={{ flex: s.n > 0 ? s.n : undefined, minWidth: 34, background: s.n > 0 ? s.bg : '#2a2a2a', color: s.n > 0 ? s.fg : MUTED, display: 'flex', alignItems: 'center', justifyContent: 'center', whiteSpace: 'nowrap', overflow: 'hidden', padding: '0 4px' }}>
-            {s.label} {s.n}
-          </div>
-        ))}
-      </div>
-      <Grid cols="1fr 1.6fr">
-        <Metric label={`Stale ToBs (over ${STALE_DAYS} days)`} value={int(open.stale)} rag={rag}>
-          {open.stale > 0 ? 'Chase or close.' : 'Nothing stale.'}
-          {tts.total > 0 && (
-            <div style={{ marginTop: 8 }}>
-              Time to sign ({tts.label} signings): median {tts.median} day{tts.median === 1 ? '' : 's'}, {tts.within7} of {tts.total} within a week, longest {tts.max} days.
-            </div>
-          )}
-        </Metric>
-        <Panel title="Oldest unsigned ToBs">
-          {open.oldest.length === 0
-            ? <div style={{ fontSize: 12, color: MUTED }}>No open ToBs</div>
-            : <Table
-                head={['Client', 'Stage', 'Days waiting']}
-                align={['left', 'left', 'right']}
-                rows={open.oldest.map(o => [o.company, o.stage, <span key="d" style={{ color: o.days > STALE_DAYS ? RD : TEXT }}>{o.days}</span>])}
-              />}
-        </Panel>
-      </Grid>
-    </Section>
-  );
-}
-
-function WaitlistSection({ m }: { m: SalesMonth }) {
-  const wl = m.waitlist;
-  return (
-    <Section n={5} title="Waitlist: clients waiting for candidates" sub="Tells Brinda which towns and trades need candidate ads">
-      <Grid cols="1fr 1.6fr">
-        {wl
-          ? <Metric label="Clients on waitlist" value={int(wl.count)} rag="grey">Right now</Metric>
-          : <Metric label="Clients on waitlist" rag="grey">Starts once Waitlist is recorded on calls</Metric>}
-        <Panel title="Waitlist by trade and town">
-          {wl
-            ? <Table head={['Trade', 'Town', 'Clients waiting']} align={['left', 'left', 'right']} rows={wl.rows.map(r => [r.trade, r.town, int(r.count)])} />
-            : <div style={{ fontSize: 12, color: MUTED }}>Starts once recorded</div>}
-        </Panel>
-      </Grid>
-    </Section>
-  );
-}
-
-function TrendSection({ m, t }: { m: SalesMonth; t: Targets }) {
-  return (
-    <Section n={6} title="Last 12 months">
-      <Panel title="ToBs signed (bars) and sign rate (line)">
-        <ResponsiveContainer width="100%" height={200}>
-          <ComposedChart data={m.series} margin={{ top: 18, right: 8, left: 8, bottom: 0 }}>
-            <XAxis dataKey="label" tick={{ fontSize: 10, fill: MUTED }} axisLine={false} tickLine={false} />
-            <YAxis yAxisId="n" hide domain={[0, (max: number) => Math.max(max, t.full) * 1.15]} />
-            <YAxis yAxisId="r" hide orientation="right" domain={[0, 100]} />
-            <Tooltip
-              contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${BORDER}`, background: BG2 }}
-              labelStyle={{ color: TEXT }}
-              formatter={(v, n) => [n === 'Sign rate' ? (v == null ? '—' : pct0(Number(v))) : int(Number(v)), String(n)]}
-            />
-            <Legend iconType="square" iconSize={8} wrapperStyle={{ fontSize: 10, color: MUTED }} />
-            <ReferenceLine yAxisId="n" y={t.full} stroke={MUTED} strokeDasharray="4 4" label={{ value: `Target ${t.full}`, position: 'insideTopLeft', fill: MUTED, fontSize: 10 }} />
-            <Bar yAxisId="n" dataKey="signed" name="ToBs signed" fill={RD} maxBarSize={44} radius={[3, 3, 0, 0]}>
-              <LabelList dataKey="signed" position="top" style={{ fontSize: 9, fill: MUTED }} />
-            </Bar>
-            <Line yAxisId="r" dataKey="signRate" name="Sign rate" stroke={TEXT} strokeWidth={2} dot={false} connectNulls />
-          </ComposedChart>
-        </ResponsiveContainer>
-      </Panel>
-    </Section>
-  );
-}
+const Arrow = ({ cur, prev, pw }: { cur: number | null; prev: number | null; pw: string }) => (
+  <div style={{ alignSelf: 'center', textAlign: 'center', color: C.text, fontSize: 13, fontWeight: 600, minWidth: 56 }}>
+    {pct(cur)}<div style={{ fontSize: 18, color: C.muted }}>→</div><div style={{ fontSize: 11, color: C.muted, fontWeight: 400 }}>{pw} {pct(prev)}</div>
+  </div>
+);
 
 function SalesSkeleton() {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <Skeleton height={48} radius={10} />
-      {[3, 4, 1].map((n, i) => (
-        <div key={i} style={{ background: BG2, borderRadius: 12, padding: '1.25rem' }}>
-          <Skeleton height={14} width={200} style={{ marginBottom: 14 }} />
-          <Grid cols={n}>{Array.from({ length: n }, (_, k) => <Skeleton key={k} height={78} radius={8} />)}</Grid>
-        </div>
-      ))}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <Skeleton height={160} radius={12} />
+      <div style={{ display: 'flex', gap: 12 }}>{[0, 1, 2, 3].map(i => <Skeleton key={i} height={140} radius={12} style={{ flex: 1 }} />)}</div>
+      <Skeleton height={200} radius={12} />
     </div>
   );
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+// ─── Page (Sales tab v2 brief + mockup, 26 Nov 2026) ──────────────────────────
 export function SalesCard() {
   const role = useAuthRole();
   const [month, setMonth] = useState(currentMonthKey);
   const [showSettings, setShowSettings] = useState(false);
   const w = monthWindow(month);
   const ctx: RagContext = { isCurrent: w.isCurrent, dayOfMonth: w.dayOfMonth };
+  const pw = w.prevShortLabel;
+  const same = w.isCurrent ? `Same day ${pw}` : pw;
 
   const { data: m, error, isLoading, isFetching } = useSalesMonth(month);
   const { data: settings } = useSalesSettings();
   const perPerson = settings?.targetPerSalesperson ?? DEFAULT_TARGET_PER_SALESPERSON;
+  const closeTarget = settings?.closeRateTarget ?? DEFAULT_CLOSE_RATE;
 
   const header = (
-    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1rem' }}>
-      <div>
-        <h2 style={{ fontSize: 26, fontWeight: 700, color: TEXT, margin: 0 }}>Sales</h2>
-        <p style={{ fontSize: 13, color: MUTED, margin: '4px 0 0' }}>
-          From booked call to signed ToB. {w.isCurrent ? 'Month to date vs same day last month.' : 'Full month vs the full previous month.'} CAC is trailing 90 days.
+    <header style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <h1 style={{ margin: 0, fontFamily: NUM_FONT, fontSize: 34, fontWeight: 700, letterSpacing: '-0.5px', color: C.text }}>Sales</h1>
+        <p style={{ margin: 0, fontSize: 14, color: C.muted }}>
+          {w.isCurrent
+            ? `${new Date().toLocaleDateString('en-NZ', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Pacific/Auckland' }).replace(',', '')} · Day ${w.dayOfMonth} of ${w.daysInMonth}`
+            : `${w.label} · full month`}
+          {' · '}Sales’ job ends at a signed ToB
         </p>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        {isFetching && <div style={{ width: 14, height: 14, borderRadius: '50%', border: `2px solid ${BORDER}`, borderTopColor: NZ, animation: 'spin 0.7s linear infinite' }} />}
+        {isFetching && <div style={{ width: 14, height: 14, borderRadius: '50%', border: `2px solid ${C.border}`, borderTopColor: C.red, animation: 'spin 0.7s linear infinite' }} />}
+        {role === 'admin' && settings && (
+          <button onClick={() => setShowSettings(true)} style={{ height: 44, background: C.card, color: C.text, border: `1px solid ${C.border}`, borderRadius: 10, padding: '0 14px', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>Edit targets</button>
+        )}
         <select
           value={month}
           onChange={e => setMonth(e.target.value)}
-          style={{ background: BG2, color: TEXT, border: `1px solid ${BORDER}`, borderRadius: 8, padding: '8px 12px', fontSize: 13 }}
+          aria-label="Month"
+          style={{ height: 44, background: C.card, color: C.text, border: `1px solid ${C.border}`, borderRadius: 10, padding: '0 12px', fontSize: 14 }}
         >
           {recentMonthKeys(12).map(k => <option key={k} value={k}>{monthWindow(k).label}</option>)}
         </select>
-        {role === 'admin' && settings && (
-          <button onClick={() => setShowSettings(true)} title="Sales settings" style={{ background: BG2, color: MUTED, border: `1px solid ${BORDER}`, borderRadius: 8, padding: '7px 10px', fontSize: 14, cursor: 'pointer' }}>⚙</button>
-        )}
       </div>
       <style>{'@keyframes spin { to { transform: rotate(360deg); } }'}</style>
-    </div>
+    </header>
   );
 
-  if (isLoading) return <>{header}<SalesSkeleton /></>;
+  if (isLoading) return <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>{header}<SalesSkeleton /></div>;
   if (!m) {
-    return <>{header}<p style={{ color: AM, fontSize: 12 }}>⚠ Sales data unavailable{error ? ` — ${error.message}` : ''}</p></>;
+    return <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>{header}<p style={{ color: C.amber, fontSize: 12 }}>⚠ Sales data unavailable{error ? ` — ${error.message}` : ''}</p></div>;
   }
 
-  const t = targetsFor(m, w, perPerson);
   const { cur, prev } = m;
-  const pw = w.prevShortLabel;
-  const same = w.isCurrent ? `Same day ${pw}` : pw;
-  // ToBs signed is coloured against the pro-rata target, not last month.
-  const signedRag = rate(cur.signed, t.proRata, 'up', ctx);
-  const callsCmp = callsCmpFor(m, w);
-  const sentCmp: Cmp = { label: 'ToBs sent', cur: cur.tobsSent, prev: prev.tobsSent, better: 'up', fmt: int, prevWord: same };
-
-  // ── Diagnosis (shared with the Overview) ──
-  const diagnosis = salesDiagnosis(m, w, perPerson);
-  const tone = RAG_COLOR[diagnosis.tone];
+  const target = targetsFor(m, w, perPerson).full;
+  const needed = neededBy(target, w.dayOfMonth, w.daysInMonth);
+  const signedRag = vsTarget(cur.signed, needed);
+  const cr = closeRate(cur), pcr = closeRate(prev);
+  const crRag = cr == null ? 'grey' : vsTarget(cr, closeTarget);
+  const held = meetingsHad(cur), pheld = meetingsHad(prev);
+  const noShowsLogged = cur.noShow != null;
+  const cacRag = m.cac ? rate(m.cac.cur, m.cac.prev, 'down', ctx) : 'grey';
+  const cacPct = m.cac ? pctChange(m.cac.cur, m.cac.prev) : null;
+  const actions = salesActions(m, target, w.dayOfMonth, w.daysInMonth);
+  const breakText = biggestBreak(m);
+  const tts = m.timeToSign;
+  const st = m.open.stages;
+  const trend = m.series.map(s => {
+    const partial = w.isCurrent && s.key === month;
+    return { ...s, partial, label: partial ? `${s.label} so far` : s.label };
+  });
 
   return (
-    <div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 28, color: C.text }}>
       {header}
+      {error && <p style={{ color: C.amber, fontSize: 12, margin: 0 }}>⚠ Showing last loaded data — {error.message}</p>}
 
-      <div style={{ background: BG2, border: `.5px solid ${BORDER}`, borderLeft: `3px solid ${tone}`, borderRadius: 10, padding: '.875rem 1rem', display: 'flex', alignItems: 'center', gap: 14, marginBottom: '.875rem' }}>
-        <span style={{ background: tone, color: diagnosis.tone === 'grey' ? TEXT : BG, fontSize: 12, fontWeight: 600, padding: '4px 12px', borderRadius: 999, whiteSpace: 'nowrap' }}>{diagnosis.badge}</span>
-        <span style={{ fontSize: 13, color: TEXT }}>{diagnosis.text}</span>
+      {/* 1. Today's actions */}
+      <Section title="Today’s actions" aside={w.isCurrent ? 'Who to call today · auto-built from the sections below · worst first' : `For ${w.label} · today’s actions show on the current month`}>
+        {w.isCurrent && (
+          <div style={{ ...CARD, overflow: 'hidden' }}>
+            {actions.map((a, i) => (
+              <div key={i} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 16, padding: '16px 20px', borderBottom: i < actions.length - 1 ? `1px solid ${C.rowBorder}` : undefined }}>
+                <Chip tone={LEVEL_TONE[a.level]} width={92}>{a.level}</Chip>
+                <div style={{ flex: '1 1 420px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <div style={{ fontSize: 16, fontWeight: 600 }}>{a.who}<span style={{ color: C.faint }}> · </span>{a.title}</div>
+                  <div style={{ fontSize: 14, color: C.muted, lineHeight: 1.45 }}>{a.detail}</div>
+                </div>
+                <div style={{ ...TODO, flex: '0 1 260px', fontSize: 14, padding: '10px 12px' }}>{a.action}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Section>
+
+      {/* 2. Are we on track? */}
+      <Section title="Are we on track?" aside={<Tag bg={C.soft}>WHAT SALES DELIVERED · {w.isCurrent ? 'THIS MONTH' : w.label.toUpperCase()}</Tag>}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14 }}>
+          <Tile label="SIGNED TOBS" chip={<Chip tone={signedRag}>{PACE_LABEL[signedRag]}</Chip>}>
+            <Big value={int(cur.signed)} color={ragColor(signedRag)} unit="signed" />
+            <TextLine>Need <strong>{needed}</strong> by today · <strong>{target}</strong> by month end</TextLine>
+            <TextLine muted>{same}: {int(prev.signed)}</TextLine>
+          </Tile>
+          <Tile label="CLOSE RATE" chip={<Chip tone={crRag}>{PACE_LABEL[crRag]}</Chip>}>
+            <Big value={pct(cr)} color={ragColor(crRag)} unit="of meetings" />
+            <TextLine>Target {closeTarget}%</TextLine>
+            <TextLine muted>{same}: {pct(pcr)}{cr != null && pcr != null && ` · ${cr >= pcr ? '+' : '−'}${Math.abs(Math.round(cr - pcr))} pts`}</TextLine>
+          </Tile>
+          <Tile label="MEETINGS HAD" chip={<Chip tone="grey">NO TARGET</Chip>}>
+            <Big value={int(held)} color={C.text} unit="meetings" />
+            <TextLine>{noShowsLogged ? `${int(cur.callsBooked)} booked · ${int(cur.noShow!)} no-shows` : 'Meetings booked until no-shows are logged'}</TextLine>
+            <TextLine muted>{same}: {int(pheld)} · {direction(held, pheld)}</TextLine>
+          </Tile>
+          <Tile label="CLIENT CAC" chip={cacPct == null ? <Chip tone="grey">NO DATA</Chip> : <Chip tone={cacRag}>{Math.abs(Math.round(cacPct))}% {cacPct > 0 ? 'WORSE' : 'BETTER'}</Chip>}>
+            <Big value={m.cac ? money0(m.cac.cur) : '—'} color={ragColor(cacRag)} unit="per signed ToB" />
+            <TextLine>Client ads + sales time · trailing 90 days</TextLine>
+            <TextLine muted>{same}: {m.cac ? money0(m.cac.prev) : '—'}</TextLine>
+          </Tile>
+        </div>
+      </Section>
+
+      {/* 3. Where is it breaking? */}
+      <Section title="Where is it breaking?" aside={`Conversion on each step · ${same} underneath`}>
+        <div style={{ ...CARD, padding: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            <Step label="MEETINGS HAD" value={int(held)}>{noShowsLogged ? `${int(cur.callsBooked)} booked` : 'Booked, until no-shows are logged'} · paid-ad calls</Step>
+            <Arrow cur={pctOf(cur.tobsSent, held)} prev={pctOf(prev.tobsSent, pheld)} pw={pw} />
+            <Step label="TOBS SENT" value={int(cur.tobsSent)}>{int(cur.closedNoToB)} meetings closed with no ToB</Step>
+            <Arrow cur={pctOf(cur.signed, cur.tobsSent)} prev={pctOf(prev.signed, prev.tobsSent)} pw={pw} />
+            <Step label="SIGNED" value={int(cur.signed)}>All sources, incl. referrals</Step>
+          </div>
+          <div style={{ background: C.inset, borderLeft: `3px solid ${breakText ? C.red : C.green}`, borderRadius: 8, padding: '12px 14px', fontSize: 15 }}>
+            <strong>Biggest break:</strong> {breakText ?? 'no step dropped vs last month.'}
+          </div>
+          <div style={{ fontSize: 13, color: C.muted }}>
+            Speed check ({tts.label}): {tts.total > 0
+              ? `median ${tts.median} day${tts.median === 1 ? '' : 's'} to sign · ${tts.within7} of ${tts.total} signed within 7 days`
+              : 'no signings yet'} · rule: anything unsigned after {CALL_DAYS} days gets a personal call.
+          </div>
+        </div>
+      </Section>
+
+      {/* 4. Open ToBs */}
+      <Section title="Open ToBs · unsigned" aside={`${m.open.total} open now · oldest first`}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
+          {[['SENT', st.sent], ['WAITING', st.waiting], ['FOLLOW UP #1', st.fu1], ['FOLLOW UP #2–3', st.fu23], [`OVER ${CALL_DAYS} DAYS`, st.over14]].map(([l, n]) => (
+            <div key={l} style={{ ...CARD, padding: 14 }}>
+              <div style={{ ...LABEL, fontSize: 11 }}>{l}</div>
+              <div style={{ fontFamily: NUM_FONT, fontSize: 28, fontWeight: 700, color: l === `OVER ${CALL_DAYS} DAYS` && Number(n) > 0 ? C.red : C.text }}>{n}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{ ...CARD, overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead><tr>{['CLIENT', 'SEQUENCE STAGE', 'DAYS UNSIGNED', 'STATUS', 'ACTION'].map(x => <th key={x} style={TH}>{x}</th>)}</tr></thead>
+            <tbody>
+              {m.open.list.length === 0 && <tr><td colSpan={5} style={{ ...TD, color: C.muted }}>No open ToBs.</td></tr>}
+              {m.open.list.map((t, i) => {
+                const s = openStatus(t);
+                return (
+                  <tr key={i}>
+                    <td style={{ ...TD, fontWeight: 600 }}>{t.company}</td>
+                    <td style={TD}>{t.stage}</td>
+                    <td style={{ ...TD, color: s === 'CALL' ? C.red : s === 'WATCH' ? C.amber : C.text, fontWeight: 600 }}>{t.days}</td>
+                    <td style={TD}><Chip tone={STATUS_TONE[s]}>{s}</Chip></td>
+                    <td style={TD}>{s === 'CALL' ? 'Personal call today' : s === 'WATCH' ? `Call before day ${CALL_DAYS}` : t.stage === 'Waiting' ? 'Waiting on client' : 'Sequence running'}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </Section>
+
+      {/* 5. Per salesperson */}
+      <Section title="Per salesperson" aside={`${same} underneath`}>
+        <div style={{ ...CARD, overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead><tr>{['SALESPERSON', 'MEETINGS', 'TOBS SENT', 'SIGNED', 'CLOSE RATE', `STALE (OVER ${CALL_DAYS} DAYS)`].map(x => <th key={x} style={TH}>{x}</th>)}</tr></thead>
+            <tbody>
+              {m.salespeople.map(p => {
+                const had = p.noShow == null ? p.calls : p.calls - p.noShow;
+                const phad = p.prev.noShow == null ? p.prev.calls : p.prev.calls - p.prev.noShow;
+                return (
+                  <tr key={p.name}>
+                    <td style={{ ...TD, fontWeight: 600 }}>{p.name}</td>
+                    <td style={TD}>{int(had)}<Sub>{int(phad)}</Sub></td>
+                    <td style={TD}>{int(p.sent)}<Sub>{int(p.prev.sent)}</Sub></td>
+                    <td style={TD}>{int(p.signed)}<Sub>{int(p.prev.signed)}</Sub></td>
+                    <td style={TD}>{pct(pctOf(p.signed, had))}<Sub>{pct(pctOf(p.prev.signed, phad))}</Sub></td>
+                    <td style={{ ...TD, color: p.stale > 0 ? C.red : C.text, fontWeight: 600 }}>{p.stale}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </Section>
+
+      {/* 6. Trend */}
+      <Section title="Trend" aside={`Signed ToBs per month · dashed line = target ${target}`}>
+        <div style={{ ...CARD, padding: 16 }}>
+          <ResponsiveContainer width="100%" height={220}>
+            <ComposedChart data={trend} margin={{ top: 18, right: 8, left: 8, bottom: 0 }}>
+              <XAxis dataKey="label" tick={{ fontSize: 11, fill: C.muted }} axisLine={false} tickLine={false} />
+              <YAxis hide domain={[0, (max: number) => Math.max(max, target) * 1.15]} />
+              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${C.border}`, background: C.card }} labelStyle={{ color: C.text }} cursor={{ fill: C.inset }} />
+              <ReferenceLine y={target} stroke={C.muted} strokeDasharray="4 4" />
+              <Bar dataKey="signed" name="Signed ToBs" maxBarSize={44} radius={[3, 3, 0, 0]}>
+                {trend.map(s => {
+                  const partial = s.partial;
+                  const fill = s.signed >= target ? C.green : C.greyFill;
+                  return <Cell key={s.key} fill={partial ? 'transparent' : fill} stroke={partial ? C.muted : undefined} strokeDasharray={partial ? '4 3' : undefined} />;
+                })}
+                <LabelList dataKey="signed" position="top" style={{ fontSize: 10, fill: C.muted }} />
+              </Bar>
+            </ComposedChart>
+          </ResponsiveContainer>
+          <div style={{ fontSize: 12, color: C.muted }}>
+            Green = hit target · grey = missed{w.isCurrent && ' · dashed outline = this month so far'}. Close rate gets added as a line once meetings are stored by month.
+          </div>
+        </div>
+      </Section>
+
+      <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>
+        Colours: green at or ahead of target by today, amber 75–99%, red under 75%, grey for no data or no target. Never green for zero.
+        Meetings are paid-ad calls (Client Paid Ads, by call date); ToBs sent and signed are all sources. Duplicate CRM companies count once. Open ToBs are as of today.
       </div>
 
-      <ConvertingSection m={m} w={w} ctx={ctx} t={t} signedRag={signedRag} />
-      <FunnelSection m={m} w={w} ctx={ctx} signedRag={signedRag} callsCmp={callsCmp} sentCmp={sentCmp} />
-      <SalespersonSection m={m} ctx={ctx} t={t} />
-      <WaitingSection m={m} />
-      <WaitlistSection m={m} />
-      <TrendSection m={m} t={t} />
-
-      <div style={{ fontSize: 11, color: MUTED, lineHeight: 1.6 }}>
-        Colour rule: green = same or better than last month; amber = up to 20% worse; red = more than 20% worse. ToBs signed is coloured against the pro-rata target of {perPerson} per salesperson instead. Stale ToBs: 0 green, 1–5 amber, more than 5 red. Grey for days 1–7.<br />
-        Figures come from the Airtable CRM and Client Paid Ads tables, in NZ time. Duplicate CRM companies count once. Open ToBs and the waitlist are as of today.
-      </div>
-
-      {error && <p style={{ color: AM, fontSize: 12 }}>⚠ Showing last loaded data — {error.message}</p>}
       {showSettings && settings && <SettingsPanel settings={settings} onClose={() => setShowSettings(false)} />}
     </div>
   );

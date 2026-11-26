@@ -1160,7 +1160,7 @@ export async function fetchSalesMonth(w: MonthWindow): Promise<SalesMonth> {
   const open = [...latestOpen.values()].map(t => ({ ...t, days: daysBetween(t.sentDay!, today) }));
   // "Waiting" clients have told us when they'll be back, so they're never stale.
   const isStale = (t: (typeof open)[number]) => t['TOB Status'] !== 'Waiting' && t.days > STALE_DAYS;
-  const stage = (s: string) => open.filter(t => t['TOB Status'] === s).length;
+  const stage = (s: string) => open.filter(t => t['TOB Status'] === s && !isStale(t)).length;
 
   // ── By salesperson ──
   const names = new Set([DEFAULT_SALESPERSON]);
@@ -1168,9 +1168,12 @@ export async function fetchSalesMonth(w: MonthWindow): Promise<SalesMonth> {
   tobs.filter(t => inDays(t.sentDay, w.cur)).forEach(t => names.add(t.who));
   open.forEach(t => names.add(t.who));
   const salespeople = [...names].map(name => {
-    const f = funnel(w.cur, name);
+    const f = funnel(w.cur, name), p = funnel(w.prev, name);
     const mine = open.filter(t => t.who === name);
-    return { name, calls: f.callsBooked, noShow: f.noShow, sent: f.tobsSent, signed: f.signed, open: mine.length, stale: mine.filter(isStale).length };
+    return {
+      name, calls: f.callsBooked, noShow: f.noShow, sent: f.tobsSent, signed: f.signed, open: mine.length, stale: mine.filter(isStale).length,
+      prev: { calls: p.callsBooked, noShow: p.noShow, sent: p.tobsSent, signed: p.signed },
+    };
   });
 
   // ── Time to sign, for signings last month and this month ──
@@ -1196,16 +1199,17 @@ export async function fetchSalesMonth(w: MonthWindow): Promise<SalesMonth> {
     salespeople,
     open: {
       total: open.length,
+      // Over 14 days is its own bucket, so each ToB is counted once.
       stages: {
         sent: stage('Sent') + stage('Sending') + stage('Response'),
         waiting: stage('Waiting'),
         fu1: stage('Follow Up #1'),
-        fu2: stage('Follow Up #2'),
-        fu3: stage('Follow Up #3') + stage('Follow Up #4'),
+        fu23: stage('Follow Up #2') + stage('Follow Up #3') + stage('Follow Up #4'),
+        over14: open.filter(isStale).length,
       },
       stale: open.filter(isStale).length,
-      oldest: open.filter(t => t['TOB Status'] !== 'Waiting').sort((a, b) => b.days - a.days).slice(0, 5)
-        .map(t => ({ company: t['Company Name']?.trim() || '(no name)', stage: t['TOB Status']!, days: t.days })),
+      list: [...open].sort((a, b) => b.days - a.days)
+        .map(t => ({ company: t['Company Name']?.trim() || '(no name)', stage: t['TOB Status']!, days: t.days, who: t.who })),
     },
     timeToSign: {
       label: `${w.prevShortLabel}–${w.shortLabel}`,

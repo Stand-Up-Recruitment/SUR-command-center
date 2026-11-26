@@ -606,6 +606,7 @@ export interface OverviewSettings extends PlanSettings {
 // ─── Sales tab (month view) ───────────────────────────────────────────────────
 export interface SalesSettings {
   targetPerSalesperson: number;
+  closeRateTarget: number;   // % of meetings had that sign
 }
 
 /** One window of the booked-call → signed-ToB funnel. Call outcomes are null until they're recorded in Airtable. */
@@ -629,9 +630,10 @@ export interface SalespersonRow {
   signed: number;
   open: number;
   stale: number;
+  prev: { calls: number; noShow: number | null; sent: number; signed: number };
 }
 
-export interface OpenTob { company: string; stage: string; days: number }
+export interface OpenTob { company: string; stage: string; days: number; who: string }
 
 export interface SalesMonth {
   cur: SalesFunnel;
@@ -639,9 +641,9 @@ export interface SalesMonth {
   salespeople: SalespersonRow[];
   open: {
     total: number;
-    stages: { sent: number; waiting: number; fu1: number; fu2: number; fu3: number };
+    stages: { sent: number; waiting: number; fu1: number; fu23: number; over14: number };
     stale: number;
-    oldest: OpenTob[];
+    list: OpenTob[];   // every open ToB, oldest first
   };
   timeToSign: { label: string; total: number; median: number; within7: number; max: number };
   waitlist: { count: number; rows: { trade: string; town: string; count: number }[] } | null;
