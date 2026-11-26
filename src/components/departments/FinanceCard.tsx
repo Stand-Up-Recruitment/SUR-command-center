@@ -282,10 +282,9 @@ function PLSummarySection({ w, totalRevenue, totalGrossProfit, totalOpex, netPro
   plan: PlacementPlan;
 }) {
   const grossMarginPct = totalRevenue > 0 ? (totalGrossProfit / totalRevenue) * 100 : 0;
-  // Per placement, like per placed client: candidate cost is a product cost (off the profit), client cost is the CAC.
-  const candCac = cac?.candidateCacLoaded;
-  const clientCacPerPlacement = cac?.placementCacLoaded != null && candCac != null ? cac.placementCacLoaded - candCac : null;
-  const perPlacement = plan.gp && candCac != null && clientCacPerPlacement ? (plan.gp.value - candCac) / clientCacPerPlacement : null;
+  // LTGP:CAC per paying client (a client with at least one placement). Prior 30 days: same LTGP, prior 30 days' client CAC.
+  const prevCostPerPayingClient = cac?.prevClientCacLoaded && cac.placementRate > 0 ? cac.prevClientCacLoaded / cac.placementRate : null;
+  const prevLtgpToCac = cac?.hasPrevPeriod && cac.ltgp != null && prevCostPerPayingClient ? cac.ltgp / prevCostPerPayingClient : null;
   const fmtRatio = (r: number | null | undefined) => (r != null ? `${r.toFixed(1)}:1` : '—');
   const netMarginPct = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
 
@@ -348,12 +347,11 @@ function PLSummarySection({ w, totalRevenue, totalGrossProfit, totalOpex, netPro
 
       {/* Unit economics: LTGP:CAC with the two CACs behind it (moved from Marketing). Last 30 days vs the prior 30. */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 14, marginBottom: 14 }}>
-        <KP
-          label="LTGP:CAC"
-          value={fmtRatio(perPlacement)}
-          valueColor={PU}
-          sub={`Per placement · GP ${plan.gp && candCac != null ? fmtNZD(plan.gp.value - candCac) : '—'} (after candidate cost) ÷ CAC per placement ${clientCacPerPlacement != null ? fmtNZD(clientCacPerPlacement) : '—'} · per placed client ${fmtRatio(cac?.ltgpToCac)}`}
-        />
+        <Tile label="LTGP:CAC" chip={null}>
+          <Big value={fmtRatio(cac?.ltgpToCac)} color={cac?.ltgpToCac != null && prevLtgpToCac != null ? (cac.ltgpToCac >= prevLtgpToCac ? NZ : RD) : PU} size={40} unit="per paying client" />
+          {prevLtgpToCac != null && <TextLine muted>Prior 30 days {fmtRatio(prevLtgpToCac)}</TextLine>}
+          <TextLine muted>LTGP {cac?.ltgp != null ? fmtNZD(cac.ltgp) : '—'} (average per paying client, after candidate costs) ÷ client CAC per paying client {cac?.costPerPlacedClient != null ? fmtNZD(cac.costPerPlacedClient) : '—'} (client CAC {cac?.clientCacLoaded != null ? fmtNZD(cac.clientCacLoaded) : '—'} ÷ {cac ? `${Math.round(cac.placementRate * 100)}%` : '—'} of signed clients paying)</TextLine>
+        </Tile>
         {([
           ['CLIENT CAC · LAST 30 DAYS', 'per signed client', cac?.clientCacLoaded, cac?.prevClientCacLoaded, 'Client Meta spend + Les’s sales time ($28/hr, 60%) ÷ ToBs signed'],
           ['CANDIDATE CAC · LAST 30 DAYS', 'per placed candidate', cac?.candidateCacLoaded, cac?.prevCandidateCacLoaded, 'Candidate Meta + job board ads + 60% of recruiters’ pay ÷ placements signed'],
