@@ -6,6 +6,7 @@ export const C = {
   card: '#1A1B1E', inset: '#222327', border: '#2E3036', rowBorder: '#26282D', track: '#2A2C31',
   text: '#F2F2F3', soft: '#C9CBD1', muted: '#A1A3AA', faint: '#8A8D95', ink: '#141414',
   green: '#4FCB7C', amber: '#F2A93B', red: '#F0504A', blue: '#8DBBF7', greyFill: '#3A3C42',
+  purple: '#B794F6', teal: '#5ED3C3',   // Sales funnel owner bands: Marketing, Recruitment
 };
 export const PACE_COLOR: Record<Pace, string> = { green: C.green, amber: C.amber, red: C.red, grey: C.faint };
 // Filled status chips: [background, text]

@@ -8,7 +8,30 @@ export const WATCH_DAYS = 8;    // unsigned 8–14 days → call before day 14
 /** Meetings had = booked minus no-shows; booked until no-shows are logged. */
 export const meetingsHad = (f: SalesFunnel) => f.callsHeld ?? f.callsBooked;
 export const pctOf = (a: number, b: number) => (b > 0 ? (a / b) * 100 : null);
-export const closeRate = (f: SalesFunnel) => pctOf(f.signed, meetingsHad(f));
+/** Qualified = showed minus not a fit; null until both outcomes are logged. */
+export const qualified = (f: SalesFunnel) => (f.callsHeld == null || f.notFit == null ? null : f.callsHeld - f.notFit);
+/** Close rate = signed ÷ qualified meetings, falling back to meetings had (then booked) until outcomes are logged. */
+export const closeRate = (f: SalesFunnel) => pctOf(f.signed, qualified(f) ?? meetingsHad(f));
+
+export type Owner = 'MARKETING' | 'SALES' | 'RECRUITMENT';
+export interface FunnelRate { name: string; label: string; owner: Owner; cur: number | null; prev: number | null }
+/** The arrows of the client funnel, in order. Job rate is shown, never scored (no data until JobAdder is matched). */
+export function funnelRates(m: SalesMonth): FunnelRate[] {
+  const r = (f: SalesFunnel) => ({
+    show: f.callsHeld == null ? null : pctOf(f.callsHeld, f.callsBooked),
+    fit: f.callsHeld == null || f.notFit == null ? null : pctOf(f.callsHeld - f.notFit, f.callsHeld),
+    offer: pctOf(f.tobsSent, qualified(f) ?? f.callsBooked),   // booked until outcomes are logged
+    sign: pctOf(f.signed, f.tobsSent),
+  });
+  const c = r(m.cur), p = r(m.prev);
+  return [
+    { name: 'show rate', label: 'Booked → showed', owner: 'MARKETING', cur: c.show, prev: p.show },
+    { name: 'fit rate', label: 'Showed → qualified', owner: 'MARKETING', cur: c.fit, prev: p.fit },
+    { name: 'offer rate', label: 'Qualified → ToB sent', owner: 'SALES', cur: c.offer, prev: p.offer },
+    { name: 'sign rate', label: 'ToB sent → signed', owner: 'SALES', cur: c.sign, prev: p.sign },
+    { name: 'job rate', label: 'Signed → job loaded', owner: 'RECRUITMENT', cur: null, prev: null },
+  ];
+}
 
 /** Monthly target × day of month ÷ days in month, rounded up (the full target for a past month). */
 export const neededBy = (target: number, dayOfMonth: number, daysInMonth: number) =>
@@ -49,22 +72,25 @@ export function salesActions(m: SalesMonth, target: number, dayOfMonth: number, 
       action: 'Chase the warmest open ToBs',
     });
   }
-  if (m.cur.noShow == null) {
-    out.push({ level: 'SET UP', who: 'Trung', title: 'No-shows not logged', detail: 'Meetings had and close rate use meetings booked until No Show is a call outcome in Airtable', action: 'Add No Show to Client Paid Ads' });
-  }
+  const blank = [
+    m.cur.noShow == null && 'showed',
+    qualified(m.cur) == null && 'qualified',
+    m.lostReasons.length === 0 && 'why-not-signed',
+    'job loaded',
+  ].filter(Boolean);
+  out.push({
+    level: 'SET UP', who: 'Trung', title: 'Call outcomes and lost reasons not logged',
+    detail: `${blank.join(', ').replace(/^./, c => c.toUpperCase())} ${blank.length === 1 ? 'is' : 'are'} blank until Airtable and JobAdder capture them`,
+    action: 'Add Lost Reason + JobAdder jobs feed',
+  });
   out.push({ level: 'SET UP', who: 'Rachel → Trung', title: 'Sequence timing missing', detail: 'The tab can’t tell when a ToB’s follow-up sequence has finished', action: 'Send which day each follow-up goes out' });
   return out;
 }
 
-/** The funnel step whose conversion dropped the most vs last month, in plain English. null if none dropped. */
-export function biggestBreak(m: SalesMonth): string | null {
-  const steps = [
-    { name: 'Meeting → ToB sent', cur: pctOf(m.cur.tobsSent, meetingsHad(m.cur)), prev: pctOf(m.prev.tobsSent, meetingsHad(m.prev)) },
-    { name: 'ToB sent → signed', cur: pctOf(m.cur.signed, m.cur.tobsSent), prev: pctOf(m.prev.signed, m.prev.tobsSent) },
-  ];
-  const drops = steps
-    .filter(s => s.cur != null && s.prev != null && s.cur < s.prev)
-    .sort((a, b) => (b.prev! - b.cur!) - (a.prev! - a.cur!));
-  const s = drops[0];
-  return s ? `${s.name}: ${Math.round(s.cur!)}% vs ${Math.round(s.prev!)}% last month` : null;
+/** The scored funnel step (not job rate) that dropped the most points vs last month, and who owns it. null if none dropped. */
+export function biggestBreak(m: SalesMonth): { owner: Owner; text: string } | null {
+  const s = funnelRates(m)
+    .filter(r => r.owner !== 'RECRUITMENT' && r.cur != null && r.prev != null && r.cur < r.prev)
+    .sort((a, b) => (b.prev! - b.cur!) - (a.prev! - a.cur!))[0];
+  return s ? { owner: s.owner, text: `${s.label}: ${Math.round(s.cur!)}% vs ${Math.round(s.prev!)}% last month` } : null;
 }

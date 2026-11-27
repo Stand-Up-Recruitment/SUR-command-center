@@ -1041,6 +1041,7 @@ type SalesCallFields = {
 };
 type SalesTobFields = {
   'Company Name'?: string; 'TOB Status'?: string; 'Sent Date'?: string; 'Signed Date'?: string; Salesperson?: unknown;
+  'Lost Reason'?: string;
 };
 
 const NO_TOB_OUTCOMES = ['Closed', 'No Show', 'Not a Fit', 'Waitlist'];
@@ -1048,13 +1049,15 @@ const SIGNED_TOB = ['Moved To Main Client', 'Signed'];
 const STALE_DAYS = 14;
 const DEFAULT_SALESPERSON = 'Les';
 
-// Requests the not-yet-created Salesperson field, and drops it if Airtable doesn't know it.
-async function fetchWithOptionalSalesperson<T>(tableId: string, fields: string[]): Promise<T[]> {
+// Requests not-yet-created fields (Salesperson, Lost Reason), dropping any Airtable doesn't know.
+async function fetchWithOptional<T>(tableId: string, fields: string[], optional: string[] = ['Salesperson']): Promise<T[]> {
   try {
-    return await fetchAllFromBase<T>(CLIENTS_BASE_ID, tableId, {}, [...fields, 'Salesperson']);
+    return await fetchAllFromBase<T>(CLIENTS_BASE_ID, tableId, {}, [...fields, ...optional]);
   } catch (e) {
-    if (!/unknown field/i.test((e as Error).message)) throw e;
-    return fetchAllFromBase<T>(CLIENTS_BASE_ID, tableId, {}, fields);
+    const msg = (e as Error).message;
+    if (!optional.length || !/unknown field/i.test(msg)) throw e;
+    const left = optional.filter(f => !msg.includes(f));
+    return fetchWithOptional<T>(tableId, fields, left.length < optional.length ? left : []);
   }
 }
 
@@ -1098,8 +1101,8 @@ export async function fetchSalesMonth(w: MonthWindow): Promise<SalesMonth> {
   const cacPrev = trailingDays(w.prev.until, CAC_WINDOW_DAYS);
 
   const [callRows, tobRows, cac] = await Promise.all([
-    fetchWithOptionalSalesperson<SalesCallFields>(CLIENTS_TABLE_ID, ['Status', 'Call Booked', 'Company Name', 'Trade', 'Location', 'Source']),
-    fetchWithOptionalSalesperson<SalesTobFields>(CRM_TABLE_ID, ['Company Name', 'TOB Status', 'Sent Date', 'Signed Date']),
+    fetchWithOptional<SalesCallFields>(CLIENTS_TABLE_ID, ['Status', 'Call Booked', 'Company Name', 'Trade', 'Location', 'Source']),
+    fetchWithOptional<SalesTobFields>(CRM_TABLE_ID, ['Company Name', 'TOB Status', 'Sent Date', 'Signed Date'], ['Salesperson', 'Lost Reason']),
     // CAC per Signed Client is read from the shared acquisitionCacs, never recalculated here.
     (CANDIDATES_BASE_ID
       ? Promise.all([fetchAcquisitionData(), fetchMetaSpendRange(cacCur), fetchMetaSpendRange(cacPrev)]).then(([data, sCur, sPrev]) => {
@@ -1137,7 +1140,7 @@ export async function fetchSalesMonth(w: MonthWindow): Promise<SalesMonth> {
     return {
       callsBooked: inCalls.length,
       noShow,
-      notFit: outcome('Not a Fit'),
+      notFit: outcome('Closed'),   // Les: not a fit = showed but no ToB sent
       waitlist: outcome('Waitlist'),
       callsHeld: noShow == null ? null : inCalls.length - noShow,
       closedNoToB: inCalls.filter(c => NO_TOB_OUTCOMES.includes(c.Status ?? '')).length,
@@ -1171,8 +1174,8 @@ export async function fetchSalesMonth(w: MonthWindow): Promise<SalesMonth> {
     const f = funnel(w.cur, name), p = funnel(w.prev, name);
     const mine = open.filter(t => t.who === name);
     return {
-      name, calls: f.callsBooked, noShow: f.noShow, sent: f.tobsSent, signed: f.signed, open: mine.length, stale: mine.filter(isStale).length,
-      prev: { calls: p.callsBooked, noShow: p.noShow, sent: p.tobsSent, signed: p.signed },
+      name, calls: f.callsBooked, noShow: f.noShow, notFit: f.notFit, sent: f.tobsSent, signed: f.signed, open: mine.length, stale: mine.filter(isStale).length,
+      prev: { calls: p.callsBooked, noShow: p.noShow, notFit: p.notFit, sent: p.tobsSent, signed: p.signed },
     };
   });
 
@@ -1180,6 +1183,11 @@ export async function fetchSalesMonth(w: MonthWindow): Promise<SalesMonth> {
   const signWindow = { since: w.prev.since, until: w.cur.until };
   const signDays = uniqueByCompany(tobs.filter(t => SIGNED_TOB.includes(t['TOB Status'] ?? '') && inDays(t['Signed Date'], signWindow) && t.sentDay))
     .map(t => Math.max(0, daysBetween(t.sentDay!, t['Signed Date']!)));
+
+  // ── Why they didn't sign: unsigned ToBs sent this month with a Lost Reason, biggest first ──
+  const reasons = new Map<string, number>();
+  uniqueByCompany(tobs.filter(t => t['Lost Reason'] && !SIGNED_TOB.includes(t['TOB Status'] ?? '') && inDays(t.sentDay, w.cur)))
+    .forEach(t => reasons.set(t['Lost Reason']!, (reasons.get(t['Lost Reason']!) ?? 0) + 1));
 
   // ── Waitlist: clients currently waiting for candidates, by trade and town ──
   const waiting = callRows.filter(r => r.Status === 'Waitlist');
@@ -1222,6 +1230,7 @@ export async function fetchSalesMonth(w: MonthWindow): Promise<SalesMonth> {
       ? { count: waiting.length, rows: [...byTradeTown.values()].sort((a, b) => b.count - a.count) }
       : null,
     cac,
+    lostReasons: [...reasons].map(([reason, count]) => ({ reason, count })).sort((a, b) => b.count - a.count),
     series: last12Months(w.month, w.cur.until).map(m => {
       const f = funnel(m);
       return { key: m.key, label: m.label, signed: f.signed, sent: f.tobsSent, signRate: f.tobsSent > 0 ? (f.signed / f.tobsSent) * 100 : null };
