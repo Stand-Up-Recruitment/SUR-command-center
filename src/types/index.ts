@@ -613,7 +613,7 @@ export interface SalesSettings {
 export interface SalesFunnel {
   callsBooked: number;    // Client Paid Ads (paid source), by call date
   noShow: number | null;
-  notFit: number | null;
+  notFit: number | null;  // showed but no ToB sent (Status "Closed")
   waitlist: number | null;
   callsHeld: number | null;
   closedNoToB: number;    // calls whose outcome is Closed / No Show / Not a Fit / Waitlist
@@ -626,11 +626,12 @@ export interface SalespersonRow {
   name: string;
   calls: number;
   noShow: number | null;
+  notFit: number | null;
   sent: number;
   signed: number;
   open: number;
   stale: number;
-  prev: { calls: number; noShow: number | null; sent: number; signed: number };
+  prev: { calls: number; noShow: number | null; notFit: number | null; sent: number; signed: number };
 }
 
 export interface OpenTob { company: string; stage: string; days: number; who: string }
@@ -648,6 +649,7 @@ export interface SalesMonth {
   timeToSign: { label: string; total: number; median: number; within7: number; max: number };
   waitlist: { count: number; rows: { trade: string; town: string; count: number }[] } | null;
   cac: { cur: number; prev: number } | null;   // CAC per Signed Client, trailing 90 days, from acquisitionCacs
+  lostReasons: { reason: string; count: number }[];   // unsigned ToBs sent this month, biggest first; empty = not logged yet
   series: { key: string; label: string; signed: number; sent: number; signRate: number | null }[];
 }
 

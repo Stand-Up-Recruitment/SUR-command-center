@@ -12,8 +12,8 @@ import { rate, pctChange, type RagContext } from '../../lib/rag';
 import { PACE_LABEL, type Pace } from '../../lib/workingDays';
 import { DEFAULT_TARGET_PER_SALESPERSON, targetsFor } from './salesMetrics';
 import {
-  CALL_DAYS, meetingsHad, pctOf, closeRate, neededBy, vsTarget, openStatus, salesActions, biggestBreak,
-  type SalesLevel, type OpenStatus,
+  CALL_DAYS, pctOf, qualified, closeRate, funnelRates, neededBy, vsTarget, openStatus, salesActions, biggestBreak,
+  type SalesLevel, type OpenStatus, type Owner,
 } from '../../lib/sales';
 import type { SalesSettings } from '../../types';
 
@@ -38,7 +38,7 @@ function SettingsPanel({ settings, onClose }: { settings: SalesSettings; onClose
         <div style={{ fontSize: 15, fontWeight: 600, color: C.text, marginBottom: 14 }}>Sales targets</div>
         <label style={label}>Signed ToBs per month (per salesperson)</label>
         <input style={{ ...input, margin: '4px 0 12px' }} type="number" min={1} step={1} value={target} onChange={e => setTarget(e.target.value)} />
-        <label style={label}>Close rate target (% of meetings had)</label>
+        <label style={label}>Close rate target (% of qualified meetings)</label>
         <input style={{ ...input, margin: '4px 0 12px' }} type="number" min={1} max={100} step={1} value={close} onChange={e => setClose(e.target.value)} />
         <label style={label}>Admin password</label>
         <input style={{ ...input, margin: '4px 0 12px' }} type="password" value={password} onChange={e => setPassword(e.target.value)} />
@@ -59,23 +59,28 @@ const LEVEL_TONE: Record<SalesLevel, Pace | 'blue'> = { 'CALL NOW': 'red', 'THIS
 const STATUS_TONE: Record<OpenStatus, Pace> = { CALL: 'red', WATCH: 'amber', 'IN SEQUENCE': 'grey' };
 const ragColor = (r: Pace) => (r === 'grey' ? C.text : PACE_COLOR[r]);
 const pct = (n: number | null) => (n == null ? '—' : `${Math.round(n)}%`);
-const direction = (cur: number, prev: number) => (cur > prev ? 'up' : cur < prev ? 'down' : 'flat');
 const TH: CSSProperties = { ...LABEL, fontSize: 12, textAlign: 'left', padding: '12px 16px', borderBottom: `1px solid ${C.rowBorder}`, whiteSpace: 'nowrap' };
 const TD: CSSProperties = { padding: '14px 16px', borderBottom: `1px solid ${C.rowBorder}`, fontSize: 14, color: C.text, verticalAlign: 'top' };
 const Sub = ({ children }: { children: ReactNode }) => <div style={{ fontSize: 12, color: C.muted, marginTop: 3 }}>{children}</div>;
 
-function Step({ label, value, children }: { label: string; value: string; children: ReactNode }) {
+const OWNER_COLOR: Record<Owner, string> = { MARKETING: C.purple, SALES: C.blue, RECRUITMENT: C.teal };
+
+/** A funnel box with its owner's colour band. value null = grey "Not logged yet", never zero. */
+function Step({ owner, label, value, children }: { owner: Owner; label: string; value: number | null; children: ReactNode }) {
   return (
-    <div style={{ background: C.inset, border: `1px solid ${C.border}`, borderRadius: 10, padding: 14, flex: '1 1 150px', minWidth: 0 }}>
-      <div style={{ ...LABEL, fontSize: 11 }}>{label}</div>
-      <div style={{ fontFamily: NUM_FONT, fontSize: 30, fontWeight: 700, color: C.text, margin: '4px 0' }}>{value}</div>
-      <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5 }}>{children}</div>
+    <div style={{ background: C.inset, border: `1px solid ${C.border}`, borderTop: `3px solid ${OWNER_COLOR[owner]}`, borderRadius: 10, padding: 12, flex: '1 1 110px', minWidth: 0 }}>
+      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.4px', color: OWNER_COLOR[owner] }}>{owner}{owner === 'RECRUITMENT' && ' · NOT SCORED'}</div>
+      <div style={{ ...LABEL, fontSize: 11, marginTop: 2 }}>{label}</div>
+      <div style={{ fontFamily: NUM_FONT, fontSize: 30, fontWeight: 700, color: value == null ? C.faint : C.text, margin: '4px 0' }}>{value == null ? '—' : int(value)}</div>
+      <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5 }}>{value == null ? <><div style={{ color: C.soft }}>Not logged yet</div>{children}</> : children}</div>
     </div>
   );
 }
-const Arrow = ({ cur, prev, pw }: { cur: number | null; prev: number | null; pw: string }) => (
-  <div style={{ alignSelf: 'center', textAlign: 'center', color: C.text, fontSize: 13, fontWeight: 600, minWidth: 56 }}>
-    {pct(cur)}<div style={{ fontSize: 18, color: C.muted }}>→</div><div style={{ fontSize: 11, color: C.muted, fontWeight: 400 }}>{pw} {pct(prev)}</div>
+/** Arrow between boxes: this month's rate on top, last month's underneath. Red when it fell. */
+const Arrow = ({ name, cur, prev, pw }: { name: string; cur: number | null; prev: number | null; pw: string }) => (
+  <div style={{ alignSelf: 'center', textAlign: 'center', fontSize: 13, fontWeight: 600, minWidth: 44, color: cur != null && prev != null ? (Math.round(cur) < Math.round(prev) ? C.red : C.green) : C.muted }}>
+    {pct(cur)}<div style={{ fontSize: 18, color: C.muted }}>→</div>
+    <div style={{ fontSize: 11, color: C.muted, fontWeight: 400 }}>{cur == null ? name : `${pw} ${pct(prev)}`}</div>
   </div>
 );
 
@@ -83,7 +88,7 @@ function SalesSkeleton() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Skeleton height={160} radius={12} />
-      <div style={{ display: 'flex', gap: 12 }}>{[0, 1, 2, 3].map(i => <Skeleton key={i} height={140} radius={12} style={{ flex: 1 }} />)}</div>
+      <div style={{ display: 'flex', gap: 12 }}>{[0, 1, 2].map(i => <Skeleton key={i} height={140} radius={12} style={{ flex: 1 }} />)}</div>
       <Skeleton height={200} radius={12} />
     </div>
   );
@@ -144,12 +149,13 @@ export function SalesCard() {
   const signedRag = vsTarget(cur.signed, needed);
   const cr = closeRate(cur), pcr = closeRate(prev);
   const crRag = cr == null ? 'grey' : vsTarget(cr, closeTarget);
-  const held = meetingsHad(cur), pheld = meetingsHad(prev);
-  const noShowsLogged = cur.noShow != null;
+  const outcomesLogged = qualified(cur) != null;
+  const rates = funnelRates(m);
   const cacRag = m.cac ? rate(m.cac.cur, m.cac.prev, 'down', ctx) : 'grey';
   const cacPct = m.cac ? pctChange(m.cac.cur, m.cac.prev) : null;
   const actions = salesActions(m, target, w.dayOfMonth, w.daysInMonth);
-  const breakText = biggestBreak(m);
+  const brk = biggestBreak(m);
+  const sameShort = w.isCurrent ? `${pw} same day` : pw;
   const tts = m.timeToSign;
   const st = m.open.stages;
   const trend = m.series.map(s => {
@@ -189,14 +195,9 @@ export function SalesCard() {
             <TextLine muted>{same}: {int(prev.signed)}</TextLine>
           </Tile>
           <Tile label="CLOSE RATE" chip={<Chip tone={crRag}>{PACE_LABEL[crRag]}</Chip>}>
-            <Big value={pct(cr)} color={ragColor(crRag)} unit="of meetings" />
-            <TextLine>Target {closeTarget}%</TextLine>
+            <Big value={pct(cr)} color={ragColor(crRag)} unit="signed ÷ qualified meetings" />
+            <TextLine>Target {closeTarget}%{!outcomesLogged && ' · uses booked until outcomes are logged'}</TextLine>
             <TextLine muted>{same}: {pct(pcr)}{cr != null && pcr != null && ` · ${cr >= pcr ? '+' : '−'}${Math.abs(Math.round(cr - pcr))} pts`}</TextLine>
-          </Tile>
-          <Tile label="MEETINGS HAD" chip={<Chip tone="grey">NO TARGET</Chip>}>
-            <Big value={int(held)} color={C.text} unit="meetings" />
-            <TextLine>{noShowsLogged ? `${int(cur.callsBooked)} booked · ${int(cur.noShow!)} no-shows` : 'Meetings booked until no-shows are logged'}</TextLine>
-            <TextLine muted>{same}: {int(pheld)} · {direction(held, pheld)}</TextLine>
           </Tile>
           <Tile label="CLIENT CAC" chip={cacPct == null ? <Chip tone="grey">NO DATA</Chip> : <Chip tone={cacRag}>{Math.abs(Math.round(cacPct))}% {cacPct > 0 ? 'WORSE' : 'BETTER'}</Chip>}>
             <Big value={m.cac ? money0(m.cac.cur) : '—'} color={ragColor(cacRag)} unit="per signed ToB" />
@@ -207,23 +208,42 @@ export function SalesCard() {
       </Section>
 
       {/* 3. Where is it breaking? */}
-      <Section title="Where is it breaking?" aside={`Conversion on each step · ${same} underneath`}>
+      <Section title="Where is it breaking?" aside={`Upstream (Marketing) · Sales · Downstream (Recruitment) · ${same} underneath`}>
+        <div style={{ background: brk ? 'rgba(240,80,74,.12)' : C.inset, border: `1px solid ${brk ? C.red : C.border}`, borderLeft: `3px solid ${brk ? C.red : C.green}`, borderRadius: 10, padding: '12px 14px', fontSize: 15, display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-start' }}>
+          {brk ? <><Chip tone="red">BIGGEST BREAK · {brk.owner}</Chip><span>{brk.text}. This one is in {brk.owner === 'MARKETING' ? 'Marketing’s' : 'Sales’'} section.</span></>
+            : <span><strong>Biggest break:</strong> no step dropped vs last month.</span>}
+        </div>
         <div style={{ ...CARD, padding: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ ...LABEL, fontSize: 12 }}>CLIENT FUNNEL · colour band shows who owns each step</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            <Step label="MEETINGS HAD" value={int(held)}>{noShowsLogged ? `${int(cur.callsBooked)} booked` : 'Booked, until no-shows are logged'} · paid-ad calls</Step>
-            <Arrow cur={pctOf(cur.tobsSent, held)} prev={pctOf(prev.tobsSent, pheld)} pw={pw} />
-            <Step label="TOBS SENT" value={int(cur.tobsSent)}>{int(cur.closedNoToB)} meetings closed with no ToB</Step>
-            <Arrow cur={pctOf(cur.signed, cur.tobsSent)} prev={pctOf(prev.signed, prev.tobsSent)} pw={pw} />
-            <Step label="SIGNED" value={int(cur.signed)}>All sources, incl. referrals</Step>
+            <Step owner="MARKETING" label="BOOKED" value={cur.callsBooked}>{sameShort}: {int(prev.callsBooked)}<Sub>Paid-ad meetings booked</Sub></Step>
+            <Arrow {...rates[0]} pw={pw} />
+            <Step owner="MARKETING" label="SHOWED" value={cur.callsHeld}>{prev.callsHeld != null && `${sameShort}: ${int(prev.callsHeld)}`}<Sub>Booked minus no-shows</Sub></Step>
+            <Arrow {...rates[1]} pw={pw} />
+            <Step owner="MARKETING" label="QUALIFIED" value={qualified(cur)}>{qualified(prev) != null && `${sameShort}: ${int(qualified(prev)!)}`}<Sub>Showed minus not a fit (no ToB)</Sub></Step>
+            <Arrow {...rates[2]} pw={pw} />
+            <Step owner="SALES" label="TOBS SENT" value={cur.tobsSent}>{sameShort}: {int(prev.tobsSent)}{!outcomesLogged && <Sub>Offer rate uses booked for now</Sub>}</Step>
+            <Arrow {...rates[3]} pw={pw} />
+            <Step owner="SALES" label="SIGNED" value={cur.signed}>{sameShort}: {int(prev.signed)}<Sub>Need {needed} by today · {target} by month end</Sub></Step>
+            <Arrow {...rates[4]} pw={pw} />
+            <Step owner="RECRUITMENT" label="JOB LOADED" value={null}><Sub>Signed ToB with a job within 30 days</Sub></Step>
           </div>
-          <div style={{ background: C.inset, borderLeft: `3px solid ${breakText ? C.red : C.green}`, borderRadius: 8, padding: '12px 14px', fontSize: 15 }}>
-            <strong>Biggest break:</strong> {breakText ?? 'no step dropped vs last month.'}
-          </div>
-          <div style={{ fontSize: 13, color: C.muted }}>
-            Speed check ({tts.label}): {tts.total > 0
-              ? `median ${tts.median} day${tts.median === 1 ? '' : 's'} to sign · ${tts.within7} of ${tts.total} signed within 7 days`
-              : 'no signings yet'} · rule: anything unsigned after {CALL_DAYS} days gets a personal call.
-          </div>
+        </div>
+        <div style={{ border: `1px dashed ${C.border}`, borderRadius: 10, padding: '12px 14px', fontSize: 14, display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
+          <Chip tone="grey">WHY THEY DIDN’T SIGN</Chip>
+          <span style={{ color: m.lostReasons.length ? C.text : C.muted }}>
+            {m.lostReasons.length
+              ? m.lostReasons.map(r => `${r.reason} ${r.count}`).join(' · ')
+              : 'Not logged yet. Will read like: Fee 5 · No roles right now 4 · Went quiet 3'}
+          </span>
+        </div>
+        <div style={{ border: `1px dashed ${C.border}`, borderRadius: 10, padding: '12px 14px', fontSize: 14, display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
+          <Chip tone="grey">SPEED CHECK</Chip>
+          <span style={{ color: C.muted }}>
+            Median time to sign ({tts.label}): {tts.total > 0
+              ? `${tts.median} day${tts.median === 1 ? '' : 's'} · ${tts.within7} of ${tts.total} signed inside 7 days`
+              : 'no signings yet'}. Unsigned after {CALL_DAYS} days = call it personally.
+          </span>
         </div>
       </Section>
 
@@ -268,13 +288,16 @@ export function SalesCard() {
               {m.salespeople.map(p => {
                 const had = p.noShow == null ? p.calls : p.calls - p.noShow;
                 const phad = p.prev.noShow == null ? p.prev.calls : p.prev.calls - p.prev.noShow;
+                // Close rate matches the tile: signed ÷ qualified, meetings had until outcomes are logged.
+                const q = p.noShow == null || p.notFit == null ? had : had - p.notFit;
+                const pq = p.prev.noShow == null || p.prev.notFit == null ? phad : phad - p.prev.notFit;
                 return (
                   <tr key={p.name}>
                     <td style={{ ...TD, fontWeight: 600 }}>{p.name}</td>
                     <td style={TD}>{int(had)}<Sub>{int(phad)}</Sub></td>
                     <td style={TD}>{int(p.sent)}<Sub>{int(p.prev.sent)}</Sub></td>
                     <td style={TD}>{int(p.signed)}<Sub>{int(p.prev.signed)}</Sub></td>
-                    <td style={TD}>{pct(pctOf(p.signed, had))}<Sub>{pct(pctOf(p.prev.signed, phad))}</Sub></td>
+                    <td style={TD}>{pct(pctOf(p.signed, q))}<Sub>{pct(pctOf(p.prev.signed, pq))}</Sub></td>
                     <td style={{ ...TD, color: p.stale > 0 ? C.red : C.text, fontWeight: 600 }}>{p.stale}</td>
                   </tr>
                 );
@@ -311,7 +334,8 @@ export function SalesCard() {
 
       <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>
         Colours: green at or ahead of target by today, amber 75–99%, red under 75%, grey for no data or no target. Never green for zero.
-        Meetings are paid-ad calls (Client Paid Ads, by call date); ToBs sent and signed are all sources. Duplicate CRM companies count once. Open ToBs are as of today.
+        Funnel bands: <span style={{ color: C.purple }}>Marketing</span> · <span style={{ color: C.blue }}>Sales</span> · <span style={{ color: C.teal }}>Recruitment</span>.
+        Meetings are paid-ad calls (Client Paid Ads, by call date); not a fit = showed but closed with no ToB. ToBs sent and signed are all sources. Duplicate CRM companies count once. Open ToBs are as of today.
       </div>
 
       {showSettings && settings && <SettingsPanel settings={settings} onClose={() => setShowSettings(false)} />}
